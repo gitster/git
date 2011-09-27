@@ -9,11 +9,15 @@ SUBDIRECTORY_OK=Yes
 . git-sh-setup
 
 no_prune=:
+progress=
 while test $# != 0
 do
 	case "$1" in
 	--prune)
 		no_prune=
+		;;
+	--progress)
+		progress=--progress
 		;;
 	--)
 		usage
@@ -32,6 +36,6 @@ esac
 test "true" != "$pack_refs" ||
 git pack-refs --prune &&
 git reflog expire --all &&
-git-repack -a -d -l &&
+git-repack -a -d -l $progress &&
 $no_prune git prune &&
 git rerere gc || exit
