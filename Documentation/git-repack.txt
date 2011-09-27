@@ -74,6 +74,10 @@ other objects in that pack they already have locally.
 	Pass the `-q` option to 'git pack-objects'. See
 	linkgit:git-pack-objects[1].
 
+--progress::
+	Pass the `-progress` option to 'git pack-objects'. See
+	linkgit:git-pack-objects[1].
+
 -n::
 	Do not update the server information with
 	'git update-server-info'.  This option skips

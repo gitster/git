@@ -28,7 +28,7 @@ static int gc_auto_threshold = 6700;
 static int gc_auto_pack_limit = 50;
 static const char *prune_expire = "2.weeks.ago";
 
-#define MAX_ADD 10
+#define MAX_ADD 11
 static const char *argv_pack_refs[] = {"pack-refs", "--all", "--prune", NULL};
 static const char *argv_reflog[] = {"reflog", "expire", "--all", NULL};
 static const char *argv_repack[MAX_ADD] = {"repack", "-d", "-l", NULL};
@@ -177,10 +177,12 @@ int cmd_gc(int argc, const char **argv, const char *prefix)
 	int aggressive = 0;
 	int auto_gc = 0;
 	int quiet = 0;
+	int progress = 0;
 	char buf[80];
 
 	struct option builtin_gc_options[] = {
 		OPT__QUIET(&quiet, "suppress progress reporting"),
+		OPT_BOOLEAN(0, "progress", &progress, "force progress reporting"),
 		{ OPTION_STRING, 0, "prune", &prune_expire, "date",
 			"prune unreferenced objects",
 			PARSE_OPT_OPTARG, NULL, (intptr_t)prune_expire },
@@ -212,6 +214,9 @@ int cmd_gc(int argc, const char **argv, const char *prefix)
 	}
 	if (quiet)
 		append_option(argv_repack, "-q", MAX_ADD);
+
+	if (progress)
+		append_option(argv_repack, "--progress", MAX_ADD);
 
 	if (auto_gc) {
 		/*

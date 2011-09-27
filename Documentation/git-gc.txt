@@ -9,7 +9,7 @@ git-gc - Cleanup unnecessary files and optimize the local repository
 SYNOPSIS
 --------
 [verse]
-'git gc' [--aggressive] [--auto] [--quiet] [--prune=<date> | --no-prune]
+'git gc' [--aggressive] [--auto] [--quiet] [--progress] [--prune=<date> | --no-prune]
 
 DESCRIPTION
 -----------
@@ -69,7 +69,14 @@ automatic consolidation of packs.
 	Do not prune any loose objects.
 
 --quiet::
-	Suppress all progress reports.
+	Suppress all progress reports. Progress is not reported to
+	the standard error stream.
+
+--progress::
+	Progress status is reported on the standard error stream
+	by default when it is attached to a terminal, unless -q
+	is specified. This flag forces progress status even if the
+	standard error stream is not directed to a terminal.
 
 Configuration
 -------------
