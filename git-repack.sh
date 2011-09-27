@@ -14,6 +14,7 @@ f               pass --no-reuse-delta to git-pack-objects
 F               pass --no-reuse-object to git-pack-objects
 n               do not run git-update-server-info
 q,quiet         be quiet
+progress        pass --progress to git-pack-objects
 l               pass --local to git-pack-objects
  Packing constraints
 window=         size of the window used for delta compression
@@ -25,7 +26,7 @@ SUBDIRECTORY_OK='Yes'
 . git-sh-setup
 
 no_update_info= all_into_one= remove_redundant= unpack_unreachable=
-local= no_reuse= extra=
+local= no_reuse= extra= progress=
 while test $# != 0
 do
 	case "$1" in
@@ -35,6 +36,7 @@ do
 		unpack_unreachable=--unpack-unreachable ;;
 	-d)	remove_redundant=t ;;
 	-q)	GIT_QUIET=t ;;
+	--progress) progress=--progress ;;
 	-f)	no_reuse=--no-reuse-delta ;;
 	-F)	no_reuse=--no-reuse-object ;;
 	-l)	local=--local ;;
@@ -85,7 +87,7 @@ esac
 mkdir -p "$PACKDIR" || exit
 
 args="$args $local ${GIT_QUIET:+-q} $no_reuse$extra"
-names=$(git pack-objects --keep-true-parents --honor-pack-keep --non-empty --all --reflog $args </dev/null "$PACKTMP") ||
+names=$(git pack-objects --keep-true-parents --honor-pack-keep --non-empty --all --reflog $progress $args </dev/null "$PACKTMP") ||
 	exit 1
 if [ -z "$names" ]; then
 	say Nothing new to pack.
