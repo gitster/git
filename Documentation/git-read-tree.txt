@@ -81,12 +81,11 @@ OPTIONS
 * when both sides add a path identically.  The resolution
   is to add that path.
 
---prefix=<prefix>/::
+--prefix=<prefix>::
 	Keep the current index contents, and read the contents
 	of the named tree-ish under the directory at `<prefix>`.
 	The command will refuse to overwrite entries that already
-	existed in the original index file. Note that the `<prefix>/`
-	value must end with a slash.
+	existed in the original index file.
 
 --exclude-per-directory=<gitignore>::
 	When running the command with `-u` and `-m` options, the
@@ -115,6 +114,12 @@ OPTIONS
 	directories the index file and index output file are
 	located in.
 
+--[no-]recurse-submodules::
+	Using --recurse-submodules will update the content of all initialized
+	submodules according to the commit recorded in the superproject by
+	calling read-tree recursively, also setting the submodules HEAD to be
+	detached at that commit.
+
 --no-sparse-checkout::
 	Disable sparse checkout support even if `core.sparseCheckout`
 	is true.
@@ -127,11 +132,11 @@ OPTIONS
 	The id of the tree object(s) to be read/merged.
 
 
-Merging
+MERGING
 -------
 If `-m` is specified, 'git read-tree' can perform 3 kinds of
 merge, a single tree merge if only 1 tree is given, a
-fast-forward merge with 2 trees, or a 3-way merge if 3 trees are
+fast-forward merge with 2 trees, or a 3-way merge if 3 or more trees are
 provided.
 
 
@@ -173,6 +178,7 @@ Here are the "carry forward" rules, where "I" denotes the index,
 "clean" means that index and work tree coincide, and "exists"/"nothing"
 refer to the presence of a path in the specified commit:
 
+....
 	I                   H        M        Result
        -------------------------------------------------------
      0  nothing             nothing  nothing  (does not happen)
@@ -211,6 +217,7 @@ refer to the presence of a path in the specified commit:
      19 no    no    yes     exists   exists   keep index
      20 yes   yes   no      exists   exists   use M
      21 no    yes   no      exists   exists   fail
+....
 
 In all "keep index" cases, the index entry stays as in the
 original index file.  If the entry is not up to date,
@@ -375,7 +382,7 @@ middle of doing, and when your working tree is ready (i.e. you
 have finished your work-in-progress), attempt the merge again.
 
 
-Sparse checkout
+SPARSE CHECKOUT
 ---------------
 
 "Sparse checkout" allows populating the working directory sparsely.

@@ -170,7 +170,7 @@ Git index format
 
   The entries are written out in the top-down, depth-first order.  The
   first entry represents the root level of the repository, followed by the
-  first subtree---let's call this A---of the root level (with its name
+  first subtree--let's call this A--of the root level (with its name
   relative to the root level), followed by the first subtree of A (with
   its name relative to A), ...
 
@@ -233,3 +233,125 @@ Git index format
   The remaining index entries after replaced ones will be added to the
   final index. These added entries are also sorted by entry name then
   stage.
+
+== Untracked cache
+
+  Untracked cache saves the untracked file list and necessary data to
+  verify the cache. The signature for this extension is { 'U', 'N',
+  'T', 'R' }.
+
+  The extension starts with
+
+  - A sequence of NUL-terminated strings, preceded by the size of the
+    sequence in variable width encoding. Each string describes the
+    environment where the cache can be used.
+
+  - Stat data of $GIT_DIR/info/exclude. See "Index entry" section from
+    ctime field until "file size".
+
+  - Stat data of core.excludesfile
+
+  - 32-bit dir_flags (see struct dir_struct)
+
+  - 160-bit SHA-1 of $GIT_DIR/info/exclude. Null SHA-1 means the file
+    does not exist.
+
+  - 160-bit SHA-1 of core.excludesfile. Null SHA-1 means the file does
+    not exist.
+
+  - NUL-terminated string of per-dir exclude file name. This usually
+    is ".gitignore".
+
+  - The number of following directory blocks, variable width
+    encoding. If this number is zero, the extension ends here with a
+    following NUL.
+
+  - A number of directory blocks in depth-first-search order, each
+    consists of
+
+    - The number of untracked entries, variable width encoding.
+
+    - The number of sub-directory blocks, variable width encoding.
+
+    - The directory name terminated by NUL.
+
+    - A number of untracked file/dir names terminated by NUL.
+
+The remaining data of each directory block is grouped by type:
+
+  - An ewah bitmap, the n-th bit marks whether the n-th directory has
+    valid untracked cache entries.
+
+  - An ewah bitmap, the n-th bit records "check-only" bit of
+    read_directory_recursive() for the n-th directory.
+
+  - An ewah bitmap, the n-th bit indicates whether SHA-1 and stat data
+    is valid for the n-th directory and exists in the next data.
+
+  - An array of stat data. The n-th data corresponds with the n-th
+    "one" bit in the previous ewah bitmap.
+
+  - An array of SHA-1. The n-th SHA-1 corresponds with the n-th "one" bit
+    in the previous ewah bitmap.
+
+  - One NUL.
+
+== File System Monitor cache
+
+  The file system monitor cache tracks files for which the core.fsmonitor
+  hook has told us about changes.  The signature for this extension is
+  { 'F', 'S', 'M', 'N' }.
+
+  The extension starts with
+
+  - 32-bit version number: the current supported version is 1.
+
+  - 64-bit time: the extension data reflects all changes through the given
+	time which is stored as the nanoseconds elapsed since midnight,
+	January 1, 1970.
+
+  - 32-bit bitmap size: the size of the CE_FSMONITOR_VALID bitmap.
+
+  - An ewah bitmap, the n-th bit indicates whether the n-th index entry
+    is not CE_FSMONITOR_VALID.
+
+== End of Index Entry
+
+  The End of Index Entry (EOIE) is used to locate the end of the variable
+  length index entries and the begining of the extensions. Code can take
+  advantage of this to quickly locate the index extensions without having
+  to parse through all of the index entries.
+
+  Because it must be able to be loaded before the variable length cache
+  entries and other index extensions, this extension must be written last.
+  The signature for this extension is { 'E', 'O', 'I', 'E' }.
+
+  The extension consists of:
+
+  - 32-bit offset to the end of the index entries
+
+  - 160-bit SHA-1 over the extension types and their sizes (but not
+	their contents).  E.g. if we have "TREE" extension that is N-bytes
+	long, "REUC" extension that is M-bytes long, followed by "EOIE",
+	then the hash would be:
+
+	SHA-1("TREE" + <binary representation of N> +
+		"REUC" + <binary representation of M>)
+
+== Index Entry Offset Table
+
+  The Index Entry Offset Table (IEOT) is used to help address the CPU
+  cost of loading the index by enabling multi-threading the process of
+  converting cache entries from the on-disk format to the in-memory format.
+  The signature for this extension is { 'I', 'E', 'O', 'T' }.
+
+  The extension consists of:
+
+  - 32-bit version (currently 1)
+
+  - A number of index offset entries each consisting of:
+
+    - 32-bit offset from the begining of the file to the first cache entry
+	in this block of entries.
+
+    - 32-bit count of cache entries in this block

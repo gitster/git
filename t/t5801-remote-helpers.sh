@@ -96,7 +96,7 @@ test_expect_success 'push new branch with old:new refspec' '
 
 test_expect_success 'push new branch with HEAD:new refspec' '
 	(cd local &&
-	 git checkout new-name
+	 git checkout new-name &&
 	 git push origin HEAD:new-refspec-2
 	) &&
 	compare_refs local HEAD server refs/heads/new-refspec-2
@@ -126,7 +126,7 @@ test_expect_success 'forced push' '
 test_expect_success 'cloning without refspec' '
 	GIT_REMOTE_TESTGIT_REFSPEC="" \
 	git clone "testgit::${PWD}/server" local2 2>error &&
-	grep "This remote helper should implement refspec capability" error &&
+	test_i18ngrep "this remote helper should implement refspec capability" error &&
 	compare_refs local2 HEAD server HEAD
 '
 
@@ -134,7 +134,7 @@ test_expect_success 'pulling without refspecs' '
 	(cd local2 &&
 	git reset --hard &&
 	GIT_REMOTE_TESTGIT_REFSPEC="" git pull 2>../error) &&
-	grep "This remote helper should implement refspec capability" error &&
+	test_i18ngrep "this remote helper should implement refspec capability" error &&
 	compare_refs local2 HEAD server HEAD
 '
 
@@ -146,7 +146,7 @@ test_expect_success 'pushing without refspecs' '
 	GIT_REMOTE_TESTGIT_REFSPEC="" &&
 	export GIT_REMOTE_TESTGIT_REFSPEC &&
 	test_must_fail git push 2>../error) &&
-	grep "remote-helper doesn.t support push; refspec needed" error
+	test_i18ngrep "remote-helper doesn.t support push; refspec needed" error
 '
 
 test_expect_success 'pulling without marks' '
@@ -242,28 +242,24 @@ clean_mark () {
 	sort >$(basename "$1")
 }
 
-cmp_marks () {
-	test_when_finished "rm -rf git.marks testgit.marks" &&
-	clean_mark ".git/testgit/$1/git.marks" &&
-	clean_mark ".git/testgit/$1/testgit.marks" &&
-	test_cmp git.marks testgit.marks
-}
-
 test_expect_success 'proper failure checks for fetching' '
 	(cd local &&
 	test_must_fail env GIT_REMOTE_TESTGIT_FAILURE=1 git fetch 2>error &&
 	cat error &&
-	grep -q "Error while running fast-import" error
+	test_i18ngrep -q "error while running fast-import" error
 	)
 '
 
 test_expect_success 'proper failure checks for pushing' '
+	test_when_finished "rm -rf local/git.marks local/testgit.marks" &&
 	(cd local &&
 	git checkout -b crash master &&
 	echo crash >>file &&
 	git commit -a -m crash &&
 	test_must_fail env GIT_REMOTE_TESTGIT_FAILURE=1 git push --all &&
-	cmp_marks origin
+	clean_mark ".git/testgit/origin/git.marks" &&
+	clean_mark ".git/testgit/origin/testgit.marks" &&
+	test_cmp git.marks testgit.marks
 	)
 '
 
@@ -279,6 +275,30 @@ test_expect_success 'push messages' '
 	git push origin new_branch 2> msg &&
 	! grep "\[new branch\]" msg
 	)
+'
+
+test_expect_success 'fetch HEAD' '
+	(cd server &&
+	git checkout master &&
+	echo more >>file &&
+	git commit -a -m more
+	) &&
+	(cd local &&
+	git fetch origin HEAD
+	) &&
+	compare_refs server HEAD local FETCH_HEAD
+'
+
+test_expect_success 'fetch url' '
+	(cd server &&
+	git checkout master &&
+	echo more >>file &&
+	git commit -a -m more
+	) &&
+	(cd local &&
+	git fetch "testgit::${PWD}/../server"
+	) &&
+	compare_refs server HEAD local FETCH_HEAD
 '
 
 test_done

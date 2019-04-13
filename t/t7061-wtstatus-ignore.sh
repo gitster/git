@@ -9,11 +9,21 @@ cat >expected <<\EOF
 ?? actual
 ?? expected
 ?? untracked/
+!! untracked/ignored
 EOF
 
 test_expect_success 'status untracked directory with --ignored' '
 	echo "ignored" >.gitignore &&
 	mkdir untracked &&
+	: >untracked/ignored &&
+	: >untracked/uncommitted &&
+	git status --porcelain --ignored >actual &&
+	test_cmp expected actual
+'
+
+test_expect_success 'same with gitignore starting with BOM' '
+	printf "\357\273\277ignored\n" >.gitignore &&
+	mkdir -p untracked &&
 	: >untracked/ignored &&
 	: >untracked/uncommitted &&
 	git status --porcelain --ignored >actual &&
@@ -259,6 +269,17 @@ EOF
 
 test_expect_success 'status ignored tracked directory with uncommitted file in tracked subdir with --ignore -u' '
 	git status --porcelain --ignored -u >actual &&
+	test_cmp expected actual
+'
+
+cat >expected <<\EOF
+!! tracked/submodule/
+EOF
+
+test_expect_success 'status ignores submodule in excluded directory' '
+	git init tracked/submodule &&
+	test_commit -C tracked/submodule initial &&
+	git status --porcelain --ignored -u tracked/submodule >actual &&
 	test_cmp expected actual
 '
 

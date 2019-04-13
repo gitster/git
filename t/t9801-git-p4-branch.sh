@@ -300,7 +300,7 @@ test_expect_success 'git p4 clone complex branches' '
 		test_path_is_file file2 &&
 		test_path_is_file file3 &&
 		! grep update file2 &&
-		test_path_is_missing .git/git-p4-tmp
+		test_must_fail git show-ref --verify refs/git-p4-tmp
 	)
 '
 
@@ -352,7 +352,7 @@ test_expect_success 'git p4 sync changes to two branches in the same changelist'
 		test_path_is_file file2 &&
 		test_path_is_file file3 &&
 		! grep update file2 &&
-		test_path_is_missing .git/git-p4-tmp
+		test_must_fail git show-ref --verify refs/git-p4-tmp
 	)
 '
 
@@ -501,6 +501,112 @@ test_expect_success 'use-client-spec detect-branches skips files in branches' '
 		test_path_is_file b1-file1 &&
 		test_path_is_file b3-file3_2 &&
 		test_path_is_missing b3-file3_1
+	)
+'
+
+test_expect_success 'restart p4d' '
+	kill_p4d &&
+	start_p4d
+'
+
+#
+# 1: //depot/branch1/base/file1
+#    //depot/branch1/base/file2
+#    //depot/branch1/base/dir/sub_file1
+# 2: integrate //depot/branch1/base/... -> //depot/branch2/base/...
+# 3: //depot/branch1/base/file3
+# 4: //depot/branch1/base/file2 (edit)
+# 5: integrate //depot/branch1/base/... -> //depot/branch3/base/...
+#
+# Note: the client view removes the "base" folder from the workspace
+#       and moves sub_file1 one level up.
+test_expect_success 'add simple p4 branches with common base folder on each branch' '
+	(
+		cd "$cli" &&
+		client_view "//depot/branch1/base/... //client/branch1/..." \
+			    "//depot/branch1/base/dir/sub_file1 //client/branch1/sub_file1" \
+			    "//depot/branch2/base/... //client/branch2/..." \
+			    "//depot/branch3/base/... //client/branch3/..." &&
+		mkdir -p branch1 &&
+		cd branch1 &&
+		echo file1 >file1 &&
+		echo file2 >file2 &&
+		mkdir dir &&
+		echo sub_file1 >sub_file1 &&
+		p4 add file1 file2 sub_file1 &&
+		p4 submit -d "Create branch1" &&
+		p4 integrate //depot/branch1/base/... //depot/branch2/base/... &&
+		p4 submit -d "Integrate branch2 from branch1" &&
+		echo file3 >file3 &&
+		p4 add file3 &&
+		p4 submit -d "add file3 in branch1" &&
+		p4 open file2 &&
+		echo update >>file2 &&
+		p4 submit -d "update file2 in branch1" &&
+		p4 integrate //depot/branch1/base/... //depot/branch3/base/... &&
+		p4 submit -d "Integrate branch3 from branch1"
+	)
+'
+
+# Configure branches through git-config and clone them.
+# All files are tested to make sure branches were cloned correctly.
+# Finally, make an update to branch1 on P4 side to check if it is imported
+# correctly by git p4.
+# git p4 is expected to use the client view to also not include the common
+# "base" folder in the imported directory structure.
+test_expect_success 'git p4 clone simple branches with base folder on server side' '
+	test_create_repo "$git" &&
+	(
+		cd "$git" &&
+		git config git-p4.branchList branch1:branch2 &&
+		git config --add git-p4.branchList branch1:branch3 &&
+		git p4 clone --dest=. --use-client-spec  --detect-branches //depot@all &&
+		git log --all --graph --decorate --stat &&
+		git reset --hard p4/depot/branch1 &&
+		test -f file1 &&
+		test -f file2 &&
+		test -f file3 &&
+		test -f sub_file1 &&
+		grep update file2 &&
+		git reset --hard p4/depot/branch2 &&
+		test -f file1 &&
+		test -f file2 &&
+		test ! -f file3 &&
+		test -f sub_file1 &&
+		! grep update file2 &&
+		git reset --hard p4/depot/branch3 &&
+		test -f file1 &&
+		test -f file2 &&
+		test -f file3 &&
+		test -f sub_file1 &&
+		grep update file2 &&
+		cd "$cli" &&
+		cd branch1 &&
+		p4 edit file2 &&
+		echo file2_ >>file2 &&
+		p4 submit -d "update file2 in branch1" &&
+		cd "$git" &&
+		git reset --hard p4/depot/branch1 &&
+		git p4 rebase &&
+		grep file2_ file2
+	)
+'
+
+# Now update a file in one of the branches in git and submit to P4
+test_expect_success 'Update a file in git side and submit to P4 using client view' '
+	test_when_finished cleanup_git &&
+	(
+		cd "$git" &&
+		git reset --hard p4/depot/branch1 &&
+		echo "client spec" >> file1 &&
+		git add -u . &&
+		git commit -m "update file1 in branch1" &&
+		git config git-p4.skipSubmitEdit true &&
+		git p4 submit --verbose &&
+		cd "$cli" &&
+		p4 sync ... &&
+		cd branch1 &&
+		grep "client spec" file1
 	)
 '
 

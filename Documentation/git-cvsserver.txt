@@ -22,7 +22,7 @@ cvspserver stream tcp nowait nobody /usr/bin/git-cvsserver git-cvsserver pserver
 Usage:
 
 [verse]
-'git-cvsserver' [options] [pserver|server] [<directory> ...]
+'git-cvsserver' [<options>] [pserver|server] [<directory> ...]
 
 OPTIONS
 -------
@@ -54,7 +54,7 @@ Print usage information and exit
 You can specify a list of allowed directories. If no directories
 are given, all are allowed. This is an additional restriction, gitcvs
 access still needs to be enabled by the `gitcvs.enabled` config option
-unless '--export-all' was given, too.
+unless `--export-all` was given, too.
 
 
 DESCRIPTION
@@ -154,7 +154,7 @@ with CVS_SERVER (and shouldn't) as 'git-shell' understands `cvs` to mean
    [gitcvs]
         enabled=1
         # optional for debugging
-        logfile=/path/to/logfile
+	logFile=/path/to/logfile
 
 ------
 Note: you need to ensure each user that is going to invoke 'git-cvsserver' has
@@ -207,7 +207,7 @@ allowing access over SSH.
 ------
 
 [[dbbackend]]
-Database Backend
+DATABASE BACKEND
 ----------------
 
 'git-cvsserver' uses one database per Git head (i.e. CVS module) to
@@ -223,7 +223,7 @@ access method and requested operation.
 That means that even if you offer only read access (e.g. by using
 the pserver method), 'git-cvsserver' should have write access to
 the database to work reliably (otherwise you need to make sure
-that the database is up-to-date any time 'git-cvsserver' is executed).
+that the database is up to date any time 'git-cvsserver' is executed).
 
 By default it uses SQLite databases in the Git directory, named
 `gitcvs.<module_name>.sqlite`. Note that the SQLite backend creates
@@ -254,14 +254,14 @@ Configuring database backend
 its documentation if changing these variables, especially
 about `DBI->connect()`.
 
-gitcvs.dbname::
+gitcvs.dbName::
 	Database name. The exact meaning depends on the
 	selected database driver, for SQLite this is a filename.
 	Supports variable substitution (see below). May
 	not contain semicolons (`;`).
 	Default: '%Ggitcvs.%m.sqlite'
 
-gitcvs.dbdriver::
+gitcvs.dbDriver::
 	Used DBI driver. You can specify any available driver
 	for this here, but it might not work. cvsserver is tested
 	with 'DBD::SQLite', reported to work with
@@ -271,12 +271,12 @@ gitcvs.dbdriver::
 	Default: 'SQLite'
 
 gitcvs.dbuser::
-	Database user. Only useful if setting `dbdriver`, since
+	Database user. Only useful if setting `dbDriver`, since
 	SQLite has no concept of database users. Supports variable
 	substitution (see below).
 
-gitcvs.dbpass::
-	Database password.  Only useful if setting `dbdriver`, since
+gitcvs.dbPass::
+	Database password.  Only useful if setting `dbDriver`, since
 	SQLite has no concept of database passwords.
 
 gitcvs.dbTableNamePrefix::
@@ -288,7 +288,7 @@ All variables can also be set per access method, see <<configaccessmethod,above>
 
 Variable substitution
 ^^^^^^^^^^^^^^^^^^^^^
-In `dbdriver` and `dbuser` you can use the following variables:
+In `dbDriver` and `dbUser` you can use the following variables:
 
 %G::
 	Git directory name
@@ -321,7 +321,7 @@ git-cvsserver, as described above.
 When these environment variables are set, the corresponding
 command-line arguments may not be used.
 
-Eclipse CVS Client Notes
+ECLIPSE CVS CLIENT NOTES
 ------------------------
 
 To get a checkout with the Eclipse CVS client:
@@ -332,7 +332,7 @@ To get a checkout with the Eclipse CVS client:
 3. Browse the 'modules' available. It will give you a list of the heads in
    the repository. You will not be able to browse the tree from there. Only
    the heads.
-4. Pick 'HEAD' when it asks what branch/tag to check out. Untick the
+4. Pick `HEAD` when it asks what branch/tag to check out. Untick the
    "launch commit wizard" to avoid committing the .project file.
 
 Protocol notes: If you are using anonymous access via pserver, just select that.
@@ -346,7 +346,7 @@ offer. In that case CVS_SERVER is ignored, and you will have to replace
 the cvs utility on the server with 'git-cvsserver' or manipulate your `.bashrc`
 so that calling 'cvs' effectively calls 'git-cvsserver'.
 
-Clients known to work
+CLIENTS KNOWN TO WORK
 ---------------------
 
 - CVS 1.12.9 on Debian
@@ -354,7 +354,7 @@ Clients known to work
 - Eclipse 3.0, 3.1.2 on MacOSX (see Eclipse CVS Client Notes)
 - TortoiseCVS
 
-Operations supported
+OPERATIONS SUPPORTED
 --------------------
 
 All the operations required for normal use are supported, including
@@ -402,29 +402,29 @@ Exports and tagging (tags and branches) are not supported at this stage.
 CRLF Line Ending Conversions
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-By default the server leaves the '-k' mode blank for all files,
+By default the server leaves the `-k` mode blank for all files,
 which causes the CVS client to treat them as a text files, subject
 to end-of-line conversion on some platforms.
 
 You can make the server use the end-of-line conversion attributes to
-set the '-k' modes for files by setting the `gitcvs.usecrlfattr`
+set the `-k` modes for files by setting the `gitcvs.usecrlfattr`
 config variable.  See linkgit:gitattributes[5] for more information
 about end-of-line conversion.
 
 Alternatively, if `gitcvs.usecrlfattr` config is not enabled
 or the attributes do not allow automatic detection for a filename, then
-the server uses the `gitcvs.allbinary` config for the default setting.
-If `gitcvs.allbinary` is set, then file not otherwise
-specified will default to '-kb' mode. Otherwise the '-k' mode
-is left blank. But if `gitcvs.allbinary` is set to "guess", then
-the correct '-k' mode will be guessed based on the contents of
+the server uses the `gitcvs.allBinary` config for the default setting.
+If `gitcvs.allBinary` is set, then file not otherwise
+specified will default to '-kb' mode. Otherwise the `-k` mode
+is left blank. But if `gitcvs.allBinary` is set to "guess", then
+the correct `-k` mode will be guessed based on the contents of
 the file.
 
 For best consistency with 'cvs', it is probably best to override the
 defaults by setting `gitcvs.usecrlfattr` to true,
-and `gitcvs.allbinary` to "guess".
+and `gitcvs.allBinary` to "guess".
 
-Dependencies
+DEPENDENCIES
 ------------
 'git-cvsserver' depends on DBD::SQLite.
 

@@ -56,7 +56,7 @@ test_expect_success \
      compare_diff_raw current expected'
 
 cat >expected <<\EOF
-:100644 100644 766498d93a4b06057a8e49d23f4068f1170ff38f 0a41e115ab61be0328a19b29f18cdcb49338d516 M	file0
+:100644 100644 8e4020bb5a8d8c873b25de15933e75cc0fc275df dca6b92303befc93086aa025d90a5facd7eb2812 M	file0
 EOF
 test_expect_success \
     'limit to file0 should show file0' \
@@ -74,11 +74,8 @@ test_expect_success 'diff-tree pathspec' '
 	tree2=$(git write-tree) &&
 	echo "$tree2" &&
 	git diff-tree -r --name-only $tree $tree2 -- pa path1/a >current &&
-	>expected &&
-	test_cmp expected current
+	test_must_be_empty current
 '
-
-EMPTY_TREE=4b825dc642cb6eb9a060e54bf8d69288fbee4904
 
 test_expect_success 'diff-tree with wildcard shows dir also matches' '
 	git diff-tree --name-only $EMPTY_TREE $tree -- "f*" >result &&
@@ -113,10 +110,10 @@ test_expect_success 'diff-tree -r with wildcard' '
 test_expect_success 'setup submodules' '
 	test_tick &&
 	git init submod &&
-	( cd submod && test_commit first; ) &&
+	( cd submod && test_commit first ) &&
 	git add submod &&
 	git commit -m first &&
-	( cd submod && test_commit second; ) &&
+	( cd submod && test_commit second ) &&
 	git add submod &&
 	git commit -m second
 '

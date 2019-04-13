@@ -42,7 +42,7 @@ test_expect_success 'rev-list --objects with pathspecs and copied files' '
 	test_tick &&
 	git commit -m that &&
 
-	ONE=$(git rev-parse HEAD:one)
+	ONE=$(git rev-parse HEAD:one) &&
 	git rev-list --objects HEAD two >output &&
 	grep "$ONE two/three" output &&
 	! grep one output
@@ -58,8 +58,7 @@ test_expect_success 'rev-list A..B and rev-list ^A B are the same' '
 
 test_expect_success 'propagate uninteresting flag down correctly' '
 	git rev-list --objects ^HEAD^{tree} HEAD^{tree} >actual &&
-	>expect &&
-	test_cmp expect actual
+	test_must_be_empty actual
 '
 
 test_expect_success 'symleft flag bit is propagated down from tag' '
@@ -85,14 +84,39 @@ test_expect_success 'rev-list can show index objects' '
 	#   - we do not show the root tree; since we updated the index, it
 	#     does not have a valid cache tree
 	#
-	cat >expect <<-\EOF
+	cat >expect <<-\EOF &&
 	8e4020bb5a8d8c873b25de15933e75cc0fc275df one
 	d9d3a7417b9605cfd88ee6306b28dadc29e6ab08 only-in-index
 	9200b628cf9dc883a85a7abc8d6e6730baee589c two
 	EOF
 	echo only-in-index >only-in-index &&
+	test_when_finished "git reset --hard" &&
 	git add only-in-index &&
 	git rev-list --objects --indexed-objects >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success 'rev-list can negate index objects' '
+	git rev-parse HEAD >expect &&
+	git rev-list -1 --objects HEAD --not --indexed-objects >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success '--bisect and --first-parent can not be combined' '
+	test_must_fail git rev-list --bisect --first-parent HEAD
+'
+
+test_expect_success '--header shows a NUL after each commit' '
+	# We know that there is no Q in the true payload; names and
+	# addresses of the authors and the committers do not have
+	# any, and object names or header names do not, either.
+	git rev-list --header --max-count=2 HEAD |
+	nul_to_q |
+	grep "^Q" >actual &&
+	cat >expect <<-EOF &&
+	Q$(git rev-parse HEAD~1)
+	Q
+	EOF
 	test_cmp expect actual
 '
 

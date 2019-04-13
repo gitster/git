@@ -3,13 +3,13 @@ section of the Git project as a convenience to Git users.
 git-multimail is developed as an independent project at the following
 website:
 
-    https://github.com/mhagger/git-multimail
+    https://github.com/git-multimail/git-multimail
 
 The version in this directory was obtained from the upstream project
-on 2014-04-07 and consists of the "git-multimail" subdirectory from
+on January 07 2019 and consists of the "git-multimail" subdirectory from
 revision
 
-    1b32653bafc4f902535b9fc1cd9cae911325b870
+    04e80e6c40be465cc62b6c246f0fcb8fd2cfd454 refs/tags/1.5.0
 
 Please see the README file in this directory for information about how
 to report bugs or contribute to git-multimail.

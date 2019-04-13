@@ -35,12 +35,19 @@ set to `no` at the beginning of them.
 --no-ff::
 	Create a merge commit even when the merge resolves as a
 	fast-forward.  This is the default behaviour when merging an
-	annotated (and possibly signed) tag.
+	annotated (and possibly signed) tag that is not stored in
+	its natural place in 'refs/tags/' hierarchy.
 
 --ff-only::
 	Refuse to merge and exit with a non-zero status unless the
-	current `HEAD` is already up-to-date or the merge can be
+	current `HEAD` is already up to date or the merge can be
 	resolved as a fast-forward.
+
+-S[<keyid>]::
+--gpg-sign[=<keyid>]::
+	GPG-sign the resulting merge commit. The `keyid` argument is
+	optional and defaults to the committer identity; if specified,
+	it must be stuck to the option without a space.
 
 --log[=<n>]::
 --no-log::
@@ -51,6 +58,16 @@ set to `no` at the beginning of them.
 With --no-log do not list one-line descriptions from the
 actual commits being merged.
 
+--signoff::
+--no-signoff::
+	Add Signed-off-by line by the committer at the end of the commit
+	log message.  The meaning of a signoff depends on the project,
+	but it typically certifies that committer has
+	the rights to submit this work under the same license and
+	agrees to a Developer Certificate of Origin
+	(see http://developercertificate.org/ for more information).
++
+With --no-signoff do not add a Signed-off-by line.
 
 --stat::
 -n::
@@ -89,8 +106,11 @@ option can be used to override --squash.
 
 --verify-signatures::
 --no-verify-signatures::
-	Verify that the commits being merged have good and trusted GPG signatures
-	and abort the merge in case they do not.
+	Verify that the tip commit of the side branch being merged is
+	signed with a valid key, i.e. a key that has a valid uid: in the
+	default trust model, this means the signing key has been signed by
+	a trusted key.  If the tip commit of the side branch is not signed
+	with a valid key, the merge is aborted.
 
 --summary::
 --no-summary::
@@ -114,3 +134,11 @@ ifndef::git-pull[]
 	reporting.
 
 endif::git-pull[]
+
+--allow-unrelated-histories::
+	By default, `git merge` command refuses to merge histories
+	that do not share a common ancestor.  This option can be
+	used to override this safety when merging histories of two
+	projects that started their lives independently. As that is
+	a very rare occasion, no configuration variable to enable
+	this by default exists and will not be added.

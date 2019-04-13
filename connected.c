@@ -3,11 +3,8 @@
 #include "sigchain.h"
 #include "connected.h"
 #include "transport.h"
+#include "packfile.h"
 
-int check_everything_connected(sha1_iterate_fn fn, int quiet, void *cb_data)
-{
-	return check_everything_connected_with_transport(fn, quiet, cb_data, NULL);
-}
 /*
  * If we feed all the commits we want to verify to this command
  *
@@ -19,22 +16,27 @@ int check_everything_connected(sha1_iterate_fn fn, int quiet, void *cb_data)
  *
  * Returns 0 if everything is connected, non-zero otherwise.
  */
-static int check_everything_connected_real(sha1_iterate_fn fn,
-					   int quiet,
-					   void *cb_data,
-					   struct transport *transport,
-					   const char *shallow_file)
+int check_connected(oid_iterate_fn fn, void *cb_data,
+		    struct check_connected_options *opt)
 {
 	struct child_process rev_list = CHILD_PROCESS_INIT;
-	const char *argv[9];
-	char commit[41];
-	unsigned char sha1[20];
-	int err = 0, ac = 0;
+	struct check_connected_options defaults = CHECK_CONNECTED_INIT;
+	char commit[GIT_MAX_HEXSZ + 1];
+	struct object_id oid;
+	int err = 0;
 	struct packed_git *new_pack = NULL;
+	struct transport *transport;
 	size_t base_len;
 
-	if (fn(cb_data, sha1))
+	if (!opt)
+		opt = &defaults;
+	transport = opt->transport;
+
+	if (fn(cb_data, &oid)) {
+		if (opt->err_fd)
+			close(opt->err_fd);
 		return err;
+	}
 
 	if (transport && transport->smart_options &&
 	    transport->smart_options->self_contained_and_connected &&
@@ -47,30 +49,39 @@ static int check_everything_connected_real(sha1_iterate_fn fn,
 		strbuf_release(&idx_file);
 	}
 
-	if (shallow_file) {
-		argv[ac++] = "--shallow-file";
-		argv[ac++] = shallow_file;
+	if (opt->shallow_file) {
+		argv_array_push(&rev_list.args, "--shallow-file");
+		argv_array_push(&rev_list.args, opt->shallow_file);
 	}
-	argv[ac++] = "rev-list";
-	argv[ac++] = "--objects";
-	argv[ac++] = "--stdin";
-	argv[ac++] = "--not";
-	argv[ac++] = "--all";
-	if (quiet)
-		argv[ac++] = "--quiet";
-	argv[ac] = NULL;
+	argv_array_push(&rev_list.args,"rev-list");
+	argv_array_push(&rev_list.args, "--objects");
+	argv_array_push(&rev_list.args, "--stdin");
+	if (repository_format_partial_clone)
+		argv_array_push(&rev_list.args, "--exclude-promisor-objects");
+	if (!opt->is_deepening_fetch) {
+		argv_array_push(&rev_list.args, "--not");
+		argv_array_push(&rev_list.args, "--all");
+	}
+	argv_array_push(&rev_list.args, "--quiet");
+	if (opt->progress)
+		argv_array_pushf(&rev_list.args, "--progress=%s",
+				 _("Checking connectivity"));
 
-	rev_list.argv = argv;
 	rev_list.git_cmd = 1;
+	rev_list.env = opt->env;
 	rev_list.in = -1;
 	rev_list.no_stdout = 1;
-	rev_list.no_stderr = quiet;
+	if (opt->err_fd)
+		rev_list.err = opt->err_fd;
+	else
+		rev_list.no_stderr = opt->quiet;
+
 	if (start_command(&rev_list))
 		return error(_("Could not run 'git rev-list'"));
 
 	sigchain_push(SIGPIPE, SIG_IGN);
 
-	commit[40] = '\n';
+	commit[GIT_SHA1_HEXSZ] = '\n';
 	do {
 		/*
 		 * If index-pack already checked that:
@@ -80,40 +91,21 @@ static int check_everything_connected_real(sha1_iterate_fn fn,
 		 * are sure the ref is good and not sending it to
 		 * rev-list for verification.
 		 */
-		if (new_pack && find_pack_entry_one(sha1, new_pack))
+		if (new_pack && find_pack_entry_one(oid.hash, new_pack))
 			continue;
 
-		memcpy(commit, sha1_to_hex(sha1), 40);
-		if (write_in_full(rev_list.in, commit, 41) < 0) {
+		memcpy(commit, oid_to_hex(&oid), GIT_SHA1_HEXSZ);
+		if (write_in_full(rev_list.in, commit, GIT_SHA1_HEXSZ + 1) < 0) {
 			if (errno != EPIPE && errno != EINVAL)
-				error(_("failed write to rev-list: %s"),
-				      strerror(errno));
+				error_errno(_("failed write to rev-list"));
 			err = -1;
 			break;
 		}
-	} while (!fn(cb_data, sha1));
+	} while (!fn(cb_data, &oid));
 
-	if (close(rev_list.in)) {
-		error(_("failed to close rev-list's stdin: %s"), strerror(errno));
-		err = -1;
-	}
+	if (close(rev_list.in))
+		err = error_errno(_("failed to close rev-list's stdin"));
 
 	sigchain_pop(SIGPIPE);
 	return finish_command(&rev_list) || err;
-}
-
-int check_everything_connected_with_transport(sha1_iterate_fn fn,
-					      int quiet,
-					      void *cb_data,
-					      struct transport *transport)
-{
-	return check_everything_connected_real(fn, quiet, cb_data,
-					       transport, NULL);
-}
-
-int check_shallow_connected(sha1_iterate_fn fn, int quiet, void *cb_data,
-			    const char *shallow_file)
-{
-	return check_everything_connected_real(fn, quiet, cb_data,
-					       NULL, shallow_file);
 }

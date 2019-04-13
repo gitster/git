@@ -43,7 +43,7 @@ arguments. The first argument specifies a remote repository as in Git;
 it is either the name of a configured remote or a URL. The second
 argument specifies a URL; it is usually of the form
 '<transport>://<address>', but any arbitrary string is possible.
-The 'GIT_DIR' environment variable is set up for the remote helper
+The `GIT_DIR` environment variable is set up for the remote helper
 and can be used to determine where to store additional data or from
 which directory to invoke auxiliary Git commands.
 
@@ -61,10 +61,10 @@ argument. If such a URL is encountered directly on the command line,
 the first argument is '<address>', and if it is encountered in a
 configured remote, the first argument is the name of that remote.
 
-Additionally, when a configured remote has 'remote.<name>.vcs' set to
+Additionally, when a configured remote has `remote.<name>.vcs` set to
 '<transport>', Git explicitly invokes 'git remote-<transport>' with
 '<name>' as the first argument. If set, the second argument is
-'remote.<name>.url'; otherwise, the second argument is omitted.
+`remote.<name>.url`; otherwise, the second argument is omitted.
 
 INPUT FORMAT
 ------------
@@ -102,6 +102,14 @@ Capabilities for Pushing
 +
 Supported commands: 'connect'.
 
+'stateless-connect'::
+	Experimental; for internal use only.
+	Can attempt to connect to a remote server for communication
+	using git's wire-protocol version 2.  See the documentation
+	for the stateless-connect command for more information.
++
+Supported commands: 'stateless-connect'.
+
 'push'::
 	Can discover remote refs and push local commits and the
 	history leading up to them to new or existing remote refs.
@@ -135,6 +143,14 @@ Capabilities for Fetching
 	requires a bidirectional, full-duplex connection.
 +
 Supported commands: 'connect'.
+
+'stateless-connect'::
+	Experimental; for internal use only.
+	Can attempt to connect to a remote server for communication
+	using git's wire-protocol version 2.  See the documentation
+	for the stateless-connect command for more information.
++
+Supported commands: 'stateless-connect'.
 
 'fetch'::
 	Can discover remote refs and transfer objects reachable from
@@ -210,17 +226,17 @@ the remote repository.
 'export-marks' <file>::
 	This modifies the 'export' capability, instructing Git to dump the
 	internal marks table to <file> when complete. For details,
-	read up on '--export-marks=<file>' in linkgit:git-fast-export[1].
+	read up on `--export-marks=<file>` in linkgit:git-fast-export[1].
 
 'import-marks' <file>::
 	This modifies the 'export' capability, instructing Git to load the
 	marks specified in <file> before processing any input. For details,
-	read up on '--import-marks=<file>' in linkgit:git-fast-export[1].
+	read up on `--import-marks=<file>` in linkgit:git-fast-export[1].
 
 'signed-tags'::
 	This modifies the 'export' capability, instructing Git to pass
-	'--signed-tags=verbatim' to linkgit:git-fast-export[1].  In the
-	absence of this capability, Git will use '--signed-tags=warn-strip'.
+	`--signed-tags=verbatim` to linkgit:git-fast-export[1].  In the
+	absence of this capability, Git will use `--signed-tags=warn-strip`.
 
 
 
@@ -298,7 +314,7 @@ Supported if the helper has the "fetch" capability.
 	is followed by a blank line). For example, the following would
 	be two batches of 'push', the first asking the remote-helper
 	to push the local ref 'master' to the remote ref 'master' and
-	the local 'HEAD' to the remote 'branch', and the second
+	the local `HEAD` to the remote 'branch', and the second
 	asking to push ref 'foo' to ref 'bar' (forced update requested
 	by the '+').
 +
@@ -375,6 +391,22 @@ Supported if the helper has the "export" capability.
 +
 Supported if the helper has the "connect" capability.
 
+'stateless-connect' <service>::
+	Experimental; for internal use only.
+	Connects to the given remote service for communication using
+	git's wire-protocol version 2.  Valid replies to this command
+	are empty line (connection established), 'fallback' (no smart
+	transport support, fall back to dumb transports) and just
+	exiting with error message printed (can't connect, don't bother
+	trying to fall back).  After line feed terminating the positive
+	(empty) response, the output of the service starts.  Messages
+	(both request and response) must consist of zero or more
+	PKT-LINEs, terminating in a flush packet. The client must not
+	expect the server to store any state in between request-response
+	pairs.  After the connection ends, the remote helper exits.
++
+Supported if the helper has the "stateless-connect" capability.
+
 If a fatal error occurs, the program writes the error message to
 stderr and exits. The caller should expect that a suitable error
 message has been printed if the child closes the connection without
@@ -408,14 +440,25 @@ set by Git if the remote helper has the 'option' capability.
 	of <n> correspond to the number of -v flags passed on the
 	command line.
 
-'option progress' \{'true'|'false'\}::
+'option progress' {'true'|'false'}::
 	Enables (or disables) progress messages displayed by the
 	transport helper during a command.
 
 'option depth' <depth>::
 	Deepens the history of a shallow repository.
 
-'option followtags' \{'true'|'false'\}::
+'option deepen-since <timestamp>::
+	Deepens the history of a shallow repository based on time.
+
+'option deepen-not <ref>::
+	Deepens the history of a shallow repository excluding ref.
+	Multiple options add up.
+
+'option deepen-relative {'true'|'false'}::
+	Deepens the history of a shallow repository relative to
+	current boundary. Only valid when used with "option depth".
+
+'option followtags' {'true'|'false'}::
 	If enabled the helper should automatically fetch annotated
 	tag objects if the object the tag points at was transferred
 	during the fetch command.  If the tag is not fetched by
@@ -423,7 +466,7 @@ set by Git if the remote helper has the 'option' capability.
 	ask for the tag specifically.  Some helpers may be able to
 	use this option to avoid a second network connection.
 
-'option dry-run' \{'true'|'false'\}:
+'option dry-run' {'true'|'false'}:
 	If true, pretend the operation completed successfully,
 	but don't actually change any repository data.	For most
 	helpers this only applies to the 'push', if supported.
@@ -434,19 +477,33 @@ set by Git if the remote helper has the 'option' capability.
 	must not rely on this option being set before
 	connect request occurs.
 
-'option check-connectivity' \{'true'|'false'\}::
+'option check-connectivity' {'true'|'false'}::
 	Request the helper to check connectivity of a clone.
 
-'option force' \{'true'|'false'\}::
+'option force' {'true'|'false'}::
 	Request the helper to perform a force update.  Defaults to
 	'false'.
 
-'option cloning \{'true'|'false'\}::
+'option cloning' {'true'|'false'}::
 	Notify the helper this is a clone request (i.e. the current
 	repository is guaranteed empty).
 
-'option update-shallow \{'true'|'false'\}::
+'option update-shallow' {'true'|'false'}::
 	Allow to extend .git/shallow if the new refs require it.
+
+'option pushcert' {'true'|'false'}::
+	GPG sign pushes.
+
+'option push-option <string>::
+	Transmit <string> as a push option. As the push option
+	must not contain LF or NUL characters, the string is not encoded.
+
+'option from-promisor' {'true'|'false'}::
+	Indicate that these objects are being fetched from a promisor.
+
+'option no-dependents' {'true'|'false'}::
+	Indicate that only the objects wanted need to be fetched, not
+	their dependents.
 
 SEE ALSO
 --------

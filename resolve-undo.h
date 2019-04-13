@@ -1,9 +1,11 @@
 #ifndef RESOLVE_UNDO_H
 #define RESOLVE_UNDO_H
 
+#include "cache.h"
+
 struct resolve_undo_info {
 	unsigned int mode[3];
-	unsigned char sha1[3][20];
+	struct object_id oid[3];
 };
 
 extern void record_resolve_undo(struct index_state *, struct cache_entry *);

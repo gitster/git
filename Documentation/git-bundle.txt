@@ -20,7 +20,7 @@ DESCRIPTION
 Some workflows require that one or more branches of development on one
 machine be replicated on another machine, but the two machines cannot
 be directly connected, and therefore the interactive Git protocols (git,
-ssh, rsync, http) cannot be used.  This command provides support for
+ssh, http) cannot be used.  This command provides support for
 'git fetch' and 'git pull' to operate by packaging objects and references
 in an archive at the originating machine, then importing those into
 another repository using 'git fetch' and 'git pull'
@@ -92,8 +92,8 @@ It is okay to err on the side of caution, causing the bundle file
 to contain objects already in the destination, as these are ignored
 when unpacking at the destination.
 
-EXAMPLE
--------
+EXAMPLES
+--------
 
 Assume you want to transfer the history from a repository R1 on machine A
 to another repository R2 on machine B.

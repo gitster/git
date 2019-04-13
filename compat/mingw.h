@@ -1,27 +1,46 @@
+#ifdef __MINGW64_VERSION_MAJOR
+#include <stdint.h>
+#include <wchar.h>
+typedef _sigset_t sigset_t;
+#endif
 #include <winsock2.h>
 #include <ws2tcpip.h>
+
+/* MinGW-w64 reports to have flockfile, but it does not actually have it. */
+#ifdef __MINGW64_VERSION_MAJOR
+#undef _POSIX_THREAD_SAFE_FUNCTIONS
+#endif
+
+extern int mingw_core_config(const char *var, const char *value, void *cb);
+#define platform_core_config mingw_core_config
 
 /*
  * things that are not available in header files
  */
 
-typedef int pid_t;
 typedef int uid_t;
 typedef int socklen_t;
+#ifndef __MINGW64_VERSION_MAJOR
+typedef int pid_t;
 #define hstrerror strerror
+#endif
 
 #define S_IFLNK    0120000 /* Symbolic link */
 #define S_ISLNK(x) (((x) & S_IFMT) == S_IFLNK)
 #define S_ISSOCK(x) 0
 
+#ifndef S_IRWXG
 #define S_IRGRP 0
 #define S_IWGRP 0
 #define S_IXGRP 0
 #define S_IRWXG (S_IRGRP | S_IWGRP | S_IXGRP)
+#endif
+#ifndef S_IRWXO
 #define S_IROTH 0
 #define S_IWOTH 0
 #define S_IXOTH 0
 #define S_IRWXO (S_IROTH | S_IWOTH | S_IXOTH)
+#endif
 
 #define S_ISUID 0004000
 #define S_ISGID 0002000
@@ -51,11 +70,18 @@ typedef int socklen_t;
 #define F_SETFD 2
 #define FD_CLOEXEC 0x1
 
+#if !defined O_CLOEXEC && defined O_NOINHERIT
+#define O_CLOEXEC	O_NOINHERIT
+#endif
+
 #ifndef EAFNOSUPPORT
 #define EAFNOSUPPORT WSAEAFNOSUPPORT
 #endif
 #ifndef ECONNABORTED
 #define ECONNABORTED WSAECONNABORTED
+#endif
+#ifndef ENOTSOCK
+#define ENOTSOCK WSAENOTSOCK
 #endif
 
 struct passwd {
@@ -76,6 +102,14 @@ struct itimerval {
 };
 #define ITIMER_REAL 0
 
+struct utsname {
+	char sysname[16];
+	char nodename[1];
+	char release[16];
+	char version[16];
+	char machine[1];
+};
+
 /*
  * sanitize preprocessor namespace polluted by Windows headers defining
  * macros which collide with git local versions
@@ -92,14 +126,14 @@ static inline int symlink(const char *oldpath, const char *newpath)
 { errno = ENOSYS; return -1; }
 static inline int fchmod(int fildes, mode_t mode)
 { errno = ENOSYS; return -1; }
+#ifndef __MINGW64_VERSION_MAJOR
 static inline pid_t fork(void)
 { errno = ENOSYS; return -1; }
+#endif
 static inline unsigned int alarm(unsigned int seconds)
 { return 0; }
 static inline int fsync(int fd)
 { return _commit(fd); }
-static inline pid_t getppid(void)
-{ return 1; }
 static inline void sync(void)
 {}
 static inline uid_t getuid(void)
@@ -118,9 +152,16 @@ static inline int fcntl(int fd, int cmd, ...)
 #define sigemptyset(x) (void)0
 static inline int sigaddset(sigset_t *set, int signum)
 { return 0; }
+#define SIG_BLOCK 0
 #define SIG_UNBLOCK 0
 static inline int sigprocmask(int how, const sigset_t *set, sigset_t *oldset)
 { return 0; }
+static inline pid_t getppid(void)
+{ return 1; }
+static inline pid_t getpgid(pid_t pid)
+{ return pid == 0 ? getpid() : pid; }
+static inline pid_t tcgetpgrp(int fd)
+{ return getpid(); }
 
 /*
  * simple adaptors
@@ -164,13 +205,16 @@ int pipe(int filedes[2]);
 unsigned int sleep (unsigned int seconds);
 int mkstemp(char *template);
 int gettimeofday(struct timeval *tv, void *tz);
+#ifndef __MINGW64_VERSION_MAJOR
 struct tm *gmtime_r(const time_t *timep, struct tm *result);
 struct tm *localtime_r(const time_t *timep, struct tm *result);
+#endif
 int getpagesize(void);	/* defined in MinGW's libgcc.a */
 struct passwd *getpwuid(uid_t uid);
 int setitimer(int type, struct itimerval *in, struct itimerval *out);
 int sigaction(int sig, struct sigaction *in, struct sigaction *out);
 int link(const char *oldpath, const char *newpath);
+int uname(struct utsname *buf);
 
 /*
  * replacements of existing functions
@@ -197,6 +241,9 @@ FILE *mingw_freopen (const char *filename, const char *otype, FILE *stream);
 int mingw_fflush(FILE *stream);
 #define fflush mingw_fflush
 
+ssize_t mingw_write(int fd, const void *buf, size_t len);
+#define write mingw_write
+
 int mingw_access(const char *filename, int mode);
 #undef access
 #define access mingw_access
@@ -213,11 +260,35 @@ char *mingw_mktemp(char *template);
 char *mingw_getcwd(char *pointer, int len);
 #define getcwd mingw_getcwd
 
+#ifdef NO_UNSETENV
+#error "NO_UNSETENV is incompatible with the Windows-specific startup code!"
+#endif
+
+/*
+ * We bind *env() routines (even the mingw_ ones) to private mingw_ versions.
+ * These talk to the CRT using UNICODE/wchar_t, but maintain the original
+ * narrow-char API.
+ *
+ * Note that the MSCRT maintains both ANSI (getenv()) and UNICODE (_wgetenv())
+ * routines and stores both versions of each environment variable in parallel
+ * (and secretly updates both when you set one or the other), but it uses CP_ACP
+ * to do the conversion rather than CP_UTF8.
+ *
+ * Since everything in the git code base is UTF8, we define the mingw_ routines
+ * to access the CRT using the UNICODE routines and manually convert them to
+ * UTF8.  This also avoids round-trip problems.
+ *
+ * This also helps with our linkage, since "_wenviron" is publicly exported
+ * from the CRT.  But to access "_environ" we would have to statically link
+ * to the CRT (/MT).
+ *
+ * We require NO_SETENV (and let gitsetenv() call our mingw_putenv).
+ */
+#define getenv       mingw_getenv
+#define putenv       mingw_putenv
+#define unsetenv     mingw_putenv
 char *mingw_getenv(const char *name);
-#define getenv mingw_getenv
-int mingw_putenv(const char *namevalue);
-#define putenv mingw_putenv
-#define unsetenv mingw_putenv
+int   mingw_putenv(const char *name);
 
 int mingw_gethostname(char *host, int namelen);
 #define gethostname mingw_gethostname
@@ -283,16 +354,41 @@ static inline int getrlimit(int resource, struct rlimit *rlp)
 }
 
 /*
- * Use mingw specific stat()/lstat()/fstat() implementations on Windows.
+ * Use mingw specific stat()/lstat()/fstat() implementations on Windows,
+ * including our own struct stat with 64 bit st_size and nanosecond-precision
+ * file times.
  */
+#ifndef __MINGW64_VERSION_MAJOR
 #define off_t off64_t
 #define lseek _lseeki64
+struct timespec {
+	time_t tv_sec;
+	long tv_nsec;
+};
+#endif
 
-/* use struct stat with 64 bit st_size */
+struct mingw_stat {
+    _dev_t st_dev;
+    _ino_t st_ino;
+    _mode_t st_mode;
+    short st_nlink;
+    short st_uid;
+    short st_gid;
+    _dev_t st_rdev;
+    off64_t st_size;
+    struct timespec st_atim;
+    struct timespec st_mtim;
+    struct timespec st_ctim;
+};
+
+#define st_atime st_atim.tv_sec
+#define st_mtime st_mtim.tv_sec
+#define st_ctime st_ctim.tv_sec
+
 #ifdef stat
 #undef stat
 #endif
-#define stat _stati64
+#define stat mingw_stat
 int mingw_lstat(const char *file_name, struct stat *buf);
 int mingw_stat(const char *file_name, struct stat *buf);
 int mingw_fstat(int fd, struct stat *buf);
@@ -305,16 +401,12 @@ int mingw_fstat(int fd, struct stat *buf);
 #endif
 #define lstat mingw_lstat
 
-#ifndef _stati64
-# define _stati64(x,y) mingw_stat(x,y)
-#elif defined (_USE_32BIT_TIME_T)
-# define _stat32i64(x,y) mingw_stat(x,y)
-#else
-# define _stat64(x,y) mingw_stat(x,y)
-#endif
 
 int mingw_utime(const char *file_name, const struct utimbuf *times);
 #define utime mingw_utime
+size_t mingw_strftime(char *s, size_t max,
+		   const char *format, const struct tm *tm);
+#define strftime mingw_strftime
 
 pid_t mingw_spawnvpe(const char *cmd, const char **argv, char **env,
 		     const char *dir,
@@ -338,6 +430,12 @@ int mingw_raise(int sig);
  * ANSI emulation wrappers
  */
 
+int winansi_isatty(int fd);
+#define isatty winansi_isatty
+
+int winansi_dup2(int oldfd, int newfd);
+#define dup2 winansi_dup2
+
 void winansi_init(void);
 HANDLE winansi_get_osfhandle(int fd);
 
@@ -345,28 +443,21 @@ HANDLE winansi_get_osfhandle(int fd);
  * git specific compatibility
  */
 
-#define has_dos_drive_prefix(path) (isalpha(*(path)) && (path)[1] == ':')
-#define is_dir_sep(c) ((c) == '/' || (c) == '\\')
-static inline char *mingw_find_last_dir_sep(const char *path)
+static inline void convert_slashes(char *path)
 {
-	char *ret = NULL;
-	for (; *path; ++path)
-		if (is_dir_sep(*path))
-			ret = (char *)path;
-	return ret;
+	for (; *path; path++)
+		if (*path == '\\')
+			*path = '/';
 }
-#define find_last_dir_sep mingw_find_last_dir_sep
-int mingw_offset_1st_component(const char *path);
-#define offset_1st_component mingw_offset_1st_component
 #define PATH_SEP ';'
+extern char *mingw_query_user_email(void);
+#define query_user_email mingw_query_user_email
+#if !defined(__MINGW64_VERSION_MAJOR) && (!defined(_MSC_VER) || _MSC_VER < 1800)
 #define PRIuMAX "I64u"
 #define PRId64 "I64d"
-
-void mingw_open_html(const char *path);
-#define open_html mingw_open_html
-
-void mingw_mark_as_git_dir(const char *dir);
-#define mark_as_git_dir mingw_mark_as_git_dir
+#else
+#include <inttypes.h>
+#endif
 
 /**
  * Converts UTF-8 encoded string to UTF-16LE.
@@ -483,10 +574,10 @@ extern CRITICAL_SECTION pinfo_cs;
  * A replacement of main() that adds win32 specific initialization.
  */
 
-void mingw_startup();
-#define main(c,v) dummy_decl_mingw_main(); \
+void mingw_startup(void);
+#define main(c,v) dummy_decl_mingw_main(void); \
 static int mingw_main(c,v); \
-int main(int argc, char **argv) \
+int main(int argc, const char **argv) \
 { \
 	mingw_startup(); \
 	return mingw_main(__argc, (void *)__argv); \

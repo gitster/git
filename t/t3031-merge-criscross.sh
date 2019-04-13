@@ -32,7 +32,7 @@ test_expect_success 'setup repo with criss-cross history' '
 	do
 		echo $n > data/$n &&
 		n=$(($n+1)) ||
-		break
+		return 1
 	done &&
 
 	# check them in
@@ -88,7 +88,7 @@ test_expect_success 'setup repo with criss-cross history' '
 	git branch G
 '
 
-test_expect_success 'recursive merge between F and G, causes segfault' '
+test_expect_success 'recursive merge between F and G does not cause segfault' '
 	git merge F
 '
 

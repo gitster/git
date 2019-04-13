@@ -24,7 +24,7 @@ test_expect_success 'prepare repository' '
 '
 
 test_expect_success 'Merge with d/f conflicts' '
-	test_expect_code 1 git merge "merge msg" B master
+	test_expect_code 1 git merge -m "merge msg" master
 '
 
 test_expect_success 'F/D conflict' '
@@ -89,9 +89,6 @@ test_expect_success 'modify/delete + directory/file conflict' '
 '
 
 test_expect_success 'modify/delete + directory/file conflict; other way' '
-	# Yes, we really need the double reset since "letters" appears as
-	# both a file and a directory.
-	git reset --hard &&
 	git reset --hard &&
 	git clean -f &&
 	git checkout modify^0 &&

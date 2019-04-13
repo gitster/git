@@ -20,7 +20,7 @@ note () {
 }
 
 unnote () {
-	git name-rev --tags --stdin | sed -e "s|$_x40 (tags/\([^)]*\))\([ 	]\)|\1\2|g"
+	git name-rev --tags --stdin | sed -e "s|$OID_REGEX (tags/\([^)]*\))\([ 	]\)|\1\2|g"
 }
 
 test_expect_success setup '
@@ -58,7 +58,7 @@ test_expect_success setup '
 
 	git checkout master &&
 	test_tick && git merge --no-ff fiddler-branch &&
-	note K
+	note K &&
 
 	test_commit "file=Part 1" file "Part 1" L &&
 
@@ -92,10 +92,7 @@ check_outcome () {
 		git log --format="$FMT" $param |
 		unnote >actual &&
 		sed -e "$munge_actual" <actual >check &&
-		test_cmp expect check || {
-			cat actual
-			false
-		}
+		test_cmp expect check
 	'
 }
 

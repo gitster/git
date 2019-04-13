@@ -19,15 +19,20 @@
 use 5.008;
 use strict;
 use warnings;
+use POSIX qw/strftime/;
 use Term::ReadLine;
 use Getopt::Long;
 use Text::ParseWords;
-use Data::Dumper;
 use Term::ANSIColor;
 use File::Temp qw/ tempdir tempfile /;
-use File::Spec::Functions qw(catfile);
-use Error qw(:try);
+use File::Spec::Functions qw(catdir catfile);
+use Git::LoadCPAN::Error qw(:try);
+use Cwd qw(abs_path cwd);
 use Git;
+use Git::I18N;
+use Net::Domain ();
+use Net::SMTP ();
+use Git::LoadCPAN::Mail::Address;
 
 Getopt::Long::Configure qw/ pass_through /;
 
@@ -46,6 +51,7 @@ package main;
 sub usage {
 	print <<EOT;
 git send-email [options] <file | directory | rev-list options >
+git send-email --dump-aliases
 
   Composing:
     --from                  <str>  * Email From:
@@ -53,6 +59,7 @@ git send-email [options] <file | directory | rev-list options >
     --[no-]cc               <str>  * Email Cc:
     --[no-]bcc              <str>  * Email Bcc:
     --subject               <str>  * Email "Subject:"
+    --reply-to              <str>  * Email "Reply-To:"
     --in-reply-to           <str>  * Email "In-Reply-To:"
     --[no-]xmailer                 * Add "X-Mailer:" header (default).
     --[no-]annotate                * Review each patch that will be sent in an editor.
@@ -75,13 +82,22 @@ git send-email [options] <file | directory | rev-list options >
                                      Pass an empty string to disable certificate
                                      verification.
     --smtp-domain           <str>  * The domain name sent to HELO/EHLO handshake
+    --smtp-auth             <str>  * Space-separated list of allowed AUTH mechanisms, or
+                                     "none" to disable authentication.
+                                     This setting forces to use one of the listed mechanisms.
+    --no-smtp-auth                   Disable SMTP authentication. Shorthand for
+                                     `--smtp-auth=none`
     --smtp-debug            <0|1>  * Disable, enable Net::SMTP debug.
+
+    --batch-size            <int>  * send max <int> message per connection.
+    --relogin-delay         <int>  * delay <int> seconds between two successive login.
+                                     This option can only be used with --batch-size
 
   Automating:
     --identity              <str>  * Use the sendemail.<id> options.
     --to-cmd                <str>  * Email To: via `<str> \$patch_path`
     --cc-cmd                <str>  * Email Cc: via `<str> \$patch_path`
-    --suppress-cc           <str>  * author, self, sob, cc, cccmd, body, bodycc, all.
+    --suppress-cc           <str>  * author, self, sob, cc, cccmd, body, bodycc, misc-by, all.
     --[no-]cc-cover                * Email Cc: addresses in the cover letter.
     --[no-]to-cover                * Email To: addresses in the cover letter.
     --[no-]signed-off-by-cc        * Send to Signed-off-by: addresses. Default on.
@@ -99,8 +115,16 @@ git send-email [options] <file | directory | rev-list options >
                                      `git format-patch` ones.
     --force                        * Send even if safety checks would prevent it.
 
+  Information:
+    --dump-aliases                 * Dump configured aliases and exit.
+
 EOT
 	exit(1);
+}
+
+sub completion_helper {
+    print Git::command('format-patch', '--git-completion-helper');
+    exit(0);
 }
 
 # most mail servers generate the Date: header, but not all...
@@ -111,20 +135,20 @@ sub format_2822_time {
 	my $localmin = $localtm[1] + $localtm[2] * 60;
 	my $gmtmin = $gmttm[1] + $gmttm[2] * 60;
 	if ($localtm[0] != $gmttm[0]) {
-		die "local zone differs from GMT by a non-minute interval\n";
+		die __("local zone differs from GMT by a non-minute interval\n");
 	}
 	if ((($gmttm[6] + 1) % 7) == $localtm[6]) {
 		$localmin += 1440;
 	} elsif ((($gmttm[6] - 1) % 7) == $localtm[6]) {
 		$localmin -= 1440;
 	} elsif ($gmttm[6] != $localtm[6]) {
-		die "local time offset greater than or equal to 24 hours\n";
+		die __("local time offset greater than or equal to 24 hours\n");
 	}
 	my $offset = $localmin - $gmtmin;
 	my $offhour = $offset / 60;
 	my $offmin = abs($offset % 60);
 	if (abs($offhour) >= 24) {
-		die ("local time offset greater than or equal to 24 hours\n");
+		die __("local time offset greater than or equal to 24 hours\n");
 	}
 
 	return sprintf("%s, %2d %s %d %02d:%02d:%02d %s%02d%02d",
@@ -143,9 +167,9 @@ sub format_2822_time {
 }
 
 my $have_email_valid = eval { require Email::Valid; 1 };
-my $have_mail_address = eval { require Mail::Address; 1 };
 my $smtp;
 my $auth;
+my $num_sent = 0;
 
 # Regexes for RFC 2047 productions.
 my $re_token = qr/[^][()<>@,;:\\"\/?.= \000-\037\177-\377]+/;
@@ -154,13 +178,13 @@ my $re_encoded_word = qr/=\?($re_token)\?($re_token)\?($re_encoded_text)\?=/;
 
 # Variables we fill in automatically, or via prompting:
 my (@to,$no_to,@initial_to,@cc,$no_cc,@initial_cc,@bcclist,$no_bcc,@xh,
-	$initial_reply_to,$initial_subject,@files,
+	$initial_in_reply_to,$reply_to,$initial_subject,@files,
 	$author,$sender,$smtp_authpass,$annotate,$use_xmailer,$compose,$time);
 
 my $envelope_sender;
 
 # Example reply to:
-#$initial_reply_to = ''; #<20050203173208.GA23964@foobar.com>';
+#$initial_in_reply_to = ''; #<20050203173208.GA23964@foobar.com>';
 
 my $repo = eval { Git->repository() };
 my @repo = $repo ? ($repo) : ();
@@ -178,6 +202,7 @@ my ($quiet, $dry_run) = (0, 0);
 my $format_patch;
 my $compose_filename;
 my $force = 0;
+my $dump_aliases = 0;
 
 # Handle interactive edition of files.
 my $multiedit;
@@ -191,13 +216,13 @@ sub do_edit {
 		map {
 			system('sh', '-c', $editor.' "$@"', $editor, $_);
 			if (($? & 127) || ($? >> 8)) {
-				die("the editor exited uncleanly, aborting everything");
+				die(__("the editor exited uncleanly, aborting everything"));
 			}
 		} @_;
 	} else {
 		system('sh', '-c', $editor.' "$@"', $editor, @_);
 		if (($? & 127) || ($? >> 8)) {
-			die("the editor exited uncleanly, aborting everything");
+			die(__("the editor exited uncleanly, aborting everything"));
 		}
 	}
 }
@@ -208,12 +233,13 @@ my ($cover_cc, $cover_to);
 my ($to_cmd, $cc_cmd);
 my ($smtp_server, $smtp_server_port, @smtp_server_options);
 my ($smtp_authuser, $smtp_encryption, $smtp_ssl_cert_path);
-my ($identity, $aliasfiletype, @alias_files, $smtp_domain);
+my ($batch_size, $relogin_delay);
+my ($identity, $aliasfiletype, @alias_files, $smtp_domain, $smtp_auth);
 my ($validate, $confirm);
 my (@suppress_cc);
 my ($auto_8bit_encoding);
 my ($compose_encoding);
-my ($target_xfer_encoding);
+my $target_xfer_encoding = 'auto';
 
 my ($debug_net_smtp) = 0;		# Net::SMTP, see send_message()
 
@@ -237,8 +263,10 @@ my %config_settings = (
     "smtpserveroption" => \@smtp_server_options,
     "smtpuser" => \$smtp_authuser,
     "smtppass" => \$smtp_authpass,
-    "smtpsslcertpath" => \$smtp_ssl_cert_path,
     "smtpdomain" => \$smtp_domain,
+    "smtpauth" => \$smtp_auth,
+    "smtpbatchsize" => \$batch_size,
+    "smtprelogindelay" => \$relogin_delay,
     "to" => \@initial_to,
     "tocmd" => \$to_cmd,
     "cc" => \@initial_cc,
@@ -256,6 +284,7 @@ my %config_settings = (
 
 my %config_path_settings = (
     "aliasesfile" => \@alias_files,
+    "smtpsslcertpath" => \$smtp_ssl_cert_path,
 );
 
 # Handle Uncouth Termination
@@ -270,10 +299,13 @@ sub signal_handler {
 	# tmp files from --compose
 	if (defined $compose_filename) {
 		if (-e $compose_filename) {
-			print "'$compose_filename' contains an intermediate version of the email you were composing.\n";
+			printf __("'%s' contains an intermediate version ".
+				  "of the email you were composing.\n"),
+				  $compose_filename;
 		}
 		if (-e ($compose_filename . ".final")) {
-			print "'$compose_filename.final' contains the composed email.\n"
+			printf __("'%s.final' contains the composed email.\n"),
+				  $compose_filename;
 		}
 	}
 
@@ -287,9 +319,16 @@ $SIG{INT}  = \&signal_handler;
 # needing, first, from the command line:
 
 my $help;
+my $git_completion_helper;
 my $rc = GetOptions("h" => \$help,
+                    "dump-aliases" => \$dump_aliases);
+usage() unless $rc;
+die __("--dump-aliases incompatible with other options\n")
+    if !$help and $dump_aliases and @ARGV;
+$rc = GetOptions(
 		    "sender|from=s" => \$sender,
-                    "in-reply-to=s" => \$initial_reply_to,
+                    "in-reply-to=s" => \$initial_in_reply_to,
+		    "reply-to=s" => \$reply_to,
 		    "subject=s" => \$initial_subject,
 		    "to=s" => \@initial_to,
 		    "to-cmd=s" => \$to_cmd,
@@ -299,6 +338,7 @@ my $rc = GetOptions("h" => \$help,
 		    "bcc=s" => \@bcclist,
 		    "no-bcc" => \$no_bcc,
 		    "chain-reply-to!" => \$chain_reply_to,
+		    "no-chain-reply-to" => sub {$chain_reply_to = 0},
 		    "smtp-server=s" => \$smtp_server,
 		    "smtp-server-option=s" => \@smtp_server_options,
 		    "smtp-server-port=s" => \$smtp_server_port,
@@ -309,36 +349,55 @@ my $rc = GetOptions("h" => \$help,
 		    "smtp-ssl-cert-path=s" => \$smtp_ssl_cert_path,
 		    "smtp-debug:i" => \$debug_net_smtp,
 		    "smtp-domain:s" => \$smtp_domain,
+		    "smtp-auth=s" => \$smtp_auth,
+		    "no-smtp-auth" => sub {$smtp_auth = 'none'},
 		    "identity=s" => \$identity,
 		    "annotate!" => \$annotate,
+		    "no-annotate" => sub {$annotate = 0},
 		    "compose" => \$compose,
 		    "quiet" => \$quiet,
 		    "cc-cmd=s" => \$cc_cmd,
 		    "suppress-from!" => \$suppress_from,
+		    "no-suppress-from" => sub {$suppress_from = 0},
 		    "suppress-cc=s" => \@suppress_cc,
 		    "signed-off-cc|signed-off-by-cc!" => \$signed_off_by_cc,
+		    "no-signed-off-cc|no-signed-off-by-cc" => sub {$signed_off_by_cc = 0},
 		    "cc-cover|cc-cover!" => \$cover_cc,
+		    "no-cc-cover" => sub {$cover_cc = 0},
 		    "to-cover|to-cover!" => \$cover_to,
+		    "no-to-cover" => sub {$cover_to = 0},
 		    "confirm=s" => \$confirm,
 		    "dry-run" => \$dry_run,
 		    "envelope-sender=s" => \$envelope_sender,
 		    "thread!" => \$thread,
+		    "no-thread" => sub {$thread = 0},
 		    "validate!" => \$validate,
+		    "no-validate" => sub {$validate = 0},
 		    "transfer-encoding=s" => \$target_xfer_encoding,
 		    "format-patch!" => \$format_patch,
+		    "no-format-patch" => sub {$format_patch = 0},
 		    "8bit-encoding=s" => \$auto_8bit_encoding,
 		    "compose-encoding=s" => \$compose_encoding,
 		    "force" => \$force,
 		    "xmailer!" => \$use_xmailer,
+		    "no-xmailer" => sub {$use_xmailer = 0},
+		    "batch-size=i" => \$batch_size,
+		    "relogin-delay=i" => \$relogin_delay,
+		    "git-completion-helper" => \$git_completion_helper,
 	 );
 
 usage() if $help;
+completion_helper() if $git_completion_helper;
 unless ($rc) {
     usage();
 }
 
-die "Cannot run git format-patch from outside a repository\n"
+die __("Cannot run git format-patch from outside a repository\n")
 	if $format_patch and not $repo;
+
+die __("`batch-size` and `relogin` must be specified together " .
+	"(via command-line or configuration option)\n")
+	if defined $relogin_delay and not defined $batch_size;
 
 # Now, let's fill any that aren't set in with defaults:
 
@@ -406,14 +465,14 @@ $smtp_encryption = '' unless (defined $smtp_encryption);
 my(%suppress_cc);
 if (@suppress_cc) {
 	foreach my $entry (@suppress_cc) {
-		die "Unknown --suppress-cc field: '$entry'\n"
-			unless $entry =~ /^(?:all|cccmd|cc|author|self|sob|body|bodycc)$/;
+		die sprintf(__("Unknown --suppress-cc field: '%s'\n"), $entry)
+			unless $entry =~ /^(?:all|cccmd|cc|author|self|sob|body|bodycc|misc-by)$/;
 		$suppress_cc{$entry} = 1;
 	}
 }
 
 if ($suppress_cc{'all'}) {
-	foreach my $entry (qw (cccmd cc author self sob body bodycc)) {
+	foreach my $entry (qw (cccmd cc author self sob body bodycc misc-by)) {
 		$suppress_cc{$entry} = 1;
 	}
 	delete $suppress_cc{'all'};
@@ -424,7 +483,7 @@ $suppress_cc{'self'} = $suppress_from if defined $suppress_from;
 $suppress_cc{'sob'} = !$signed_off_by_cc if defined $signed_off_by_cc;
 
 if ($suppress_cc{'body'}) {
-	foreach my $entry (qw (sob bodycc)) {
+	foreach my $entry (qw (sob bodycc misc-by)) {
 		$suppress_cc{$entry} = 1;
 	}
 	delete $suppress_cc{'body'};
@@ -435,7 +494,7 @@ my $confirm_unconfigured = !defined $confirm;
 if ($confirm_unconfigured) {
 	$confirm = scalar %suppress_cc ? 'compose' : 'auto';
 };
-die "Unknown --confirm setting: '$confirm'\n"
+die sprintf(__("Unknown --confirm setting: '%s'\n"), $confirm)
 	unless $confirm =~ /^(?:auto|cc|compose|always|never)/;
 
 # Debugging, print out the suppressions.
@@ -450,26 +509,8 @@ my ($repoauthor, $repocommitter);
 ($repoauthor) = Git::ident_person(@repo, 'author');
 ($repocommitter) = Git::ident_person(@repo, 'committer');
 
-# Verify the user input
-
-foreach my $entry (@initial_to) {
-	die "Comma in --to entry: $entry'\n" unless $entry !~ m/,/;
-}
-
-foreach my $entry (@initial_cc) {
-	die "Comma in --cc entry: $entry'\n" unless $entry !~ m/,/;
-}
-
-foreach my $entry (@bcclist) {
-	die "Comma in --bcclist entry: $entry'\n" unless $entry !~ m/,/;
-}
-
 sub parse_address_line {
-	if ($have_mail_address) {
-		return map { $_->format } Mail::Address->parse($_[0]);
-	} else {
-		return split_addrs($_[0]);
-	}
+	return map { $_->format } Mail::Address->parse($_[0]);
 }
 
 sub split_addrs {
@@ -477,17 +518,53 @@ sub split_addrs {
 }
 
 my %aliases;
+
+sub parse_sendmail_alias {
+	local $_ = shift;
+	if (/"/) {
+		printf STDERR __("warning: sendmail alias with quotes is not supported: %s\n"), $_;
+	} elsif (/:include:/) {
+		printf STDERR __("warning: `:include:` not supported: %s\n"), $_;
+	} elsif (/[\/|]/) {
+		printf STDERR __("warning: `/file` or `|pipe` redirection not supported: %s\n"), $_;
+	} elsif (/^(\S+?)\s*:\s*(.+)$/) {
+		my ($alias, $addr) = ($1, $2);
+		$aliases{$alias} = [ split_addrs($addr) ];
+	} else {
+		printf STDERR __("warning: sendmail line is not recognized: %s\n"), $_;
+	}
+}
+
+sub parse_sendmail_aliases {
+	my $fh = shift;
+	my $s = '';
+	while (<$fh>) {
+		chomp;
+		next if /^\s*$/ || /^\s*#/;
+		$s .= $_, next if $s =~ s/\\$// || s/^\s+//;
+		parse_sendmail_alias($s) if $s;
+		$s = $_;
+	}
+	$s =~ s/\\$//; # silently tolerate stray '\' on last line
+	parse_sendmail_alias($s) if $s;
+}
+
 my %parse_alias = (
 	# multiline formats can be supported in the future
 	mutt => sub { my $fh = shift; while (<$fh>) {
 		if (/^\s*alias\s+(?:-group\s+\S+\s+)*(\S+)\s+(.*)$/) {
 			my ($alias, $addr) = ($1, $2);
 			$addr =~ s/#.*$//; # mutt allows # comments
-			 # commas delimit multiple addresses
-			$aliases{$alias} = [ split_addrs($addr) ];
+			# commas delimit multiple addresses
+			my @addr = split_addrs($addr);
+
+			# quotes may be escaped in the file,
+			# unescape them so we do not double-escape them later.
+			s/\\"/"/g foreach @addr;
+			$aliases{$alias} = \@addr
 		}}},
 	mailrc => sub { my $fh = shift; while (<$fh>) {
-		if (/^alias\s+(\S+)\s+(.*)$/) {
+		if (/^alias\s+(\S+)\s+(.*?)\s*$/) {
 			# spaces delimit multiple addresses
 			$aliases{$1} = [ quotewords('\s+', 0, $2) ];
 		}}},
@@ -505,7 +582,7 @@ my %parse_alias = (
 			       $aliases{$alias} = [ split_addrs($addr) ];
 			  }
 		      } },
-
+	sendmail => \&parse_sendmail_aliases,
 	gnus => sub { my $fh = shift; while (<$fh>) {
 		if (/\(define-mail-alias\s+"(\S+?)"\s+"(\S+?)"\)/) {
 			$aliases{$1} = [ $2 ];
@@ -520,7 +597,10 @@ if (@alias_files and $aliasfiletype and defined $parse_alias{$aliasfiletype}) {
 	}
 }
 
-($sender) = expand_aliases($sender) if defined $sender;
+if ($dump_aliases) {
+    print "$_\n" for (sort keys %aliases);
+    exit(0);
+}
 
 # is_format_patch_arg($f) returns 0 if $f names a patch, or 1 if
 # $f is a revision list specification to be passed to format-patch.
@@ -532,11 +612,11 @@ sub is_format_patch_arg {
 		if (defined($format_patch)) {
 			return $format_patch;
 		}
-		die(<<EOF);
-File '$f' exists but it could also be the range of commits
+		die sprintf(__ <<EOF, $f, $f);
+File '%s' exists but it could also be the range of commits
 to produce patches for.  Please disambiguate by...
 
-    * Saying "./$f" if you mean a file; or
+    * Saying "./%s" if you mean a file; or
     * Giving --format-patch option if you mean a range.
 EOF
 	} catch Git::Error::Command with {
@@ -554,7 +634,7 @@ while (defined(my $f = shift @ARGV)) {
 		@ARGV = ();
 	} elsif (-d $f and !is_format_patch_arg($f)) {
 		opendir my $dh, $f
-			or die "Failed to opendir $f: $!";
+			or die sprintf(__("Failed to opendir %s: %s"), $f, $!);
 
 		push @files, grep { -f $_ } map { catfile($f, $_) }
 				sort readdir $dh;
@@ -567,16 +647,19 @@ while (defined(my $f = shift @ARGV)) {
 }
 
 if (@rev_list_opts) {
-	die "Cannot run git format-patch from outside a repository\n"
+	die __("Cannot run git format-patch from outside a repository\n")
 		unless $repo;
 	push @files, $repo->command('format-patch', '-o', tempdir(CLEANUP => 1), @rev_list_opts);
 }
 
+@files = handle_backup_files(@files);
+
 if ($validate) {
 	foreach my $f (@files) {
 		unless (-p $f) {
-			my $error = validate_patch($f);
-			$error and die "fatal: $f: $error\nwarning: no patches were sent\n";
+			my $error = validate_patch($f, $target_xfer_encoding);
+			$error and die sprintf(__("fatal: %s: %s\nwarning: no patches were sent\n"),
+						  $f, $error);
 		}
 	}
 }
@@ -586,7 +669,7 @@ if (@files) {
 		print $_,"\n" for (@files);
 	}
 } else {
-	print STDERR "\nNo patch files specified!\n\n";
+	print STDERR __("\nNo patch files specified!\n\n");
 	usage();
 }
 
@@ -599,7 +682,7 @@ sub get_patch_subject {
 		return "GIT: $1\n";
 	}
 	close $fh;
-	die "No subject line in $fn ?";
+	die sprintf(__("No subject line in %s?"), $fn);
 }
 
 if ($compose) {
@@ -609,25 +692,29 @@ if ($compose) {
 		tempfile(".gitsendemail.msg.XXXXXX", DIR => $repo->repo_path()) :
 		tempfile(".gitsendemail.msg.XXXXXX", DIR => "."))[1];
 	open my $c, ">", $compose_filename
-		or die "Failed to open for writing $compose_filename: $!";
+		or die sprintf(__("Failed to open for writing %s: %s"), $compose_filename, $!);
 
 
 	my $tpl_sender = $sender || $repoauthor || $repocommitter || '';
 	my $tpl_subject = $initial_subject || '';
-	my $tpl_reply_to = $initial_reply_to || '';
+	my $tpl_in_reply_to = $initial_in_reply_to || '';
+	my $tpl_reply_to = $reply_to || '';
 
-	print $c <<EOT;
+	print $c <<EOT1, Git::prefix_lines("GIT: ", __ <<EOT2), <<EOT3;
 From $tpl_sender # This line is ignored.
-GIT: Lines beginning in "GIT:" will be removed.
-GIT: Consider including an overall diffstat or table of contents
-GIT: for the patch you are writing.
-GIT:
-GIT: Clear the body content if you don't wish to send a summary.
-From: $tpl_sender
-Subject: $tpl_subject
-In-Reply-To: $tpl_reply_to
+EOT1
+Lines beginning in "GIT:" will be removed.
+Consider including an overall diffstat or table of contents
+for the patch you are writing.
 
-EOT
+Clear the body content if you don't wish to send a summary.
+EOT2
+From: $tpl_sender
+Reply-To: $tpl_reply_to
+Subject: $tpl_subject
+In-Reply-To: $tpl_in_reply_to
+
+EOT3
 	for my $f (@files) {
 		print $c get_patch_subject($f);
 	}
@@ -639,57 +726,73 @@ EOT
 		do_edit($compose_filename);
 	}
 
-	open my $c2, ">", $compose_filename . ".final"
-		or die "Failed to open $compose_filename.final : " . $!;
-
 	open $c, "<", $compose_filename
-		or die "Failed to open $compose_filename : " . $!;
+		or die sprintf(__("Failed to open %s: %s"), $compose_filename, $!);
 
-	my $need_8bit_cte = file_has_nonascii($compose_filename);
-	my $in_body = 0;
-	my $summary_empty = 1;
 	if (!defined $compose_encoding) {
 		$compose_encoding = "UTF-8";
 	}
-	while(<$c>) {
-		next if m/^GIT:/;
-		if ($in_body) {
-			$summary_empty = 0 unless (/^\n$/);
-		} elsif (/^\n$/) {
-			$in_body = 1;
-			if ($need_8bit_cte) {
-				print $c2 "MIME-Version: 1.0\n",
-					 "Content-Type: text/plain; ",
-					   "charset=$compose_encoding\n",
-					 "Content-Transfer-Encoding: 8bit\n";
-			}
-		} elsif (/^MIME-Version:/i) {
-			$need_8bit_cte = 0;
-		} elsif (/^Subject:\s*(.+)\s*$/i) {
-			$initial_subject = $1;
-			my $subject = $initial_subject;
-			$_ = "Subject: " .
-				quote_subject($subject, $compose_encoding) .
-				"\n";
-		} elsif (/^In-Reply-To:\s*(.+)\s*$/i) {
-			$initial_reply_to = $1;
-			next;
-		} elsif (/^From:\s*(.+)\s*$/i) {
-			$sender = $1;
-			next;
-		} elsif (/^(?:To|Cc|Bcc):/i) {
-			print "To/Cc/Bcc fields are not interpreted yet, they have been ignored\n";
-			next;
+
+	my %parsed_email;
+	while (my $line = <$c>) {
+		next if $line =~ m/^GIT:/;
+		parse_header_line($line, \%parsed_email);
+		if ($line =~ /^$/) {
+			$parsed_email{'body'} = filter_body($c);
 		}
-		print $c2 $_;
 	}
 	close $c;
-	close $c2;
 
-	if ($summary_empty) {
-		print "Summary email is empty, skipping it\n";
+	open my $c2, ">", $compose_filename . ".final"
+	or die sprintf(__("Failed to open %s.final: %s"), $compose_filename, $!);
+
+
+	if ($parsed_email{'From'}) {
+		$sender = delete($parsed_email{'From'});
+	}
+	if ($parsed_email{'In-Reply-To'}) {
+		$initial_in_reply_to = delete($parsed_email{'In-Reply-To'});
+	}
+	if ($parsed_email{'Reply-To'}) {
+		$reply_to = delete($parsed_email{'Reply-To'});
+	}
+	if ($parsed_email{'Subject'}) {
+		$initial_subject = delete($parsed_email{'Subject'});
+		print $c2 "Subject: " .
+			quote_subject($initial_subject, $compose_encoding) .
+			"\n";
+	}
+
+	if ($parsed_email{'MIME-Version'}) {
+		print $c2 "MIME-Version: $parsed_email{'MIME-Version'}\n",
+				"Content-Type: $parsed_email{'Content-Type'};\n",
+				"Content-Transfer-Encoding: $parsed_email{'Content-Transfer-Encoding'}\n";
+		delete($parsed_email{'MIME-Version'});
+		delete($parsed_email{'Content-Type'});
+		delete($parsed_email{'Content-Transfer-Encoding'});
+	} elsif (file_has_nonascii($compose_filename)) {
+		my $content_type = (delete($parsed_email{'Content-Type'}) or
+			"text/plain; charset=$compose_encoding");
+		print $c2 "MIME-Version: 1.0\n",
+			"Content-Type: $content_type\n",
+			"Content-Transfer-Encoding: 8bit\n";
+	}
+	# Preserve unknown headers
+	foreach my $key (keys %parsed_email) {
+		next if $key eq 'body';
+		print $c2 "$key: $parsed_email{$key}";
+	}
+
+	if ($parsed_email{'body'}) {
+		print $c2 "\n$parsed_email{'body'}\n";
+		delete($parsed_email{'body'});
+	} else {
+		print __("Summary email is empty, skipping it\n");
 		$compose = -1;
 	}
+
+	close $c2;
+
 } elsif ($annotate) {
 	do_edit(@files);
 }
@@ -717,7 +820,9 @@ sub ask {
 			return $resp;
 		}
 		if ($confirm_only) {
-			my $yesno = $term->readline("Are you sure you want to use <$resp> [y/N]? ");
+			my $yesno = $term->readline(
+				# TRANSLATORS: please keep [y/N] as is.
+				sprintf(__("Are you sure you want to use <%s> [y/N]? "), $resp));
 			if (defined $yesno && $yesno =~ /y/i) {
 				return $resp;
 			}
@@ -725,6 +830,32 @@ sub ask {
 	}
 	return;
 }
+
+sub parse_header_line {
+	my $lines = shift;
+	my $parsed_line = shift;
+	my $addr_pat = join "|", qw(To Cc Bcc);
+
+	foreach (split(/\n/, $lines)) {
+		if (/^($addr_pat):\s*(.+)$/i) {
+		        $parsed_line->{$1} = [ parse_address_line($2) ];
+		} elsif (/^([^:]*):\s*(.+)\s*$/i) {
+		        $parsed_line->{$1} = $2;
+		}
+	}
+}
+
+sub filter_body {
+	my $c = shift;
+	my $body = "";
+	while (my $body_line = <$c>) {
+		if ($body_line !~ m/^GIT:/) {
+			$body .= $body_line;
+		}
+	}
+	return $body;
+}
+
 
 my %broken_encoding;
 
@@ -746,26 +877,30 @@ foreach my $f (@files) {
 }
 
 if (!defined $auto_8bit_encoding && scalar %broken_encoding) {
-	print "The following files are 8bit, but do not declare " .
-		"a Content-Transfer-Encoding.\n";
+	print __("The following files are 8bit, but do not declare " .
+		 "a Content-Transfer-Encoding.\n");
 	foreach my $f (sort keys %broken_encoding) {
 		print "    $f\n";
 	}
-	$auto_8bit_encoding = ask("Which 8bit encoding should I declare [UTF-8]? ",
+	$auto_8bit_encoding = ask(__("Which 8bit encoding should I declare [UTF-8]? "),
+				  valid_re => qr/.{4}/, confirm_only => 1,
 				  default => "UTF-8");
 }
 
 if (!$force) {
 	for my $f (@files) {
 		if (get_patch_subject($f) =~ /\Q*** SUBJECT HERE ***\E/) {
-			die "Refusing to send because the patch\n\t$f\n"
+			die sprintf(__("Refusing to send because the patch\n\t%s\n"
 				. "has the template subject '*** SUBJECT HERE ***'. "
-				. "Pass --force if you really want to send.\n";
+				. "Pass --force if you really want to send.\n"), $f);
 		}
 	}
 }
 
-if (!defined $sender) {
+if (defined $sender) {
+	$sender =~ s/^\s+|\s+$//g;
+	($sender) = expand_aliases($sender);
+} else {
 	$sender = $repoauthor || $repocommitter || '';
 }
 
@@ -774,9 +909,10 @@ if (!defined $sender) {
 # But it's a no-op to run sanitize_address on an already sanitized address.
 $sender = sanitize_address($sender);
 
+my $to_whom = __("To whom should the emails be sent (if anyone)?");
 my $prompting = 0;
 if (!@initial_to && !defined $to_cmd) {
-	my $to = ask("Who should the emails be sent to (if any)? ",
+	my $to = ask("$to_whom ",
 		     default => "",
 		     valid_re => qr/\@.*\./, confirm_only => 1);
 	push @initial_to, parse_address_line($to) if defined $to; # sanitized/validated later
@@ -791,33 +927,38 @@ my %EXPANDED_ALIASES;
 sub expand_one_alias {
 	my $alias = shift;
 	if ($EXPANDED_ALIASES{$alias}) {
-		die "fatal: alias '$alias' expands to itself\n";
+		die sprintf(__("fatal: alias '%s' expands to itself\n"), $alias);
 	}
 	local $EXPANDED_ALIASES{$alias} = 1;
 	return $aliases{$alias} ? expand_aliases(@{$aliases{$alias}}) : $alias;
 }
 
-@initial_to = expand_aliases(@initial_to);
-@initial_to = validate_address_list(sanitize_address_list(@initial_to));
-@initial_cc = expand_aliases(@initial_cc);
-@initial_cc = validate_address_list(sanitize_address_list(@initial_cc));
-@bcclist = expand_aliases(@bcclist);
-@bcclist = validate_address_list(sanitize_address_list(@bcclist));
+@initial_to = process_address_list(@initial_to);
+@initial_cc = process_address_list(@initial_cc);
+@bcclist = process_address_list(@bcclist);
 
-if ($thread && !defined $initial_reply_to && $prompting) {
-	$initial_reply_to = ask(
-		"Message-ID to be used as In-Reply-To for the first email (if any)? ",
+if ($thread && !defined $initial_in_reply_to && $prompting) {
+	$initial_in_reply_to = ask(
+		__("Message-ID to be used as In-Reply-To for the first email (if any)? "),
 		default => "",
 		valid_re => qr/\@.*\./, confirm_only => 1);
 }
-if (defined $initial_reply_to) {
-	$initial_reply_to =~ s/^\s*<?//;
-	$initial_reply_to =~ s/>?\s*$//;
-	$initial_reply_to = "<$initial_reply_to>" if $initial_reply_to ne '';
+if (defined $initial_in_reply_to) {
+	$initial_in_reply_to =~ s/^\s*<?//;
+	$initial_in_reply_to =~ s/>?\s*$//;
+	$initial_in_reply_to = "<$initial_in_reply_to>" if $initial_in_reply_to ne '';
+}
+
+if (defined $reply_to) {
+	$reply_to =~ s/^\s+|\s+$//g;
+	($reply_to) = expand_aliases($reply_to);
+	$reply_to = sanitize_address($reply_to);
 }
 
 if (!defined $smtp_server) {
-	foreach (qw( /usr/sbin/sendmail /usr/lib/sendmail )) {
+	my @sendmail_paths = qw( /usr/sbin/sendmail /usr/lib/sendmail );
+	push @sendmail_paths, map {"$_/sendmail"} split /:/, $ENV{PATH};
+	foreach (@sendmail_paths) {
 		if (-x $_) {
 			$smtp_server = $_;
 			last;
@@ -831,7 +972,7 @@ if ($compose && $compose > 0) {
 }
 
 # Variables we set as part of the loop over files
-our ($message_id, %mail, $subject, $reply_to, $references, $message,
+our ($message_id, %mail, $subject, $in_reply_to, $references, $message,
 	$needs_confirm, $message_num, $ask_default);
 
 sub extract_valid_address {
@@ -856,7 +997,7 @@ sub extract_valid_address {
 sub extract_valid_address_or_die {
 	my $address = shift;
 	$address = extract_valid_address($address);
-	die "error: unable to extract a valid address from: $address\n"
+	die sprintf(__("error: unable to extract a valid address from: %s\n"), $address)
 		if !$address;
 	return $address;
 }
@@ -864,8 +1005,11 @@ sub extract_valid_address_or_die {
 sub validate_address {
 	my $address = shift;
 	while (!extract_valid_address($address)) {
-		print STDERR "error: unable to extract a valid address from: $address\n";
-		$_ = ask("What to do with this address? ([q]uit|[d]rop|[e]dit): ",
+		printf STDERR __("error: unable to extract a valid address from: %s\n"), $address;
+		# TRANSLATORS: Make sure to include [q] [d] [e] in your
+		# translation. The program will only accept English input
+		# at this point.
+		$_ = ask(__("What to do with this address? ([q]uit|[d]rop|[e]dit): "),
 			valid_re => qr/^(?:quit|q|drop|d|edit|e)/i,
 			default => 'q');
 		if (/^d/i) {
@@ -874,7 +1018,7 @@ sub validate_address {
 			cleanup_compose_files();
 			exit(0);
 		}
-		$address = ask("Who should the email be sent to (if any)? ",
+		$address = ask("$to_whom ",
 			default => "",
 			valid_re => qr/\@.*\./, confirm_only => 1);
 	}
@@ -899,7 +1043,7 @@ my ($message_id_stamp, $message_id_serial);
 sub make_message_id {
 	my $uniq;
 	if (!defined $message_id_stamp) {
-		$message_id_stamp = sprintf("%s-%s", time, $$);
+		$message_id_stamp = strftime("%Y%m%d%H%M%S.$$", gmtime(time));
 		$message_id_serial = 0;
 	}
 	$message_id_serial++;
@@ -914,7 +1058,7 @@ sub make_message_id {
 		require Sys::Hostname;
 		$du_part = 'user@' . Sys::Hostname::hostname();
 	}
-	my $message_id_template = "<%s-git-send-email-%s>";
+	my $message_id_template = "<%s-%s>";
 	$message_id = sprintf($message_id_template, $uniq, $du_part);
 	#print "new message id = $message_id\n"; # Was useful for debugging
 }
@@ -995,15 +1139,17 @@ sub sanitize_address {
 		return $recipient;
 	}
 
+	# remove non-escaped quotes
+	$recipient_name =~ s/(^|[^\\])"/$1/g;
+
 	# rfc2047 is needed if a non-ascii char is included
 	if ($recipient_name =~ /[^[:ascii:]]/) {
-		$recipient_name =~ s/^"(.*)"$/$1/;
 		$recipient_name = quote_rfc2047($recipient_name);
 	}
 
 	# double quotes are needed if specials or CTLs are included
 	elsif ($recipient_name =~ /[][()<>@,;:\\".\000-\037\177]/) {
-		$recipient_name =~ s/(["\\\r])/\\$1/g;
+		$recipient_name =~ s/([\\\r])/\\$1/g;
 		$recipient_name = qq["$recipient_name"];
 	}
 
@@ -1011,8 +1157,36 @@ sub sanitize_address {
 
 }
 
+sub strip_garbage_one_address {
+	my ($addr) = @_;
+	chomp $addr;
+	if ($addr =~ /^(("[^"]*"|[^"<]*)? *<[^>]*>).*/) {
+		# "Foo Bar" <foobar@example.com> [possibly garbage here]
+		# Foo Bar <foobar@example.com> [possibly garbage here]
+		return $1;
+	}
+	if ($addr =~ /^(<[^>]*>).*/) {
+		# <foo@example.com> [possibly garbage here]
+		# if garbage contains other addresses, they are ignored.
+		return $1;
+	}
+	if ($addr =~ /^([^"#,\s]*)/) {
+		# address without quoting: remove anything after the address
+		return $1;
+	}
+	return $addr;
+}
+
 sub sanitize_address_list {
 	return (map { sanitize_address($_) } @_);
+}
+
+sub process_address_list {
+	my @addr_list = map { parse_address_line($_) } @_;
+	@addr_list = expand_aliases(@addr_list);
+	@addr_list = sanitize_address_list(@addr_list);
+	@addr_list = validate_address_list(@addr_list);
+	return @addr_list;
 }
 
 # Returns the local Fully Qualified Domain Name (FQDN) if available.
@@ -1039,10 +1213,8 @@ sub valid_fqdn {
 sub maildomain_net {
 	my $maildomain;
 
-	if (eval { require Net::Domain; 1 }) {
-		my $domain = Net::Domain::domainname();
-		$maildomain = $domain if valid_fqdn($domain);
-	}
+	my $domain = Net::Domain::domainname();
+	$maildomain = $domain if valid_fqdn($domain);
 
 	return $maildomain;
 }
@@ -1050,17 +1222,15 @@ sub maildomain_net {
 sub maildomain_mta {
 	my $maildomain;
 
-	if (eval { require Net::SMTP; 1 }) {
-		for my $host (qw(mailhost localhost)) {
-			my $smtp = Net::SMTP->new($host);
-			if (defined $smtp) {
-				my $domain = $smtp->domain;
-				$smtp->quit;
+	for my $host (qw(mailhost localhost)) {
+		my $smtp = Net::SMTP->new($host);
+		if (defined $smtp) {
+			my $domain = $smtp->domain;
+			$smtp->quit;
 
-				$maildomain = $domain if valid_fqdn($domain);
+			$maildomain = $domain if valid_fqdn($domain);
 
-				last if $maildomain;
-			}
+			last if $maildomain;
 		}
 	}
 
@@ -1083,7 +1253,7 @@ sub smtp_host_string {
 # (smtp_user was not specified), and 0 otherwise.
 
 sub smtp_auth_maybe {
-	if (!defined $smtp_authuser || $auth) {
+	if (!defined $smtp_authuser || $auth || (defined $smtp_auth && $smtp_auth eq "none")) {
 		return 1;
 	}
 
@@ -1093,6 +1263,12 @@ sub smtp_auth_maybe {
 		require Authen::SASL;
 		Authen::SASL->import(qw(Perl));
 	};
+
+	# Check mechanism naming as defined in:
+	# https://tools.ietf.org/html/rfc4422#page-8
+	if ($smtp_auth && $smtp_auth !~ /^(\b[A-Z0-9-_]{1,20}\s*)*$/) {
+		die "invalid smtp auth: '${smtp_auth}'";
+	}
 
 	# TODO: Authentication may fail not because credentials were
 	# invalid but due to other reasons, in which we should not
@@ -1106,6 +1282,20 @@ sub smtp_auth_maybe {
 		'password' => $smtp_authpass
 	}, sub {
 		my $cred = shift;
+
+		if ($smtp_auth) {
+			my $sasl = Authen::SASL->new(
+				mechanism => $smtp_auth,
+				callback => {
+					user => $cred->{'username'},
+					pass => $cred->{'password'},
+					authname => $cred->{'username'},
+				}
+			);
+
+			return !!$smtp->auth($sasl);
+		}
+
 		return !!$smtp->auth($cred->{'username'}, $cred->{'password'});
 	});
 
@@ -1136,8 +1326,7 @@ sub ssl_verify_params {
 		return (SSL_verify_mode => SSL_VERIFY_PEER(),
 			SSL_ca_file => $smtp_ssl_cert_path);
 	} else {
-		print STDERR "Not using SSL_VERIFY_PEER because the CA path does not exist.\n";
-		return (SSL_verify_mode => SSL_VERIFY_NONE());
+		die sprintf(__("CA path \"%s\" does not exist"), $smtp_ssl_cert_path);
 	}
 }
 
@@ -1153,9 +1342,14 @@ sub file_name_is_absolute {
 	return File::Spec::Functions::file_name_is_absolute($path);
 }
 
-# Returns 1 if the message was sent, and 0 otherwise.
-# In actuality, the whole program dies when there
-# is an error sending a message.
+# Prepares the email, then asks the user what to do.
+#
+# If the user chooses to send the email, it's sent and 1 is returned.
+# If the user chooses not to send the email, 0 is returned.
+# If the user decides they want to make further edits, -1 is returned and the
+# caller is expected to call send_message again after the edits are performed.
+#
+# If an error occurs sending the email, this just dies.
 
 sub send_message {
 	my @recipients = unique_email_list(@to);
@@ -1188,10 +1382,13 @@ Message-Id: $message_id
 	if ($use_xmailer) {
 		$header .= "X-Mailer: git-send-email $gitversion\n";
 	}
-	if ($reply_to) {
+	if ($in_reply_to) {
 
-		$header .= "In-Reply-To: $reply_to\n";
+		$header .= "In-Reply-To: $in_reply_to\n";
 		$header .= "References: $references\n";
+	}
+	if ($reply_to) {
+		$header .= "Reply-To: $reply_to\n";
 	}
 	if (@xh) {
 		$header .= join("\n", @xh) . "\n";
@@ -1211,22 +1408,30 @@ Message-Id: $message_id
 		if ($needs_confirm eq "inform") {
 			$confirm_unconfigured = 0; # squelch this message for the rest of this run
 			$ask_default = "y"; # assume yes on EOF since user hasn't explicitly asked for confirmation
-			print "    The Cc list above has been expanded by additional\n";
-			print "    addresses found in the patch commit message. By default\n";
-			print "    send-email prompts before sending whenever this occurs.\n";
-			print "    This behavior is controlled by the sendemail.confirm\n";
-			print "    configuration setting.\n";
-			print "\n";
-			print "    For additional information, run 'git send-email --help'.\n";
-			print "    To retain the current behavior, but squelch this message,\n";
-			print "    run 'git config --global sendemail.confirm auto'.\n\n";
+			print __ <<EOF ;
+    The Cc list above has been expanded by additional
+    addresses found in the patch commit message. By default
+    send-email prompts before sending whenever this occurs.
+    This behavior is controlled by the sendemail.confirm
+    configuration setting.
+
+    For additional information, run 'git send-email --help'.
+    To retain the current behavior, but squelch this message,
+    run 'git config --global sendemail.confirm auto'.
+
+EOF
 		}
-		$_ = ask("Send this email? ([y]es|[n]o|[q]uit|[a]ll): ",
-		         valid_re => qr/^(?:yes|y|no|n|quit|q|all|a)/i,
+		# TRANSLATORS: Make sure to include [y] [n] [e] [q] [a] in your
+		# translation. The program will only accept English input
+		# at this point.
+		$_ = ask(__("Send this email? ([y]es|[n]o|[e]dit|[q]uit|[a]ll): "),
+		         valid_re => qr/^(?:yes|y|no|n|edit|e|quit|q|all|a)/i,
 		         default => $ask_default);
-		die "Send this email reply required" unless defined $_;
+		die __("Send this email reply required") unless defined $_;
 		if (/^n/i) {
 			return 0;
+		} elsif (/^e/i) {
+			return -1;
 		} elsif (/^q/i) {
 			cleanup_compose_files();
 			exit(0);
@@ -1250,51 +1455,73 @@ Message-Id: $message_id
 	} else {
 
 		if (!defined $smtp_server) {
-			die "The required SMTP server is not properly defined."
+			die __("The required SMTP server is not properly defined.")
 		}
+
+		require Net::SMTP;
+		my $use_net_smtp_ssl = version->parse($Net::SMTP::VERSION) < version->parse("2.34");
+		$smtp_domain ||= maildomain();
 
 		if ($smtp_encryption eq 'ssl') {
 			$smtp_server_port ||= 465; # ssmtp
-			require Net::SMTP::SSL;
-			$smtp_domain ||= maildomain();
 			require IO::Socket::SSL;
+
+			# Suppress "variable accessed once" warning.
+			{
+				no warnings 'once';
+				$IO::Socket::SSL::DEBUG = 1;
+			}
+
 			# Net::SMTP::SSL->new() does not forward any SSL options
 			IO::Socket::SSL::set_client_defaults(
 				ssl_verify_params());
-			$smtp ||= Net::SMTP::SSL->new($smtp_server,
-						      Hello => $smtp_domain,
-						      Port => $smtp_server_port,
-						      Debug => $debug_net_smtp);
+
+			if ($use_net_smtp_ssl) {
+				require Net::SMTP::SSL;
+				$smtp ||= Net::SMTP::SSL->new($smtp_server,
+							      Hello => $smtp_domain,
+							      Port => $smtp_server_port,
+							      Debug => $debug_net_smtp);
+			}
+			else {
+				$smtp ||= Net::SMTP->new($smtp_server,
+							 Hello => $smtp_domain,
+							 Port => $smtp_server_port,
+							 Debug => $debug_net_smtp,
+							 SSL => 1);
+			}
 		}
-		else {
-			require Net::SMTP;
-			$smtp_domain ||= maildomain();
+		elsif (!$smtp) {
 			$smtp_server_port ||= 25;
 			$smtp ||= Net::SMTP->new($smtp_server,
 						 Hello => $smtp_domain,
 						 Debug => $debug_net_smtp,
 						 Port => $smtp_server_port);
 			if ($smtp_encryption eq 'tls' && $smtp) {
-				require Net::SMTP::SSL;
-				$smtp->command('STARTTLS');
-				$smtp->response();
-				if ($smtp->code == 220) {
+				if ($use_net_smtp_ssl) {
+					$smtp->command('STARTTLS');
+					$smtp->response();
+					if ($smtp->code != 220) {
+						die sprintf(__("Server does not support STARTTLS! %s"), $smtp->message);
+					}
+					require Net::SMTP::SSL;
 					$smtp = Net::SMTP::SSL->start_SSL($smtp,
 									  ssl_verify_params())
-						or die "STARTTLS failed! ".IO::Socket::SSL::errstr();
-					$smtp_encryption = '';
-					# Send EHLO again to receive fresh
-					# supported commands
-					$smtp->hello($smtp_domain);
-				} else {
-					die "Server does not support STARTTLS! ".$smtp->message;
+						or die sprintf(__("STARTTLS failed! %s"), IO::Socket::SSL::errstr());
 				}
+				else {
+					$smtp->starttls(ssl_verify_params())
+						or die sprintf(__("STARTTLS failed! %s"), IO::Socket::SSL::errstr());
+				}
+				# Send EHLO again to receive fresh
+				# supported commands
+				$smtp->hello($smtp_domain);
 			}
 		}
 
 		if (!$smtp) {
-			die "Unable to initialize SMTP properly. Check config and use --smtp-debug. ",
-			    "VALUES: server=$smtp_server ",
+			die __("Unable to initialize SMTP properly. Check config and use --smtp-debug."),
+			    " VALUES: server=$smtp_server ",
 			    "encryption=$smtp_encryption ",
 			    "hello=$smtp_domain",
 			    defined $smtp_server_port ? " port=$smtp_server_port" : "";
@@ -1305,14 +1532,18 @@ Message-Id: $message_id
 		$smtp->mail( $raw_from ) or die $smtp->message;
 		$smtp->to( @recipients ) or die $smtp->message;
 		$smtp->data or die $smtp->message;
-		$smtp->datasend("$header\n$message") or die $smtp->message;
+		$smtp->datasend("$header\n") or die $smtp->message;
+		my @lines = split /^/, $message;
+		foreach my $line (@lines) {
+			$smtp->datasend("$line") or die $smtp->message;
+		}
 		$smtp->dataend() or die $smtp->message;
-		$smtp->code =~ /250|200/ or die "Failed to send $subject\n".$smtp->message;
+		$smtp->code =~ /250|200/ or die sprintf(__("Failed to send %s\n"), $subject).$smtp->message;
 	}
 	if ($quiet) {
-		printf (($dry_run ? "Dry-" : "")."Sent %s\n", $subject);
+		printf($dry_run ? __("Dry-Sent %s\n") : __("Sent %s\n"), $subject);
 	} else {
-		print (($dry_run ? "Dry-" : "")."OK. Log says:\n");
+		print($dry_run ? __("Dry-OK. Log says:\n") : __("OK. Log says:\n"));
 		if (!file_name_is_absolute($smtp_server)) {
 			print "Server: $smtp_server\n";
 			print "MAIL FROM:<$raw_from>\n";
@@ -1324,23 +1555,28 @@ Message-Id: $message_id
 		}
 		print $header, "\n";
 		if ($smtp) {
-			print "Result: ", $smtp->code, ' ',
+			print __("Result: "), $smtp->code, ' ',
 				($smtp->message =~ /\n([^\n]+\n)$/s), "\n";
 		} else {
-			print "Result: OK\n";
+			print __("Result: OK\n");
 		}
 	}
 
 	return 1;
 }
 
-$reply_to = $initial_reply_to;
-$references = $initial_reply_to || '';
+$in_reply_to = $initial_in_reply_to;
+$references = $initial_in_reply_to || '';
 $subject = $initial_subject;
 $message_num = 0;
 
-foreach my $t (@files) {
-	open my $fh, "<", $t or die "can't open file $t";
+# Prepares the email, prompts the user, sends it out
+# Returns 0 if an edit was done and the function should be called again, or 1
+# otherwise.
+sub process_file {
+	my ($t) = @_;
+
+	open my $fh, "<", $t or die sprintf(__("can't open file %s"), $t);
 
 	my $author = undef;
 	my $sauthor = undef;
@@ -1387,13 +1623,13 @@ foreach my $t (@files) {
 				$sauthor = sanitize_address($author);
 				next if $suppress_cc{'author'};
 				next if $suppress_cc{'self'} and $sauthor eq $sender;
-				printf("(mbox) Adding cc: %s from line '%s'\n",
+				printf(__("(mbox) Adding cc: %s from line '%s'\n"),
 					$1, $_) unless $quiet;
 				push @cc, $1;
 			}
 			elsif (/^To:\s+(.*)$/i) {
 				foreach my $addr (parse_address_line($1)) {
-					printf("(mbox) Adding to: %s from line '%s'\n",
+					printf(__("(mbox) Adding to: %s from line '%s'\n"),
 						$addr, $_) unless $quiet;
 					push @to, $addr;
 				}
@@ -1407,7 +1643,7 @@ foreach my $t (@files) {
 					} else {
 						next if ($suppress_cc{'cc'});
 					}
-					printf("(mbox) Adding cc: %s from line '%s'\n",
+					printf(__("(mbox) Adding cc: %s from line '%s'\n"),
 						$addr, $_) unless $quiet;
 					push @cc, $addr;
 				}
@@ -1429,10 +1665,15 @@ foreach my $t (@files) {
 			elsif (/^Content-Transfer-Encoding: (.*)/i) {
 				$xfer_encoding = $1 if not defined $xfer_encoding;
 			}
+			elsif (/^In-Reply-To: (.*)/i) {
+				$in_reply_to = $1;
+			}
+			elsif (/^References: (.*)/i) {
+				$references = $1;
+			}
 			elsif (!/^Date:\s/i && /^[-A-Za-z]+:\s+\S/) {
 				push @xh, $_;
 			}
-
 		} else {
 			# In the traditional
 			# "send lots of email" format,
@@ -1441,7 +1682,7 @@ foreach my $t (@files) {
 			# So let's support that, too.
 			$input_format = 'lots';
 			if (@cc == 0 && !$suppress_cc{'cc'}) {
-				printf("(non-mbox) Adding cc: %s from line '%s'\n",
+				printf(__("(non-mbox) Adding cc: %s from line '%s'\n"),
 					$_, $_) unless $quiet;
 				push @cc, $_;
 			} elsif (!defined $subject) {
@@ -1452,19 +1693,31 @@ foreach my $t (@files) {
 	# Now parse the message body
 	while(<$fh>) {
 		$message .=  $_;
-		if (/^(Signed-off-by|Cc): (.*)$/i) {
+		if (/^([a-z-]*-by|Cc): (.*)/i) {
 			chomp;
 			my ($what, $c) = ($1, $2);
-			chomp $c;
+			# strip garbage for the address we'll use:
+			$c = strip_garbage_one_address($c);
+			# sanitize a bit more to decide whether to suppress the address:
 			my $sc = sanitize_address($c);
 			if ($sc eq $sender) {
 				next if ($suppress_cc{'self'});
 			} else {
-				next if $suppress_cc{'sob'} and $what =~ /Signed-off-by/i;
-				next if $suppress_cc{'bodycc'} and $what =~ /Cc/i;
+				if ($what =~ /^Signed-off-by$/i) {
+					next if $suppress_cc{'sob'};
+				} elsif ($what =~ /-by$/i) {
+					next if $suppress_cc{'misc-by'};
+				} elsif ($what =~ /Cc/i) {
+					next if $suppress_cc{'bodycc'};
+				}
+			}
+			if ($c !~ /.+@.+|<.+>/) {
+				printf("(body) Ignoring %s from line '%s'\n",
+					$what, $_) unless $quiet;
+				next;
 			}
 			push @cc, $c;
-			printf("(body) Adding cc: %s from line '%s'\n",
+			printf(__("(body) Adding cc: %s from line '%s'\n"),
 				$c, $_) unless $quiet;
 		}
 	}
@@ -1505,18 +1758,11 @@ foreach my $t (@files) {
 			}
 		}
 	}
-	if (defined $target_xfer_encoding) {
-		$xfer_encoding = '8bit' if not defined $xfer_encoding;
-		$message = apply_transfer_encoding(
-			$message, $xfer_encoding, $target_xfer_encoding);
-		$xfer_encoding = $target_xfer_encoding;
-	}
-	if (defined $xfer_encoding) {
-		push @xh, "Content-Transfer-Encoding: $xfer_encoding";
-	}
-	if (defined $xfer_encoding or $has_content_type) {
-		unshift @xh, 'MIME-Version: 1.0' unless $has_mime_version;
-	}
+	$xfer_encoding = '8bit' if not defined $xfer_encoding;
+	($message, $xfer_encoding) = apply_transfer_encoding(
+		$message, $xfer_encoding, $target_xfer_encoding);
+	push @xh, "Content-Transfer-Encoding: $xfer_encoding";
+	unshift @xh, 'MIME-Version: 1.0' unless $has_mime_version;
 
 	$needs_confirm = (
 		$confirm eq "always" or
@@ -1524,8 +1770,8 @@ foreach my $t (@files) {
 		($confirm =~ /^(?:auto|compose)$/ && $compose && $message_num == 1));
 	$needs_confirm = "inform" if ($needs_confirm && $confirm_unconfigured && @cc);
 
-	@to = validate_address_list(sanitize_address_list(@to));
-	@cc = validate_address_list(sanitize_address_list(@cc));
+	@to = process_address_list(@to);
+	@cc = process_address_list(@cc);
 
 	@to = (@initial_to, @to);
 	@cc = (@initial_cc, @cc);
@@ -1540,12 +1786,16 @@ foreach my $t (@files) {
 	}
 
 	my $message_was_sent = send_message();
+	if ($message_was_sent == -1) {
+		do_edit($t);
+		return 0;
+	}
 
 	# set up for the next message
 	if ($thread && $message_was_sent &&
-		($chain_reply_to || !defined $reply_to || length($reply_to) == 0 ||
+		($chain_reply_to || !defined $in_reply_to || length($in_reply_to) == 0 ||
 		$message_num == 1)) {
-		$reply_to = $message_id;
+		$in_reply_to = $message_id;
 		if (length $references > 0) {
 			$references .= "\n $message_id";
 		} else {
@@ -1553,6 +1803,22 @@ foreach my $t (@files) {
 		}
 	}
 	$message_id = undef;
+	$num_sent++;
+	if (defined $batch_size && $num_sent == $batch_size) {
+		$num_sent = 0;
+		$smtp->quit if defined $smtp;
+		undef $smtp;
+		undef $auth;
+		sleep($relogin_delay) if defined $relogin_delay;
+	}
+
+	return 1;
+}
+
+foreach my $t (@files) {
+	while (!process_file($t)) {
+		# user edited the file
+	}
 }
 
 # Execute a command (e.g. $to_cmd) to get a list of email addresses
@@ -1562,18 +1828,18 @@ sub recipients_cmd {
 
 	my @addresses = ();
 	open my $fh, "-|", "$cmd \Q$file\E"
-	    or die "($prefix) Could not execute '$cmd'";
+	    or die sprintf(__("(%s) Could not execute '%s'"), $prefix, $cmd);
 	while (my $address = <$fh>) {
 		$address =~ s/^\s*//g;
 		$address =~ s/\s*$//g;
 		$address = sanitize_address($address);
 		next if ($address eq $sender and $suppress_cc{'self'});
 		push @addresses, $address;
-		printf("($prefix) Adding %s: %s from: '%s'\n",
-		       $what, $address, $cmd) unless $quiet;
+		printf(__("(%s) Adding %s: %s from: '%s'\n"),
+		       $prefix, $what, $address, $cmd) unless $quiet;
 		}
 	close $fh
-	    or die "($prefix) failed to close pipe to '$cmd'";
+	    or die sprintf(__("(%s) failed to close pipe to '%s'"), $prefix, $cmd);
 	return @addresses;
 }
 
@@ -1590,7 +1856,7 @@ sub apply_transfer_encoding {
 	my $from = shift;
 	my $to = shift;
 
-	return $message if ($from eq $to and $from ne '7bit');
+	return ($message, $to) if ($from eq $to and $from ne '7bit');
 
 	require MIME::QuotedPrint;
 	require MIME::Base64;
@@ -1600,15 +1866,18 @@ sub apply_transfer_encoding {
 	$message = MIME::Base64::decode($message)
 		if ($from eq 'base64');
 
-	die "cannot send message as 7bit"
+	$to = ($message =~ /.{999,}/) ? 'quoted-printable' : '8bit'
+		if $to eq 'auto';
+
+	die __("cannot send message as 7bit")
 		if ($to eq '7bit' and $message =~ /[^[:ascii:]]/);
-	return $message
+	return ($message, $to)
 		if ($to eq '7bit' or $to eq '8bit');
-	return MIME::QuotedPrint::encode($message, "\n", 0)
+	return (MIME::QuotedPrint::encode($message, "\n", 0), $to)
 		if ($to eq 'quoted-printable');
-	return MIME::Base64::encode($message, "\n")
+	return (MIME::Base64::encode($message, "\n"), $to)
 		if ($to eq 'base64');
-	die "invalid transfer encoding";
+	die __("invalid transfer encoding");
 }
 
 sub unique_email_list {
@@ -1625,21 +1894,83 @@ sub unique_email_list {
 }
 
 sub validate_patch {
-	my $fn = shift;
-	open(my $fh, '<', $fn)
-		or die "unable to open $fn: $!\n";
-	while (my $line = <$fh>) {
-		if (length($line) > 998) {
-			return "$.: patch contains a line longer than 998 characters";
+	my ($fn, $xfer_encoding) = @_;
+
+	if ($repo) {
+		my $validate_hook = catfile(catdir($repo->repo_path(), 'hooks'),
+					    'sendemail-validate');
+		my $hook_error;
+		if (-x $validate_hook) {
+			my $target = abs_path($fn);
+			# The hook needs a correct cwd and GIT_DIR.
+			my $cwd_save = cwd();
+			chdir($repo->wc_path() or $repo->repo_path())
+				or die("chdir: $!");
+			local $ENV{"GIT_DIR"} = $repo->repo_path();
+			$hook_error = "rejected by sendemail-validate hook"
+				if system($validate_hook, $target);
+			chdir($cwd_save) or die("chdir: $!");
+		}
+		return $hook_error if $hook_error;
+	}
+
+	# Any long lines will be automatically fixed if we use a suitable transfer
+	# encoding.
+	unless ($xfer_encoding =~ /^(?:auto|quoted-printable|base64)$/) {
+		open(my $fh, '<', $fn)
+			or die sprintf(__("unable to open %s: %s\n"), $fn, $!);
+		while (my $line = <$fh>) {
+			if (length($line) > 998) {
+				return sprintf(__("%s: patch contains a line longer than 998 characters"), $.);
+			}
 		}
 	}
 	return;
 }
 
+sub handle_backup {
+	my ($last, $lastlen, $file, $known_suffix) = @_;
+	my ($suffix, $skip);
+
+	$skip = 0;
+	if (defined $last &&
+	    ($lastlen < length($file)) &&
+	    (substr($file, 0, $lastlen) eq $last) &&
+	    ($suffix = substr($file, $lastlen)) !~ /^[a-z0-9]/i) {
+		if (defined $known_suffix && $suffix eq $known_suffix) {
+			printf(__("Skipping %s with backup suffix '%s'.\n"), $file, $known_suffix);
+			$skip = 1;
+		} else {
+			# TRANSLATORS: please keep "[y|N]" as is.
+			my $answer = ask(sprintf(__("Do you really want to send %s? [y|N]: "), $file),
+					 valid_re => qr/^(?:y|n)/i,
+					 default => 'n');
+			$skip = ($answer ne 'y');
+			if ($skip) {
+				$known_suffix = $suffix;
+			}
+		}
+	}
+	return ($skip, $known_suffix);
+}
+
+sub handle_backup_files {
+	my @file = @_;
+	my ($last, $lastlen, $known_suffix, $skip, @result);
+	for my $file (@file) {
+		($skip, $known_suffix) = handle_backup($last, $lastlen,
+						       $file, $known_suffix);
+		push @result, $file unless $skip;
+		$last = $file;
+		$lastlen = length($file);
+	}
+	return @result;
+}
+
 sub file_has_nonascii {
 	my $fn = shift;
 	open(my $fh, '<', $fn)
-		or die "unable to open $fn: $!\n";
+		or die sprintf(__("unable to open %s: %s\n"), $fn, $!);
 	while (my $line = <$fh>) {
 		return 1 if $line =~ /[^[:ascii:]]/;
 	}
@@ -1649,7 +1980,7 @@ sub file_has_nonascii {
 sub body_or_subject_has_nonascii {
 	my $fn = shift;
 	open(my $fh, '<', $fn)
-		or die "unable to open $fn: $!\n";
+		or die sprintf(__("unable to open %s: %s\n"), $fn, $!);
 	while (my $line = <$fh>) {
 		last if $line =~ /^$/;
 		return 1 if $line =~ /^Subject.*[^[:ascii:]]/;

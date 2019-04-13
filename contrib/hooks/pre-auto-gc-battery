@@ -17,7 +17,7 @@
 # ln -sf /usr/share/git-core/contrib/hooks/pre-auto-gc-battery \
 #	hooks/pre-auto-gc
 
-if test -x /sbin/on_ac_power && /sbin/on_ac_power
+if test -x /sbin/on_ac_power && (/sbin/on_ac_power;test $? -ne 1)
 then
 	exit 0
 elif test "$(cat /sys/class/power_supply/AC/online 2>/dev/null)" = 1
@@ -33,7 +33,7 @@ elif grep -q "AC Power \+: 1" /proc/pmu/info 2>/dev/null
 then
 	exit 0
 elif test -x /usr/bin/pmset && /usr/bin/pmset -g batt |
-	grep -q "Currently drawing from 'AC Power'"
+	grep -q "drawing from 'AC Power'"
 then
 	exit 0
 fi

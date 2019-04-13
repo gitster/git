@@ -29,67 +29,65 @@ test_expect_success 'setup' '
 '
 
 test_expect_success 'git diff-tree HEAD^ HEAD' '
-	git diff-tree --quiet HEAD^ HEAD >cnt
-	test $? = 1 && test_line_count = 0 cnt
+	test_expect_code 1 git diff-tree --quiet HEAD^ HEAD >cnt &&
+	test_line_count = 0 cnt
 '
 test_expect_success 'git diff-tree HEAD^ HEAD -- a' '
-	git diff-tree --quiet HEAD^ HEAD -- a >cnt
-	test $? = 0 && test_line_count = 0 cnt
+	test_expect_code 0 git diff-tree --quiet HEAD^ HEAD -- a >cnt &&
+	test_line_count = 0 cnt
 '
 test_expect_success 'git diff-tree HEAD^ HEAD -- b' '
-	git diff-tree --quiet HEAD^ HEAD -- b >cnt
-	test $? = 1 && test_line_count = 0 cnt
+	test_expect_code 1 git diff-tree --quiet HEAD^ HEAD -- b >cnt &&
+	test_line_count = 0 cnt
 '
 # this diff outputs one line: sha1 of the given head
 test_expect_success 'echo HEAD | git diff-tree --stdin' '
-	echo $(git rev-parse HEAD) | git diff-tree --quiet --stdin >cnt
-	test $? = 1 && test_line_count = 1 cnt
+	echo $(git rev-parse HEAD) |
+	test_expect_code 1 git diff-tree --quiet --stdin >cnt &&
+	test_line_count = 1 cnt
 '
 test_expect_success 'git diff-tree HEAD HEAD' '
-	git diff-tree --quiet HEAD HEAD >cnt
-	test $? = 0 && test_line_count = 0 cnt
+	test_expect_code 0 git diff-tree --quiet HEAD HEAD >cnt &&
+	test_line_count = 0 cnt
 '
 test_expect_success 'git diff-files' '
-	git diff-files --quiet >cnt
-	test $? = 0 && test_line_count = 0 cnt
+	test_expect_code 0 git diff-files --quiet >cnt &&
+	test_line_count = 0 cnt
 '
 test_expect_success 'git diff-index --cached HEAD' '
-	git diff-index --quiet --cached HEAD >cnt
-	test $? = 0 && test_line_count = 0 cnt
+	test_expect_code 0 git diff-index --quiet --cached HEAD >cnt &&
+	test_line_count = 0 cnt
 '
 test_expect_success 'git diff-index --cached HEAD^' '
-	git diff-index --quiet --cached HEAD^ >cnt
-	test $? = 1 && test_line_count = 0 cnt
+	test_expect_code 1 git diff-index --quiet --cached HEAD^ >cnt &&
+	test_line_count = 0 cnt
 '
 test_expect_success 'git diff-index --cached HEAD^' '
 	echo text >>b &&
 	echo 3 >c &&
-	git add . && {
-		git diff-index --quiet --cached HEAD^ >cnt
-		test $? = 1 && test_line_count = 0 cnt
-	}
+	git add . &&
+	test_expect_code 1 git diff-index --quiet --cached HEAD^ >cnt &&
+	test_line_count = 0 cnt
 '
 test_expect_success 'git diff-tree -Stext HEAD^ HEAD -- b' '
-	git commit -m "text in b" && {
-		git diff-tree --quiet -Stext HEAD^ HEAD -- b >cnt
-		test $? = 1 && test_line_count = 0 cnt
-	}
+	git commit -m "text in b" &&
+	test_expect_code 1 git diff-tree --quiet -Stext HEAD^ HEAD -- b >cnt &&
+	test_line_count = 0 cnt
 '
 test_expect_success 'git diff-tree -Snot-found HEAD^ HEAD -- b' '
-	git diff-tree --quiet -Snot-found HEAD^ HEAD -- b >cnt
-	test $? = 0 && test_line_count = 0 cnt
+	test_expect_code 0 git diff-tree --quiet -Snot-found HEAD^ HEAD -- b >cnt &&
+	test_line_count = 0 cnt
 '
 test_expect_success 'git diff-files' '
-	echo 3 >>c && {
-		git diff-files --quiet >cnt
-		test $? = 1 && test_line_count = 0 cnt
-	}
+	echo 3 >>c &&
+	test_expect_code 1 git diff-files --quiet >cnt &&
+	test_line_count = 0 cnt
 '
+
 test_expect_success 'git diff-index --cached HEAD' '
-	git update-index c && {
-		git diff-index --quiet --cached HEAD >cnt
-		test $? = 1 && test_line_count = 0 cnt
-	}
+	git update-index c &&
+	test_expect_code 1 git diff-index --quiet --cached HEAD >cnt &&
+	test_line_count = 0 cnt
 '
 
 test_expect_success 'git diff, one file outside repo' '
@@ -149,9 +147,18 @@ test_expect_success 'git diff --ignore-all-space, both files outside repo' '
 '
 
 test_expect_success 'git diff --quiet ignores stat-change only entries' '
-	test-chmtime +10 a &&
+	test-tool chmtime +10 a &&
 	echo modified >>b &&
 	test_expect_code 1 git diff --quiet
+'
+
+test_expect_success 'git diff --quiet on a path that need conversion' '
+	echo "crlf.txt text=auto" >.gitattributes &&
+	printf "Hello\r\nWorld\r\n" >crlf.txt &&
+	git add .gitattributes crlf.txt &&
+
+	printf "Hello\r\nWorld\n" >crlf.txt &&
+	git diff --quiet crlf.txt
 '
 
 test_done

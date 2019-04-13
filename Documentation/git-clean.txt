@@ -16,7 +16,7 @@ DESCRIPTION
 Cleans the working tree by recursively removing files that are not
 under version control, starting from the current directory.
 
-Normally, only files unknown to Git are removed, but if the '-x'
+Normally, only files unknown to Git are removed, but if the `-x`
 option is specified, ignored files are also removed. This can, for
 example, be useful to remove all build products.
 
@@ -34,8 +34,10 @@ OPTIONS
 -f::
 --force::
 	If the Git configuration variable clean.requireForce is not set
-	to false, 'git clean' will refuse to run unless given -f, -n or
-	-i.
+	to false, 'git clean' will refuse to delete files or directories
+	unless given -f, -n or -i. Git will refuse to delete directories
+	with .git sub directory or file unless a second -f
+	is given.
 
 -i::
 --interactive::

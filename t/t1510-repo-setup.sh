@@ -39,6 +39,10 @@ A few rules for repo setup:
 11. When user's cwd is outside worktree, cwd remains unchanged,
     prefix is NULL.
 "
+
+# This test heavily relies on the standard error of nested function calls.
+test_untraceable=UnfortunatelyYes
+
 . ./test-lib.sh
 
 here=$(pwd)
@@ -106,6 +110,7 @@ setup_env () {
 expect () {
 	cat >"$1/expected" <<-EOF
 	setup: git_dir: $2
+	setup: git_common_dir: $2
 	setup: worktree: $3
 	setup: cwd: $4
 	setup: prefix: $5
@@ -229,15 +234,14 @@ test_expect_success '#0: nonbare repo, no explicit configuration' '
 	try_repo 0 unset unset unset "" unset \
 		.git "$here/0" "$here/0" "(null)" \
 		.git "$here/0" "$here/0" sub/ 2>message &&
-	! test -s message
+	test_must_be_empty message
 '
 
 test_expect_success '#1: GIT_WORK_TREE without explicit GIT_DIR is accepted' '
-	mkdir -p wt &&
 	try_repo 1 "$here" unset unset "" unset \
 		"$here/1/.git" "$here" "$here" 1/ \
 		"$here/1/.git" "$here" "$here" 1/sub/ 2>message &&
-	! test -s message
+	test_must_be_empty message
 '
 
 test_expect_success '#2: worktree defaults to cwd with explicit GIT_DIR' '
@@ -264,7 +268,7 @@ test_expect_success '#4: core.worktree without GIT_DIR set is accepted' '
 	try_case 4 unset unset \
 		.git "$here/4/sub" "$here/4" "(null)" \
 		"$here/4/.git" "$here/4/sub" "$here/4/sub" "(null)" 2>message &&
-	! test -s message
+	test_must_be_empty message
 '
 
 test_expect_success '#5: core.worktree + GIT_WORK_TREE is accepted' '
@@ -275,7 +279,7 @@ test_expect_success '#5: core.worktree + GIT_WORK_TREE is accepted' '
 	try_repo 5a .. unset "$here/5a" "" unset \
 		"$here/5a/.git" "$here" "$here" 5a/ \
 		"$here/5a/.git" "$here/5a" "$here/5a" sub/ &&
-	! test -s message
+	test_must_be_empty message
 '
 
 test_expect_success '#6: setting GIT_DIR brings core.worktree to life' '
@@ -372,7 +376,7 @@ test_expect_success '#9: GIT_WORK_TREE accepted with gitfile' '
 	try_repo 9 wt unset unset gitfile unset \
 		"$here/9.git" "$here/9/wt" "$here/9" "(null)" \
 		"$here/9.git" "$here/9/sub/wt" "$here/9/sub" "(null)" 2>message &&
-	! test -s message
+	test_must_be_empty message
 '
 
 test_expect_success '#10: GIT_DIR can point to gitfile' '
@@ -398,7 +402,7 @@ test_expect_success '#12: core.worktree with gitfile is accepted' '
 	try_repo 12 unset unset "$here/12" gitfile unset \
 		"$here/12.git" "$here/12" "$here/12" "(null)" \
 		"$here/12.git" "$here/12" "$here/12" sub/ 2>message &&
-	! test -s message
+	test_must_be_empty message
 '
 
 test_expect_success '#13: core.worktree+GIT_WORK_TREE accepted (with gitfile)' '
@@ -406,7 +410,7 @@ test_expect_success '#13: core.worktree+GIT_WORK_TREE accepted (with gitfile)' '
 	try_repo 13 non-existent-too unset non-existent gitfile unset \
 		"$here/13.git" "$here/13/non-existent-too" "$here/13" "(null)" \
 		"$here/13.git" "$here/13/sub/non-existent-too" "$here/13/sub" "(null)" 2>message &&
-	! test -s message
+	test_must_be_empty message
 '
 
 # case #14.
@@ -561,7 +565,7 @@ test_expect_success '#17: GIT_WORK_TREE without explicit GIT_DIR is accepted (ba
 	try_repo 17c "$here/17c" unset unset "" true \
 		.git "$here/17c" "$here/17c" "(null)" \
 		"$here/17c/.git" "$here/17c" "$here/17c" sub/ 2>message &&
-	! test -s message
+	test_must_be_empty message
 '
 
 test_expect_success '#18: bare .git named by GIT_DIR has no worktree' '
@@ -590,7 +594,7 @@ test_expect_success '#20a: core.worktree without GIT_DIR accepted (inside .git)'
 		"$here/20a/.git" "$here/20a" "$here/20a" .git/wt/ &&
 	try_case 20a/.git/wt/sub unset unset \
 		"$here/20a/.git" "$here/20a" "$here/20a" .git/wt/sub/ &&
-	! test -s message
+	test_must_be_empty message
 '
 
 test_expect_success '#20b/c: core.worktree and core.bare conflict' '
@@ -598,9 +602,18 @@ test_expect_success '#20b/c: core.worktree and core.bare conflict' '
 	mkdir -p 20b/.git/wt/sub &&
 	(
 		cd 20b/.git &&
-		test_must_fail git symbolic-ref HEAD >/dev/null
+		test_must_fail git status >/dev/null
 	) 2>message &&
 	grep "core.bare and core.worktree" message
+'
+
+test_expect_success '#20d: core.worktree and core.bare OK when working tree not needed' '
+	setup_repo 20d non-existent "" true &&
+	mkdir -p 20d/.git/wt/sub &&
+	(
+		cd 20d/.git &&
+		git config foo.bar value
+	)
 '
 
 # Case #21: core.worktree/GIT_WORK_TREE overrides core.bare' '
@@ -611,9 +624,9 @@ test_expect_success '#21: setup, core.worktree warns before overriding core.bare
 		cd 21/.git &&
 		GIT_WORK_TREE="$here/21" &&
 		export GIT_WORK_TREE &&
-		git symbolic-ref HEAD >/dev/null
+		git status >/dev/null
 	) 2>message &&
-	! test -s message
+	test_must_be_empty message
 
 '
 run_wt_tests 21
@@ -700,13 +713,13 @@ test_expect_success '#22.2: core.worktree and core.bare conflict' '
 		cd 22/.git &&
 		GIT_DIR=. &&
 		export GIT_DIR &&
-		test_must_fail git symbolic-ref HEAD 2>result
+		test_must_fail git status 2>result
 	) &&
 	(
 		cd 22 &&
 		GIT_DIR=.git &&
 		export GIT_DIR &&
-		test_must_fail git symbolic-ref HEAD 2>result
+		test_must_fail git status 2>result
 	) &&
 	grep "core.bare and core.worktree" 22/.git/result &&
 	grep "core.bare and core.worktree" 22/result
@@ -729,7 +742,7 @@ test_expect_success '#25: GIT_WORK_TREE accepted if GIT_DIR unset (bare gitfile 
 	try_repo 25 "$here/25" unset unset gitfile true \
 		"$here/25.git" "$here/25" "$here/25" "(null)"  \
 		"$here/25.git" "$here/25" "$here/25" "sub/" 2>message &&
-	! test -s message
+	test_must_be_empty message
 '
 
 test_expect_success '#26: bare repo has no worktree (GIT_DIR -> gitfile case)' '
@@ -752,9 +765,8 @@ test_expect_success '#28: core.worktree and core.bare conflict (gitfile case)' '
 	setup_repo 28 "$here/28" gitfile true &&
 	(
 		cd 28 &&
-		test_must_fail git symbolic-ref HEAD
+		test_must_fail git status
 	) 2>message &&
-	! grep "^warning:" message &&
 	grep "core.bare and core.worktree" message
 '
 
@@ -766,9 +778,9 @@ test_expect_success '#29: setup' '
 		cd 29 &&
 		GIT_WORK_TREE="$here/29" &&
 		export GIT_WORK_TREE &&
-		git symbolic-ref HEAD >/dev/null
+		git status
 	) 2>message &&
-	! test -s message
+	test_must_be_empty message
 '
 run_wt_tests 29 gitfile
 
@@ -777,7 +789,7 @@ test_expect_success '#30: core.worktree and core.bare conflict (gitfile version)
 	setup_repo 30 "$here/30" gitfile true &&
 	(
 		cd 30 &&
-		test_must_fail env GIT_DIR=.git git symbolic-ref HEAD 2>result
+		test_must_fail env GIT_DIR=.git git status 2>result
 	) &&
 	grep "core.bare and core.worktree" 30/result
 '

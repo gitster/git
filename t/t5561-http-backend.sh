@@ -2,17 +2,17 @@
 
 test_description='test git-http-backend'
 . ./test-lib.sh
+. "$TEST_DIRECTORY"/lib-httpd.sh
 
-if test -n "$NO_CURL"; then
-	skip_all='skipping test, git built without http support'
+if ! test_have_prereq CURL; then
+	skip_all='skipping raw http-backend tests, curl not available'
 	test_done
 fi
 
-. "$TEST_DIRECTORY"/lib-httpd.sh
 start_httpd
 
 GET() {
-	curl --include "$HTTPD_URL/$SMART/repo.git/$1" >out 2>/dev/null &&
+	curl --include "$HTTPD_URL/$SMART/repo.git/$1" >out &&
 	tr '\015' Q <out |
 	sed '
 		s/Q$//
@@ -25,7 +25,7 @@ GET() {
 POST() {
 	curl --include --data "$2" \
 	--header "Content-Type: application/x-$1-request" \
-	"$HTTPD_URL/smart/repo.git/$1" >out 2>/dev/null &&
+	"$HTTPD_URL/smart/repo.git/$1" >out &&
 	tr '\015' Q <out |
 	sed '
 		s/Q$//
@@ -35,15 +35,9 @@ POST() {
 	test_cmp exp act
 }
 
-log_div() {
-	echo >>"$HTTPD_ROOT_PATH"/access.log
-	echo "###  $1" >>"$HTTPD_ROOT_PATH"/access.log
-	echo "###" >>"$HTTPD_ROOT_PATH"/access.log
-}
-
 . "$TEST_DIRECTORY"/t556x_common
 
-cat >exp <<EOF
+grep '^[^#]' >exp <<EOF
 
 ###  refs/heads/master
 ###
@@ -135,13 +129,7 @@ GET  /smart/repo.git/info/refs?service=git-receive-pack HTTP/1.1 403 -
 POST /smart/repo.git/git-receive-pack HTTP/1.1 403 -
 EOF
 test_expect_success 'server request log matches test results' '
-	sed -e "
-		s/^.* \"//
-		s/\"//
-		s/ [1-9][0-9]*\$//
-		s/^GET /GET  /
-	" >act <"$HTTPD_ROOT_PATH"/access.log &&
-	test_cmp exp act
+	check_access_log exp
 '
 
 stop_httpd

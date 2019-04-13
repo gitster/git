@@ -601,7 +601,9 @@ sub pdate($) {
 	my ($d) = @_;
 	m#(\d{2,4})/(\d\d)/(\d\d)\s(\d\d):(\d\d)(?::(\d\d))?#
 		or die "Unparseable date: $d\n";
-	my $y=$1; $y-=1900 if $y>1900;
+	my $y=$1;
+	$y+=100 if $y<70;
+	$y+=1900 if $y<1000;
 	return timegm($6||0,$5,$4,$3,$2-1,$y);
 }
 
@@ -642,6 +644,7 @@ sub is_sha1 {
 
 sub get_headref ($) {
 	my $name = shift;
+	$name =~ s/'/'\\''/g;
 	my $r = `git rev-parse --verify '$name' 2>/dev/null`;
 	return undef unless $? == 0;
 	chomp $r;
@@ -921,7 +924,7 @@ sub commit {
 		# (See check_refname_component in refs.c.)
 		1 while $xtag =~ s/
 			(?: \.\.        # Tag cannot contain '..'.
-			|   \@{         # Tag cannot contain '@{'.
+			|   \@\{        # Tag cannot contain '@{'.
 			| ^ -           # Tag cannot begin with '-'.
 			|   \.lock $    # Tag cannot end with '.lock'.
 			| ^ \.          # Tag cannot begin...
@@ -1162,7 +1165,7 @@ if ($orig_branch) {
 		die "Fast-forward update failed: $?\n" if $?;
 	}
 	else {
-		system(qw(git merge cvsimport HEAD), "$remote/$opt_o");
+		system(qw(git merge -m cvsimport), "$remote/$opt_o");
 		die "Could not merge $opt_o into the current branch.\n" if $?;
 	}
 } else {

@@ -319,7 +319,7 @@ do so (now or later) by using -b with the checkout command again. Example:
 
   git checkout -b new_branch_name
 
-HEAD is now at 427abfa... Linux v2.6.17
+HEAD is now at 427abfa Linux v2.6.17
 ------------------------------------------------
 
 The HEAD then refers to the SHA-1 of the commit instead of to a branch,
@@ -508,7 +508,7 @@ Bisecting: 3537 revisions left to test after this
 
 If you run `git branch` at this point, you'll see that Git has
 temporarily moved you in "(no branch)". HEAD is now detached from any
-branch and points directly to a commit (with commit id 65934...) that
+branch and points directly to a commit (with commit id 65934) that
 is reachable from "master" but not from v2.6.18. Compile and test it,
 and see whether it crashes. Assume it does crash. Then:
 
@@ -549,14 +549,14 @@ says "bisect".  Choose a safe-looking commit nearby, note its commit
 id, and check it out with:
 
 -------------------------------------------------
-$ git reset --hard fb47ddb2db...
+$ git reset --hard fb47ddb2db
 -------------------------------------------------
 
 then test, run `bisect good` or `bisect bad` as appropriate, and
 continue.
 
 Instead of `git bisect visualize` and then `git reset --hard
-fb47ddb2db...`, you might just want to tell Git that you want to skip
+fb47ddb2db`, you might just want to tell Git that you want to skip
 the current commit:
 
 -------------------------------------------------
@@ -1200,7 +1200,7 @@ for other users who clone your repository.
 If you wish the exclude patterns to affect only certain repositories
 (instead of every repository for a given project), you may instead put
 them in a file in your repository named `.git/info/exclude`, or in any
-file specified by the `core.excludesfile` configuration variable.
+file specified by the `core.excludesFile` configuration variable.
 Some Git commands can also take exclude patterns directly on the
 command line.  See linkgit:gitignore[5] for the details.
 
@@ -1431,11 +1431,11 @@ differently.  Normally, a merge results in a merge commit, with two
 parents, one pointing at each of the two lines of development that
 were merged.
 
-However, if the current branch is a descendant of the other--so every
-commit present in the one is already contained in the other--then Git
-just performs a "fast-forward"; the head of the current branch is moved
-forward to point at the head of the merged-in branch, without any new
-commits being created.
+However, if the current branch is an ancestor of the other--so every commit
+present in the current branch is already contained in the other branch--then Git
+just performs a "fast-forward"; the head of the current branch is moved forward
+to point at the head of the merged-in branch, without any new commits being
+created.
 
 [[fixing-mistakes]]
 Fixing mistakes
@@ -1491,7 +1491,7 @@ resolving a merge>>.
 
 [[fixing-a-mistake-by-rewriting-history]]
 Fixing a mistake by rewriting history
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 If the problematic commit is the most recent commit, and you have not
 yet made that commit public, then you may just
@@ -1556,7 +1556,7 @@ so on a different branch and then coming back), unstash the
 work-in-progress changes.
 
 ------------------------------------------------
-$ git stash save "work in progress for foo feature"
+$ git stash push -m "work in progress for foo feature"
 ------------------------------------------------
 
 This command will save your changes away to the `stash`, and
@@ -2044,10 +2044,12 @@ If a push would not result in a <<fast-forwards,fast-forward>> of the
 remote branch, then it will fail with an error like:
 
 -------------------------------------------------
-error: remote 'refs/heads/master' is not an ancestor of
- local  'refs/heads/master'.
- Maybe you are not up-to-date and need to pull first?
-error: failed to push to 'ssh://yourserver.com/~you/proj.git'
+ ! [rejected]        master -> master (non-fast-forward)
+error: failed to push some refs to '...'
+hint: Updates were rejected because the tip of your current branch is behind
+hint: its remote counterpart. Integrate the remote changes (e.g.
+hint: 'git pull ...') before pushing again.
+hint: See the 'Note about fast-forwards' in 'git push --help' for details.
 -------------------------------------------------
 
 This can happen, for example, if you:
@@ -2125,8 +2127,37 @@ Allowing web browsing of a repository
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The gitweb cgi script provides users an easy way to browse your
-project's files and history without having to install Git; see the file
-gitweb/INSTALL in the Git source tree for instructions on setting it up.
+project's revisions, file contents and logs without having to install
+Git. Features like RSS/Atom feeds and blame/annotation details may
+optionally be enabled.
+
+The linkgit:git-instaweb[1] command provides a simple way to start
+browsing the repository using gitweb. The default server when using
+instaweb is lighttpd.
+
+See the file gitweb/INSTALL in the Git source tree and
+linkgit:gitweb[1] for instructions on details setting up a permanent
+installation with a CGI or Perl capable server.
+
+[[how-to-get-a-git-repository-with-minimal-history]]
+How to get a Git repository with minimal history
+------------------------------------------------
+
+A <<def_shallow_clone,shallow clone>>, with its truncated
+history, is useful when one is interested only in recent history
+of a project and getting full history from the upstream is
+expensive.
+
+A <<def_shallow_clone,shallow clone>> is created by specifying
+the linkgit:git-clone[1] `--depth` switch. The depth can later be
+changed with the linkgit:git-fetch[1] `--depth` switch, or full
+history restored with `--unshallow`.
+
+Merging inside a <<def_shallow_clone,shallow clone>> will work as long
+as a merge base is in the recent history.
+Otherwise, it will be like merging unrelated histories and may
+have to result in huge conflicts.  This limitation may make such
+a repository unsuitable to be used in merge based workflows.
 
 [[sharing-development-examples]]
 Examples
@@ -2164,7 +2195,7 @@ $ cd work
 Linus's tree will be stored in the remote-tracking branch named origin/master,
 and can be updated using linkgit:git-fetch[1]; you can track other
 public trees using linkgit:git-remote[1] to set up a "remote" and
-linkgit:git-fetch[1] to keep them up-to-date; see
+linkgit:git-fetch[1] to keep them up to date; see
 <<repositories-and-branches>>.
 
 Now create the branches in which you are going to work; these start out
@@ -3385,7 +3416,7 @@ commit abc
 Author:
 Date:
 ...
-:100644 100644 4b9458b... newsha... M somedirectory/myfile
+:100644 100644 4b9458b newsha M somedirectory/myfile
 
 
 commit xyz
@@ -3393,7 +3424,7 @@ Author:
 Date:
 
 ...
-:100644 100644 oldsha... 4b9458b... M somedirectory/myfile
+:100644 100644 oldsha 4b9458b M somedirectory/myfile
 ------------------------------------------------
 
 This tells you that the immediately following version of the file was
@@ -3418,13 +3449,13 @@ and your repository is good again!
 $ git log --raw --all
 ------------------------------------------------
 
-and just looked for the sha of the missing object (4b9458b..) in that
+and just looked for the sha of the missing object (4b9458b) in that
 whole thing. It's up to you--Git does *have* a lot of information, it is
 just missing one particular blob version.
 
 [[the-index]]
 The index
------------
+---------
 
 The index is a binary file (generally kept in `.git/index`) containing a
 sorted list of path names, each with permissions and the SHA-1 of a blob
@@ -4083,9 +4114,9 @@ program, e.g.  `diff3`, `merge`, or Git's own merge-file, on
 the blob objects from these three stages yourself, like this:
 
 ------------------------------------------------
-$ git cat-file blob 263414f... >hello.c~1
-$ git cat-file blob 06fa6a2... >hello.c~2
-$ git cat-file blob cc44c73... >hello.c~3
+$ git cat-file blob 263414f >hello.c~1
+$ git cat-file blob 06fa6a2 >hello.c~2
+$ git cat-file blob cc44c73 >hello.c~3
 $ git merge-file hello.c~2 hello.c~1 hello.c~3
 ------------------------------------------------
 
@@ -4343,7 +4374,7 @@ $ git log --no-merges t/
 ------------------------
 
 In the pager (`less`), just search for "bundle", go a few lines back,
-and see that it is in commit 18449ab0...  Now just copy this object name,
+and see that it is in commit 18449ab0.  Now just copy this object name,
 and paste it into the command line
 
 -------------------
@@ -4365,6 +4396,10 @@ itself!
 [[glossary]]
 Git Glossary
 ============
+
+[[git-explained]]
+Git explained
+-------------
 
 include::glossary-content.txt[]
 
@@ -4607,6 +4642,10 @@ $ git gc
 Appendix B: Notes and todo list for this manual
 ===============================================
 
+[[todo-list]]
+Todo list
+---------
+
 This is a work in progress.
 
 The basic requirements:
@@ -4636,22 +4675,14 @@ Scan email archives for other stuff left out
 Scan man pages to see if any assume more background than this manual
 provides.
 
-Simplify beginning by suggesting disconnected head instead of
-temporary branch creation?
-
 Add more good examples.  Entire sections of just cookbook examples
 might be a good idea; maybe make an "advanced examples" section a
 standard end-of-chapter section?
 
 Include cross-references to the glossary, where appropriate.
 
-Document shallow clones?  See draft 1.5.0 release notes for some
-documentation.
-
 Add a section on working with other version control systems, including
 CVS, Subversion, and just imports of series of release tarballs.
-
-More details on gitweb?
 
 Write a chapter on using plumbing and writing scripts.
 

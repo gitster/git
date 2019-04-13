@@ -33,6 +33,43 @@ check_zip() {
 	test_expect_success UNZIP " validate file contents" "
 		diff -r a ${dir_with_prefix}a
 	"
+
+	dir=eol_$1
+	dir_with_prefix=$dir/$2
+	extracted=${dir_with_prefix}a
+	original=a
+
+	test_expect_success UNZIP " extract ZIP archive with EOL conversion" '
+		(mkdir $dir && cd $dir && "$GIT_UNZIP" -a ../$zipfile)
+	'
+
+	test_expect_success UNZIP " validate that text files are converted" "
+		test_cmp_bin $extracted/text.cr $extracted/text.crlf &&
+		test_cmp_bin $extracted/text.cr $extracted/text.lf
+	"
+
+	test_expect_success UNZIP " validate that binary files are unchanged" "
+		test_cmp_bin $original/binary.cr   $extracted/binary.cr &&
+		test_cmp_bin $original/binary.crlf $extracted/binary.crlf &&
+		test_cmp_bin $original/binary.lf   $extracted/binary.lf
+	"
+
+	test_expect_success UNZIP " validate that diff files are converted" "
+		test_cmp_bin $extracted/diff.cr $extracted/diff.crlf &&
+		test_cmp_bin $extracted/diff.cr $extracted/diff.lf
+	"
+
+	test_expect_success UNZIP " validate that -diff files are unchanged" "
+		test_cmp_bin $original/nodiff.cr   $extracted/nodiff.cr &&
+		test_cmp_bin $original/nodiff.crlf $extracted/nodiff.crlf &&
+		test_cmp_bin $original/nodiff.lf   $extracted/nodiff.lf
+	"
+
+	test_expect_success UNZIP " validate that custom diff is unchanged " "
+		test_cmp_bin $original/custom.cr   $extracted/custom.cr &&
+		test_cmp_bin $original/custom.crlf $extracted/custom.crlf &&
+		test_cmp_bin $original/custom.lf   $extracted/custom.lf
+	"
 }
 
 test_expect_success \
@@ -41,6 +78,21 @@ test_expect_success \
      echo simple textfile >a/a &&
      mkdir a/bin &&
      cp /bin/sh a/bin &&
+     printf "text\r"	>a/text.cr &&
+     printf "text\r\n"	>a/text.crlf &&
+     printf "text\n"	>a/text.lf &&
+     printf "text\r"	>a/nodiff.cr &&
+     printf "text\r\n"	>a/nodiff.crlf &&
+     printf "text\n"	>a/nodiff.lf &&
+     printf "text\r"	>a/custom.cr &&
+     printf "text\r\n"	>a/custom.crlf &&
+     printf "text\n"	>a/custom.lf &&
+     printf "\0\r"	>a/binary.cr &&
+     printf "\0\r\n"	>a/binary.crlf &&
+     printf "\0\n"	>a/binary.lf &&
+     printf "\0\r"	>a/diff.cr &&
+     printf "\0\r\n"	>a/diff.crlf &&
+     printf "\0\n"	>a/diff.lf &&
      printf "A\$Format:%s\$O" "$SUBSTFORMAT" >a/substfile1 &&
      printf "A not substituted O" >a/substfile2 &&
      (p=long_path_to_a_file && cd a &&
@@ -66,16 +118,23 @@ test_expect_success 'add files to repository' '
 	GIT_COMMITTER_DATE="2005-05-27 22:00" git commit -m initial
 '
 
-test_expect_success 'setup export-subst' '
+test_expect_success 'setup export-subst and diff attributes' '
+	echo "a/nodiff.* -diff" >>.git/info/attributes &&
+	echo "a/diff.* diff" >>.git/info/attributes &&
+	echo "a/custom.* diff=custom" >>.git/info/attributes &&
+	git config diff.custom.binary true &&
 	echo "substfile?" export-subst >>.git/info/attributes &&
 	git log --max-count=1 "--pretty=format:A${SUBSTFORMAT}O" HEAD \
 		>a/substfile1
 '
 
-test_expect_success \
-    'create bare clone' \
-    'git clone --bare . bare.git &&
-     cp .git/info/attributes bare.git/info/attributes'
+test_expect_success 'create bare clone' '
+	git clone --bare . bare.git &&
+	cp .git/info/attributes bare.git/info/attributes &&
+	# Recreate our changes to .git/config rather than just copying it, as
+	# we do not want to clobber core.bare or other settings.
+	git -C bare.git config diff.custom.binary true
+'
 
 test_expect_success \
     'remove ignored file' \
@@ -99,9 +158,14 @@ test_expect_success 'git archive --format=zip with --output' \
     'git archive --format=zip --output=d2.zip HEAD &&
     test_cmp_bin d.zip d2.zip'
 
-test_expect_success 'git archive with --output, inferring format' '
+test_expect_success 'git archive with --output, inferring format (local)' '
 	git archive --output=d3.zip HEAD &&
 	test_cmp_bin d.zip d3.zip
+'
+
+test_expect_success 'git archive with --output, inferring format (remote)' '
+	git archive --remote=. --output=d4.zip HEAD &&
+	test_cmp_bin d.zip d4.zip
 '
 
 test_expect_success \

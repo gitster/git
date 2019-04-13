@@ -30,7 +30,10 @@ diffpatterns="
 	bibtex
 	cpp
 	csharp
+	css
 	fortran
+	fountain
+	golang
 	html
 	java
 	matlab

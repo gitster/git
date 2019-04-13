@@ -25,7 +25,7 @@ canned_test_failure () {
 test_bad_opts () {
 	test_expect_success "invalid args: $1" "
 		test_must_fail git log $1 2>errors &&
-		grep '$2' errors
+		test_i18ngrep '$2' errors
 	"
 }
 
@@ -54,14 +54,13 @@ canned_test "-L 4:a.c -L 8,12:a.c simple" multiple-superset
 canned_test "-L 8,12:a.c -L 4:a.c simple" multiple-superset
 
 test_bad_opts "-L" "switch.*requires a value"
-test_bad_opts "-L b.c" "argument.*not of the form"
-test_bad_opts "-L 1:" "argument.*not of the form"
+test_bad_opts "-L b.c" "argument not .start,end:file"
+test_bad_opts "-L 1:" "argument not .start,end:file"
 test_bad_opts "-L 1:nonexistent" "There is no path"
 test_bad_opts "-L 1:simple" "There is no path"
-test_bad_opts "-L '/foo:b.c'" "argument.*not of the form"
+test_bad_opts "-L '/foo:b.c'" "argument not .start,end:file"
 test_bad_opts "-L 1000:b.c" "has only.*lines"
-test_bad_opts "-L 1,1000:b.c" "has only.*lines"
-test_bad_opts "-L :b.c" "argument.*not of the form"
+test_bad_opts "-L :b.c" "argument not .start,end:file"
 test_bad_opts "-L :foo:b.c" "no match"
 
 test_expect_success '-L X (X == nlines)' '
@@ -86,17 +85,34 @@ test_expect_success '-L ,Y (Y == nlines)' '
 
 test_expect_success '-L ,Y (Y == nlines + 1)' '
 	n=$(expr $(wc -l <b.c) + 1) &&
-	test_must_fail git log -L ,$n:b.c
+	git log -L ,$n:b.c
 '
 
 test_expect_success '-L ,Y (Y == nlines + 2)' '
 	n=$(expr $(wc -l <b.c) + 2) &&
-	test_must_fail git log -L ,$n:b.c
+	git log -L ,$n:b.c
 '
 
 test_expect_success '-L with --first-parent and a merge' '
 	git checkout parallel-change &&
 	git log --first-parent -L 1,1:b.c
+'
+
+test_expect_success '-L with --output' '
+	git checkout parallel-change &&
+	git log --output=log -L :main:b.c >output &&
+	test_must_be_empty output &&
+	test_line_count = 70 log
+'
+
+test_expect_success 'range_set_union' '
+	test_seq 500 > c.c &&
+	git add c.c &&
+	git commit -m "many lines" &&
+	test_seq 1000 > c.c &&
+	git add c.c &&
+	git commit -m "modify many lines" &&
+	git log $(for x in $(test_seq 200); do echo -L $((2*x)),+1:c.c; done)
 '
 
 test_done

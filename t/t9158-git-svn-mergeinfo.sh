@@ -7,8 +7,6 @@ test_description='git svn mergeinfo propagation'
 
 . ./lib-git-svn.sh
 
-say 'define NO_SVN_TESTS to skip git svn tests'
-
 test_expect_success 'initialize source svn repo' '
 	svn_cmd mkdir -m x "$svnrepo"/trunk &&
 	svn_cmd co "$svnrepo"/trunk "$SVN_TREE" &&
@@ -34,7 +32,7 @@ test_expect_success 'change svn:mergeinfo' '
 '
 
 test_expect_success 'verify svn:mergeinfo' '
-	mergeinfo=$(svn_cmd propget svn:mergeinfo "$svnrepo"/trunk)
+	mergeinfo=$(svn_cmd propget svn:mergeinfo "$svnrepo"/trunk) &&
 	test "$mergeinfo" = "/branches/foo:1-10"
 '
 
@@ -46,7 +44,7 @@ test_expect_success 'change svn:mergeinfo multiline' '
 '
 
 test_expect_success 'verify svn:mergeinfo multiline' '
-	mergeinfo=$(svn_cmd propget svn:mergeinfo "$svnrepo"/trunk)
+	mergeinfo=$(svn_cmd propget svn:mergeinfo "$svnrepo"/trunk) &&
 	test "$mergeinfo" = "/branches/bar:1-10
 /branches/other:3-5,8,10-11"
 '

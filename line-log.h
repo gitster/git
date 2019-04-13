@@ -14,7 +14,7 @@ struct range {
 
 /* A set of ranges.  The ranges must always be disjoint and sorted. */
 struct range_set {
-	int alloc, nr;
+	unsigned int alloc, nr;
 	struct range *ranges;
 };
 
@@ -53,8 +53,6 @@ struct line_log_data {
 	struct diff_filepair *pair;
 	struct diff_ranges diff;
 };
-
-extern void line_log_data_init(struct line_log_data *r);
 
 extern void line_log_init(struct rev_info *rev, const char *prefix, struct string_list *args);
 

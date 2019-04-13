@@ -61,10 +61,10 @@ test_expect_success 'git rebase' '
 	git add foo &&
 	git rebase --continue &&
 	echo rebase >expected.args &&
-	cat >expected.data <<EOF &&
-$(git rev-parse C) $(git rev-parse HEAD^)
-$(git rev-parse D) $(git rev-parse HEAD)
-EOF
+	cat >expected.data <<-EOF &&
+	$(git rev-parse C) $(git rev-parse HEAD^)
+	$(git rev-parse D) $(git rev-parse HEAD)
+	EOF
 	verify_hook_input
 '
 
@@ -77,9 +77,10 @@ test_expect_success 'git rebase --skip' '
 	git add foo &&
 	git rebase --continue &&
 	echo rebase >expected.args &&
-	cat >expected.data <<EOF &&
-$(git rev-parse D) $(git rev-parse HEAD)
-EOF
+	cat >expected.data <<-EOF &&
+	$(git rev-parse C) $(git rev-parse HEAD^)
+	$(git rev-parse D) $(git rev-parse HEAD)
+	EOF
 	verify_hook_input
 '
 
@@ -89,9 +90,10 @@ test_expect_success 'git rebase --skip the last one' '
 	test_must_fail git rebase --onto D A &&
 	git rebase --skip &&
 	echo rebase >expected.args &&
-	cat >expected.data <<EOF &&
-$(git rev-parse E) $(git rev-parse HEAD)
-EOF
+	cat >expected.data <<-EOF &&
+	$(git rev-parse E) $(git rev-parse HEAD)
+	$(git rev-parse F) $(git rev-parse HEAD)
+	EOF
 	verify_hook_input
 '
 
@@ -103,25 +105,57 @@ test_expect_success 'git rebase -m' '
 	git add foo &&
 	git rebase --continue &&
 	echo rebase >expected.args &&
-	cat >expected.data <<EOF &&
-$(git rev-parse C) $(git rev-parse HEAD^)
-$(git rev-parse D) $(git rev-parse HEAD)
-EOF
+	cat >expected.data <<-EOF &&
+	$(git rev-parse C) $(git rev-parse HEAD^)
+	$(git rev-parse D) $(git rev-parse HEAD)
+	EOF
 	verify_hook_input
 '
 
 test_expect_success 'git rebase -m --skip' '
 	git reset --hard D &&
 	clear_hook_input &&
-	test_must_fail git rebase --onto A B &&
+	test_must_fail git rebase -m --onto A B &&
 	test_must_fail git rebase --skip &&
 	echo D > foo &&
 	git add foo &&
 	git rebase --continue &&
 	echo rebase >expected.args &&
-	cat >expected.data <<EOF &&
-$(git rev-parse D) $(git rev-parse HEAD)
-EOF
+	cat >expected.data <<-EOF &&
+	$(git rev-parse C) $(git rev-parse HEAD^)
+	$(git rev-parse D) $(git rev-parse HEAD)
+	EOF
+	verify_hook_input
+'
+
+test_expect_success 'git rebase with implicit use of interactive backend' '
+	git reset --hard D &&
+	clear_hook_input &&
+	test_must_fail git rebase --keep --onto A B &&
+	echo C > foo &&
+	git add foo &&
+	git rebase --continue &&
+	echo rebase >expected.args &&
+	cat >expected.data <<-EOF &&
+	$(git rev-parse C) $(git rev-parse HEAD^)
+	$(git rev-parse D) $(git rev-parse HEAD)
+	EOF
+	verify_hook_input
+'
+
+test_expect_success 'git rebase --skip with implicit use of interactive backend' '
+	git reset --hard D &&
+	clear_hook_input &&
+	test_must_fail git rebase --keep --onto A B &&
+	test_must_fail git rebase --skip &&
+	echo D > foo &&
+	git add foo &&
+	git rebase --continue &&
+	echo rebase >expected.args &&
+	cat >expected.data <<-EOF &&
+	$(git rev-parse C) $(git rev-parse HEAD^)
+	$(git rev-parse D) $(git rev-parse HEAD)
+	EOF
 	verify_hook_input
 '
 
@@ -148,10 +182,10 @@ test_expect_success 'git rebase -i (unchanged)' '
 	git add foo &&
 	git rebase --continue &&
 	echo rebase >expected.args &&
-	cat >expected.data <<EOF &&
-$(git rev-parse C) $(git rev-parse HEAD^)
-$(git rev-parse D) $(git rev-parse HEAD)
-EOF
+	cat >expected.data <<-EOF &&
+	$(git rev-parse C) $(git rev-parse HEAD^)
+	$(git rev-parse D) $(git rev-parse HEAD)
+	EOF
 	verify_hook_input
 '
 
@@ -163,9 +197,9 @@ test_expect_success 'git rebase -i (skip)' '
 	git add foo &&
 	git rebase --continue &&
 	echo rebase >expected.args &&
-	cat >expected.data <<EOF &&
-$(git rev-parse D) $(git rev-parse HEAD)
-EOF
+	cat >expected.data <<-EOF &&
+	$(git rev-parse D) $(git rev-parse HEAD)
+	EOF
 	verify_hook_input
 '
 
@@ -177,10 +211,10 @@ test_expect_success 'git rebase -i (squash)' '
 	git add foo &&
 	git rebase --continue &&
 	echo rebase >expected.args &&
-	cat >expected.data <<EOF &&
-$(git rev-parse C) $(git rev-parse HEAD)
-$(git rev-parse D) $(git rev-parse HEAD)
-EOF
+	cat >expected.data <<-EOF &&
+	$(git rev-parse C) $(git rev-parse HEAD)
+	$(git rev-parse D) $(git rev-parse HEAD)
+	EOF
 	verify_hook_input
 '
 
@@ -189,10 +223,10 @@ test_expect_success 'git rebase -i (fixup without conflict)' '
 	clear_hook_input &&
 	FAKE_LINES="1 fixup 2" git rebase -i B &&
 	echo rebase >expected.args &&
-	cat >expected.data <<EOF &&
-$(git rev-parse C) $(git rev-parse HEAD)
-$(git rev-parse D) $(git rev-parse HEAD)
-EOF
+	cat >expected.data <<-EOF &&
+	$(git rev-parse C) $(git rev-parse HEAD)
+	$(git rev-parse D) $(git rev-parse HEAD)
+	EOF
 	verify_hook_input
 '
 
@@ -205,10 +239,27 @@ test_expect_success 'git rebase -i (double edit)' '
 	git add foo &&
 	git rebase --continue &&
 	echo rebase >expected.args &&
-	cat >expected.data <<EOF &&
-$(git rev-parse C) $(git rev-parse HEAD^)
-$(git rev-parse D) $(git rev-parse HEAD)
-EOF
+	cat >expected.data <<-EOF &&
+	$(git rev-parse C) $(git rev-parse HEAD^)
+	$(git rev-parse D) $(git rev-parse HEAD)
+	EOF
+	verify_hook_input
+'
+
+test_expect_success 'git rebase -i (exec)' '
+	git reset --hard D &&
+	clear_hook_input &&
+	FAKE_LINES="edit 1 exec_false 2" git rebase -i B &&
+	echo something >bar &&
+	git add bar &&
+	# Fails because of exec false
+	test_must_fail git rebase --continue &&
+	git rebase --continue &&
+	echo rebase >expected.args &&
+	cat >expected.data <<-EOF &&
+	$(git rev-parse C) $(git rev-parse HEAD^)
+	$(git rev-parse D) $(git rev-parse HEAD)
+	EOF
 	verify_hook_input
 '
 

@@ -83,6 +83,16 @@ test_expect_success 'edit existing notes' '
 	test_must_fail git notes show HEAD^
 '
 
+test_expect_success 'show notes from treeish' '
+	test "b3" = "$(git notes --ref commits^{tree} show)" &&
+	test "b4" = "$(git notes --ref commits@{1} show)"
+'
+
+test_expect_success 'cannot edit notes from non-ref' '
+	test_must_fail git notes --ref commits^{tree} edit &&
+	test_must_fail git notes --ref commits@{1} edit
+'
+
 test_expect_success 'cannot "git notes add -m" where notes already exists' '
 	test_must_fail git notes add -m "b2" &&
 	test_path_is_missing .git/NOTES_EDITMSG &&
@@ -471,10 +481,8 @@ test_expect_success 'list specific note with "git notes list <object>"' '
 '
 
 test_expect_success 'listing non-existing notes fails' '
-	cat >expect <<-EOF &&
-	EOF
 	test_must_fail git notes list HEAD >actual &&
-	test_cmp expect actual
+	test_must_be_empty actual
 '
 
 test_expect_success 'append to existing note with "git notes append"' '
@@ -658,7 +666,7 @@ test_expect_success '--show-notes=* adds to GIT_NOTES_DISPLAY_REF' '
 '
 
 test_expect_success '--no-standard-notes' '
-	cat >expect-commits <<EOF
+	cat >expect-commits <<-EOF &&
 		commit 2c125331118caba0ff8238b7f4958ac6e93fe39c
 		Author: A U Thor <author@example.com>
 		Date:   Thu Apr 7 15:18:13 2005 -0700
@@ -904,7 +912,7 @@ test_expect_success 'git notes copy --stdin' '
 		${indent}
 		${indent}yet another note
 	EOF
-	(echo $(git rev-parse HEAD~3) $(git rev-parse HEAD^); \
+	(echo $(git rev-parse HEAD~3) $(git rev-parse HEAD^) &&
 	echo $(git rev-parse HEAD~2) $(git rev-parse HEAD)) |
 	git notes copy --stdin &&
 	git log -2 >actual &&
@@ -929,7 +937,7 @@ test_expect_success 'git notes copy --for-rewrite (unconfigured)' '
 	EOF
 	test_commit 14th &&
 	test_commit 15th &&
-	(echo $(git rev-parse HEAD~3) $(git rev-parse HEAD^); \
+	(echo $(git rev-parse HEAD~3) $(git rev-parse HEAD^) &&
 	echo $(git rev-parse HEAD~2) $(git rev-parse HEAD)) |
 	git notes copy --for-rewrite=foo &&
 	git log -2 >actual &&
@@ -962,7 +970,7 @@ test_expect_success 'git notes copy --for-rewrite (enabled)' '
 	EOF
 	test_config notes.rewriteMode overwrite &&
 	test_config notes.rewriteRef "refs/notes/*" &&
-	(echo $(git rev-parse HEAD~3) $(git rev-parse HEAD^); \
+	(echo $(git rev-parse HEAD~3) $(git rev-parse HEAD^) &&
 	echo $(git rev-parse HEAD~2) $(git rev-parse HEAD)) |
 	git notes copy --for-rewrite=foo &&
 	git log -2 >actual &&
@@ -1049,7 +1057,7 @@ test_expect_success 'git notes copy --for-rewrite (append two to one)' '
 	git notes add -f -m"append 2" HEAD^^ &&
 	test_config notes.rewriteMode concatenate &&
 	test_config notes.rewriteRef "refs/notes/*" &&
-	(echo $(git rev-parse HEAD^) $(git rev-parse HEAD);
+	(echo $(git rev-parse HEAD^) $(git rev-parse HEAD) &&
 	echo $(git rev-parse HEAD^^) $(git rev-parse HEAD)) |
 	git notes copy --for-rewrite=foo &&
 	git log -1 >actual &&
@@ -1120,6 +1128,12 @@ test_expect_success 'GIT_NOTES_REWRITE_REF overrides config' '
 test_expect_success 'git notes copy diagnoses too many or too few parameters' '
 	test_must_fail git notes copy &&
 	test_must_fail git notes copy one two three
+'
+
+test_expect_success 'git notes get-ref expands refs/heads/master to refs/notes/refs/heads/master' '
+	test_unconfig core.notesRef &&
+	sane_unset GIT_NOTES_REF &&
+	test "$(git notes --ref=refs/heads/master get-ref)" = "refs/notes/refs/heads/master"
 '
 
 test_expect_success 'git notes get-ref (no overrides)' '

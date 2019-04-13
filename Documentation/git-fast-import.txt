@@ -9,7 +9,7 @@ git-fast-import - Backend for fast Git data importers
 SYNOPSIS
 --------
 [verse]
-frontend | 'git fast-import' [options]
+frontend | 'git fast-import' [<options>]
 
 DESCRIPTION
 -----------
@@ -40,21 +40,22 @@ OPTIONS
 	not contain the old commit).
 
 --quiet::
-	Disable all non-fatal output, making fast-import silent when it
-	is successful.  This option disables the output shown by
-	\--stats.
+	Disable the output shown by --stats, making fast-import usually
+	be silent when it is successful.  However, if the import stream
+	has directives intended to show user output (e.g. `progress`
+	directives), the corresponding messages will still be shown.
 
 --stats::
 	Display some basic statistics about the objects fast-import has
 	created, the packfiles they were stored into, and the
 	memory used by fast-import during this run.  Showing this output
-	is currently the default, but can be disabled with \--quiet.
+	is currently the default, but can be disabled with --quiet.
 
 Options for Frontends
 ~~~~~~~~~~~~~~~~~~~~~
 
 --cat-blob-fd=<fd>::
-	Write responses to `cat-blob` and `ls` queries to the
+	Write responses to `get-mark`, `cat-blob`, and `ls` queries to the
 	file descriptor <fd> instead of `stdout`.  Allows `progress`
 	output intended for the end-user to be separated from other
 	output.
@@ -81,12 +82,12 @@ Locations of Marks Files
 	have been completed, or to save the marks table across
 	incremental runs.  As <file> is only opened and truncated
 	at checkpoint (or completion) the same path can also be
-	safely given to \--import-marks.
+	safely given to --import-marks.
 
 --import-marks=<file>::
 	Before processing any input, load the marks specified in
 	<file>.  The input file must exist, must be readable, and
-	must use the same format as produced by \--export-marks.
+	must use the same format as produced by --export-marks.
 	Multiple options may be supplied to import more than one
 	set of marks.  If a mark is defined to different values,
 	the last file wins.
@@ -121,7 +122,7 @@ Performance and Compression Tuning
 
 --depth=<n>::
 	Maximum delta depth, for blob and tree deltification.
-	Default is 10.
+	Default is 50.
 
 --export-pack-edges=<file>::
 	After creating a packfile, print a line of data to
@@ -136,8 +137,10 @@ Performance and Compression Tuning
 	Maximum size of each output packfile.
 	The default is unlimited.
 
+fastimport.unpackLimit::
+	See linkgit:git-config[1]
 
-Performance
+PERFORMANCE
 -----------
 The design of fast-import allows it to import large projects in a minimum
 amount of memory usage and processing time.  Assuming the frontend
@@ -153,7 +156,7 @@ faster if the source data is stored on a different drive than the
 destination Git repository (due to less IO contention).
 
 
-Development Cost
+DEVELOPMENT COST
 ----------------
 A typical frontend for fast-import tends to weigh in at approximately 200
 lines of Perl/Python/Ruby code.  Most developers have been able to
@@ -163,7 +166,7 @@ an ideal situation, given that most conversion tools are throw-away
 (use once, and never look back).
 
 
-Parallel Operation
+PARALLEL OPERATION
 ------------------
 Like 'git push' or 'git fetch', imports handled by fast-import are safe to
 run alongside parallel `git repack -a -d` or `git gc` invocations,
@@ -179,12 +182,12 @@ fast-forward update, fast-import will skip updating that ref and instead
 prints a warning message.  fast-import will always attempt to update all
 branch refs, and does not stop on the first failure.
 
-Branch updates can be forced with \--force, but it's recommended that
-this only be used on an otherwise quiet repository.  Using \--force
+Branch updates can be forced with --force, but it's recommended that
+this only be used on an otherwise quiet repository.  Using --force
 is not necessary for an initial import into an empty repository.
 
 
-Technical Discussion
+TECHNICAL DISCUSSION
 --------------------
 fast-import tracks a set of branches in memory.  Any branch can be created
 or modified at any point during the import process by sending a
@@ -202,7 +205,7 @@ directory also allows fast-import to run very quickly, as it does not
 need to perform any costly file update operations when switching
 between branches.
 
-Input Format
+INPUT FORMAT
 ------------
 With the exception of raw file data (which Git does not interpret)
 the fast-import input format is text (ASCII) based.  This text based
@@ -231,11 +234,11 @@ Date Formats
 ~~~~~~~~~~~~
 The following date formats are supported.  A frontend should select
 the format it will use for this import by passing the format name
-in the \--date-format=<fmt> command-line option.
+in the --date-format=<fmt> command-line option.
 
 `raw`::
 	This is the Git native format and is `<time> SP <offutc>`.
-	It is also fast-import's default format, if \--date-format was
+	It is also fast-import's default format, if --date-format was
 	not specified.
 +
 The time of the event is specified by `<time>` as the number of
@@ -350,6 +353,11 @@ and control the current import process.  More detailed discussion
 	unless the `done` feature was requested using the
 	`--done` command-line option or `feature done` command.
 
+`get-mark`::
+	Causes fast-import to print the SHA-1 corresponding to a mark
+	to the file descriptor set with `--cat-blob-fd`, or `stdout` if
+	unspecified.
+
 `cat-blob`::
 	Causes fast-import to print a blob in 'cat-file --batch'
 	format to the file descriptor set with `--cat-blob-fd` or
@@ -377,6 +385,7 @@ change to the project.
 ....
 	'commit' SP <ref> LF
 	mark?
+	original-oid?
 	('author' (SP <name>)? SP LT <email> GT SP <when> LF)?
 	'committer' (SP <name>)? SP LT <email> GT SP <when> LF
 	data
@@ -437,7 +446,7 @@ the email address from the other fields in the line.  Note that
 of bytes, except `LT`, `GT` and `LF`.  `<name>` is typically UTF-8 encoded.
 
 The time of the change is specified by `<when>` using the date format
-that was selected by the \--date-format=<fmt> command-line option.
+that was selected by the --date-format=<fmt> command-line option.
 See ``Date Formats'' above for the set of supported formats, and
 their syntax.
 
@@ -507,10 +516,6 @@ omitted when creating a new branch, the first `merge` commit will be
 the first ancestor of the current commit, and the branch will start
 out with no files.  An unlimited number of `merge` commands per
 commit are permitted by fast-import, thereby establishing an n-way merge.
-However Git's other tools never create commits with more than 15
-additional ancestors (forming a 16-way merge).  For this reason
-it is suggested that frontends do not use more than 15 `merge`
-commands per commit; 16, if starting a new, empty branch.
 
 Here `<commit-ish>` is any of the commit specification expressions
 also accepted by `from` (see above).
@@ -604,7 +609,7 @@ be removed from the branch.
 See `filemodify` above for a detailed description of `<path>`.
 
 `filecopy`
-^^^^^^^^^^^^
+^^^^^^^^^^
 Recursively copies an existing file or subdirectory to a different
 location within the branch.  The existing file or directory must
 exist.  If the destination exists it will be completely replaced
@@ -737,6 +742,19 @@ New marks are created automatically.  Existing marks can be moved
 to another object simply by reusing the same `<idnum>` in another
 `mark` command.
 
+`original-oid`
+~~~~~~~~~~~~~~
+Provides the name of the object in the original source control system.
+fast-import will simply ignore this directive, but filter processes
+which operate on and modify the stream before feeding to fast-import
+may have uses for this information
+
+....
+	'original-oid' SP <object-identifier> LF
+....
+
+where `<object-identifer>` is any string not containing LF.
+
 `tag`
 ~~~~~
 Creates an annotated tag referring to a specific commit.  To create
@@ -745,6 +763,7 @@ lightweight (non-annotated) tags see the `reset` command below.
 ....
 	'tag' SP <name> LF
 	'from' SP <commit-ish> LF
+	original-oid?
 	'tagger' (SP <name>)? SP LT <email> GT SP <when> LF
 	data
 ....
@@ -819,6 +838,7 @@ assigned mark.
 ....
 	'blob' LF
 	mark?
+	original-oid?
 	data
 ....
 
@@ -892,7 +912,7 @@ save out all current branch refs, tags and marks.
 ....
 
 Note that fast-import automatically switches packfiles when the current
-packfile reaches \--max-pack-size, or 4 GiB, whichever limit is
+packfile reaches --max-pack-size, or 4 GiB, whichever limit is
 smaller.  During an automatic packfile switch fast-import does not update
 the branch refs, tags or marks.
 
@@ -933,6 +953,25 @@ remove the leading part of the line, for example:
 Placing a `progress` command immediately after a `checkpoint` will
 inform the reader when the `checkpoint` has been completed and it
 can safely access the refs that fast-import updated.
+
+`get-mark`
+~~~~~~~~~~
+Causes fast-import to print the SHA-1 corresponding to a mark to
+stdout or to the file descriptor previously arranged with the
+`--cat-blob-fd` argument. The command otherwise has no impact on the
+current import; its purpose is to retrieve SHA-1s that later commits
+might want to refer to in their commit messages.
+
+....
+	'get-mark' SP ':' <idnum> LF
+....
+
+This command can be used anywhere in the stream that comments are
+accepted.  In particular, the `get-mark` command can be used in the
+middle of a commit but not in the middle of a `data` command.
+
+See ``Responses To Commands'' below for details about how to read
+this output safely.
 
 `cat-blob`
 ~~~~~~~~~~
@@ -1004,7 +1043,8 @@ Output uses the same format as `git ls-tree <tree> -- <path>`:
 ====
 
 The <dataref> represents the blob, tree, or commit object at <path>
-and can be used in later 'cat-blob', 'filemodify', or 'ls' commands.
+and can be used in later 'get-mark', 'cat-blob', 'filemodify', or
+'ls' commands.
 
 If there is no file or subtree at that path, 'git fast-import' will
 instead report
@@ -1033,7 +1073,7 @@ relative-marks::
 no-relative-marks::
 force::
 	Act as though the corresponding command-line option with
-	a leading '--' was passed on the command line
+	a leading `--` was passed on the command line
 	(see OPTIONS, above).
 
 import-marks::
@@ -1046,9 +1086,11 @@ import-marks-if-exists::
 	"feature import-marks-if-exists" like a corresponding
 	command-line option silently skips a nonexistent file.
 
+get-mark::
 cat-blob::
 ls::
-	Require that the backend support the 'cat-blob' or 'ls' command.
+	Require that the backend support the 'get-mark', 'cat-blob',
+	or 'ls' command respectively.
 	Versions of fast-import not supporting the specified command
 	will exit with a message indicating so.
 	This lets the import error out early with a clear message,
@@ -1082,7 +1124,7 @@ options the user may specify to git fast-import itself.
 
 The `<option>` part of the command may contain any of the options
 listed in the OPTIONS section that do not change import semantics,
-without the leading '--' and is treated in the same way.
+without the leading `--` and is treated in the same way.
 
 Option commands must be the first commands on the input (not counting
 feature commands), to give an option command after any non-option
@@ -1106,7 +1148,7 @@ If the `--done` command-line option or `feature done` command is
 in use, the `done` command is mandatory and marks the end of the
 stream.
 
-Responses To Commands
+RESPONSES TO COMMANDS
 ---------------------
 New objects written by fast-import are not available immediately.
 Most fast-import commands have no visible effect until the next
@@ -1128,14 +1170,14 @@ bidirectional pipes:
 	git fast-import >fast-import-output
 ====
 
-A frontend set up this way can use `progress`, `ls`, and `cat-blob`
-commands to read information from the import in progress.
+A frontend set up this way can use `progress`, `get-mark`, `ls`, and
+`cat-blob` commands to read information from the import in progress.
 
 To avoid deadlock, such frontends must completely consume any
-pending output from `progress`, `ls`, and `cat-blob` before
+pending output from `progress`, `ls`, `get-mark`, and `cat-blob` before
 performing writes to fast-import that might block.
 
-Crash Reports
+CRASH REPORTS
 -------------
 If fast-import is supplied invalid input it will terminate with a
 non-zero exit status and create a crash report in the top level of
@@ -1222,7 +1264,7 @@ An example crash:
 	END OF CRASH REPORT
 ====
 
-Tips and Tricks
+TIPS AND TRICKS
 ---------------
 The following tips and tricks have been collected from various
 users of fast-import, and are offered here as suggestions.
@@ -1230,7 +1272,7 @@ users of fast-import, and are offered here as suggestions.
 Use One Mark Per Commit
 ~~~~~~~~~~~~~~~~~~~~~~~
 When doing a repository conversion, use a unique mark per commit
-(`mark :<n>`) and supply the \--export-marks option on the command
+(`mark :<n>`) and supply the --export-marks option on the command
 line.  fast-import will dump a file which lists every mark and the Git
 object SHA-1 that corresponds to it.  If the frontend can tie
 the marks back to the source repository, it is easy to verify the
@@ -1295,7 +1337,7 @@ even for considerably large projects (100,000+ commits).
 
 However repacking the repository is necessary to improve data
 locality and access performance.  It can also take hours on extremely
-large projects (especially if -f and a large \--window parameter is
+large projects (especially if -f and a large --window parameter is
 used).  Since repacking is safe to run alongside readers and writers,
 run the repack in the background and let it finish when it finishes.
 There is no reason to wait to explore your new Git project!
@@ -1309,7 +1351,7 @@ Repacking Historical Data
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 If you are repacking very old imported data (e.g. older than the
 last year), consider expending some extra CPU time and supplying
-\--window=50 (or higher) when you run 'git repack'.
+--window=50 (or higher) when you run 'git repack'.
 This will take longer, but will also produce a smaller packfile.
 You only need to expend the effort once, and everyone using your
 project will benefit from the smaller repository.
@@ -1324,7 +1366,7 @@ Your users will feel better knowing how much of the data stream
 has been processed.
 
 
-Packfile Optimization
+PACKFILE OPTIMIZATION
 ---------------------
 When packing a blob fast-import always attempts to deltify against the last
 blob written.  Unless specifically arranged for by the frontend,
@@ -1355,7 +1397,7 @@ to force recomputation of all deltas can significantly reduce the
 final packfile size (30-50% smaller can be quite typical).
 
 
-Memory Utilization
+MEMORY UTILIZATION
 ------------------
 There are a number of factors which affect how much memory fast-import
 requires to perform an import.  Like critical sections of core
@@ -1411,7 +1453,7 @@ branch, their in-memory storage size can grow to a considerable size
 fast-import automatically moves active branches to inactive status based on
 a simple least-recently-used algorithm.  The LRU chain is updated on
 each `commit` command.  The maximum number of active branches can be
-increased or decreased on the command line with \--active-branches=.
+increased or decreased on the command line with --active-branches=.
 
 per active tree
 ~~~~~~~~~~~~~~~
@@ -1433,7 +1475,7 @@ and lazy loading of subtrees, allows fast-import to efficiently import
 projects with 2,000+ branches and 45,114+ files in a very limited
 memory footprint (less than 2.7 MiB per active branch).
 
-Signals
+SIGNALS
 -------
 Sending *SIGUSR1* to the 'git fast-import' process ends the current
 packfile early, simulating a `checkpoint` command.  The impatient

@@ -26,6 +26,9 @@
 #ifndef __AC_KHASH_H
 #define __AC_KHASH_H
 
+#include "cache.h"
+#include "hashmap.h"
+
 #define AC_VERSION_KHASH_H "0.2.8"
 
 typedef uint32_t khint32_t;
@@ -79,11 +82,16 @@ static const double __ac_HASH_UPPER = 0.77;
 	SCOPE kh_##name##_t *kh_init_##name(void) {							\
 		return (kh_##name##_t*)xcalloc(1, sizeof(kh_##name##_t));		\
 	}																	\
+	SCOPE void kh_release_##name(kh_##name##_t *h)						\
+	{																	\
+		free(h->flags);													\
+		free((void *)h->keys);											\
+		free((void *)h->vals);											\
+	}																	\
 	SCOPE void kh_destroy_##name(kh_##name##_t *h)						\
 	{																	\
 		if (h) {														\
-			free((void *)h->keys); free(h->flags);					\
-			free((void *)h->vals);										\
+			kh_release_##name(h);										\
 			free(h);													\
 		}																\
 	}																	\
@@ -117,7 +125,7 @@ static const double __ac_HASH_UPPER = 0.77;
 			if (new_n_buckets < 4) new_n_buckets = 4;					\
 			if (h->size >= (khint_t)(new_n_buckets * __ac_HASH_UPPER + 0.5)) j = 0;	/* requested size is too small */ \
 			else { /* hash table size to be changed (shrink or expand); rehash */ \
-				new_flags = (khint32_t*)xmalloc(__ac_fsize(new_n_buckets) * sizeof(khint32_t));	\
+				ALLOC_ARRAY(new_flags, __ac_fsize(new_n_buckets)); \
 				if (!new_flags) return -1;								\
 				memset(new_flags, 0xaa, __ac_fsize(new_n_buckets) * sizeof(khint32_t)); \
 				if (h->n_buckets < new_n_buckets) {	/* expand */		\
@@ -226,7 +234,7 @@ static const double __ac_HASH_UPPER = 0.77;
 	__KHASH_IMPL(name, SCOPE, khkey_t, khval_t, kh_is_map, __hash_func, __hash_equal)
 
 #define KHASH_INIT(name, khkey_t, khval_t, kh_is_map, __hash_func, __hash_equal) \
-	KHASH_INIT2(name, static inline, khkey_t, khval_t, kh_is_map, __hash_func, __hash_equal)
+	KHASH_INIT2(name, MAYBE_UNUSED static inline, khkey_t, khval_t, kh_is_map, __hash_func, __hash_equal)
 
 /* Other convenient macros... */
 

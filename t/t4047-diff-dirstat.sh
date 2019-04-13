@@ -248,7 +248,8 @@ EOF
 	git rm -r src/move/unchanged &&
 	git rm -r src/move/changed &&
 	git rm -r src/move/rearranged &&
-	git commit -m "changes"
+	git commit -m "changes" &&
+	git config diff.renames false
 '
 
 cat <<EOF >expect_diff_stat
@@ -374,7 +375,7 @@ test_expect_success 'later options override earlier options:' '
 	git diff --dirstat=files,10,cumulative,changes,noncumulative,3 -M HEAD^..HEAD >actual_diff_dirstat_M &&
 	test_cmp expect_diff_dirstat_M actual_diff_dirstat_M &&
 	git diff --dirstat=files,10,cumulative,changes,noncumulative,3 -C -C HEAD^..HEAD >actual_diff_dirstat_CC &&
-	test_cmp expect_diff_dirstat_CC actual_diff_dirstat_CC
+	test_cmp expect_diff_dirstat_CC actual_diff_dirstat_CC &&
 	git diff --dirstat=files --dirstat=10 --dirstat=cumulative --dirstat=changes --dirstat=noncumulative -X3 HEAD^..HEAD >actual_diff_dirstat &&
 	test_cmp expect_diff_dirstat actual_diff_dirstat &&
 	git diff --dirstat=files --dirstat=10 --dirstat=cumulative --dirstat=changes --dirstat=noncumulative -X3 -M HEAD^..HEAD >actual_diff_dirstat_M &&
@@ -939,7 +940,7 @@ test_expect_success 'diff.dirstat=0,lines' '
 test_expect_success '--dirstat=future_param,lines,0 should fail loudly' '
 	test_must_fail git diff --dirstat=future_param,lines,0 HEAD^..HEAD >actual_diff_dirstat 2>actual_error &&
 	test_debug "cat actual_error" &&
-	test_cmp /dev/null actual_diff_dirstat &&
+	test_must_be_empty actual_diff_dirstat &&
 	test_i18ngrep -q "future_param" actual_error &&
 	test_i18ngrep -q "\--dirstat" actual_error
 '
@@ -947,7 +948,7 @@ test_expect_success '--dirstat=future_param,lines,0 should fail loudly' '
 test_expect_success '--dirstat=dummy1,cumulative,2dummy should report both unrecognized parameters' '
 	test_must_fail git diff --dirstat=dummy1,cumulative,2dummy HEAD^..HEAD >actual_diff_dirstat 2>actual_error &&
 	test_debug "cat actual_error" &&
-	test_cmp /dev/null actual_diff_dirstat &&
+	test_must_be_empty actual_diff_dirstat &&
 	test_i18ngrep -q "dummy1" actual_error &&
 	test_i18ngrep -q "2dummy" actual_error &&
 	test_i18ngrep -q "\--dirstat" actual_error
@@ -971,6 +972,20 @@ test_expect_success 'diff.dirstat=future_param,0,lines should warn, but still wo
 	test_cmp expect_diff_dirstat_CC actual_diff_dirstat_CC &&
 	test_i18ngrep -q "future_param" actual_error &&
 	test_i18ngrep -q "diff\\.dirstat" actual_error
+'
+
+test_expect_success '--shortstat --dirstat should output only one dirstat' '
+	git diff --shortstat --dirstat=changes HEAD^..HEAD >out &&
+	grep " dst/copy/changed/$" out >actual_diff_shortstat_dirstat_changes &&
+	test_line_count = 1 actual_diff_shortstat_dirstat_changes &&
+
+	git diff --shortstat --dirstat=lines HEAD^..HEAD >out &&
+	grep " dst/copy/changed/$" out >actual_diff_shortstat_dirstat_lines &&
+	test_line_count = 1 actual_diff_shortstat_dirstat_lines &&
+
+	git diff --shortstat --dirstat=files HEAD^..HEAD >out &&
+	grep " dst/copy/changed/$" out >actual_diff_shortstat_dirstat_files &&
+	test_line_count = 1 actual_diff_shortstat_dirstat_files
 '
 
 test_done

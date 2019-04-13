@@ -20,6 +20,9 @@
 
 int online_cpus(void)
 {
+#ifdef NO_PTHREADS
+	return 1;
+#else
 #ifdef _SC_NPROCESSORS_ONLN
 	long ncpus;
 #endif
@@ -35,7 +38,23 @@ int online_cpus(void)
 
 	if (!pstat_getdynamic(&psd, sizeof(psd), (size_t)1, 0))
 		return (int)psd.psd_proc_cnt;
-#endif
+#elif defined(HAVE_BSD_SYSCTL) && defined(HW_NCPU)
+	int mib[2];
+	size_t len;
+	int cpucount;
+
+	mib[0] = CTL_HW;
+#  ifdef HW_AVAILCPU
+	mib[1] = HW_AVAILCPU;
+	len = sizeof(cpucount);
+	if (!sysctl(mib, 2, &cpucount, &len, NULL, 0))
+		return cpucount;
+#  endif /* HW_AVAILCPU */
+	mib[1] = HW_NCPU;
+	len = sizeof(cpucount);
+	if (!sysctl(mib, 2, &cpucount, &len, NULL, 0))
+		return cpucount;
+#endif /* defined(HAVE_BSD_SYSCTL) && defined(HW_NCPU) */
 
 #ifdef _SC_NPROCESSORS_ONLN
 	if ((ncpus = (long)sysconf(_SC_NPROCESSORS_ONLN)) > 0)
@@ -43,10 +62,12 @@ int online_cpus(void)
 #endif
 
 	return 1;
+#endif
 }
 
 int init_recursive_mutex(pthread_mutex_t *m)
 {
+#ifndef NO_PTHREADS
 	pthread_mutexattr_t a;
 	int ret;
 
@@ -58,4 +79,47 @@ int init_recursive_mutex(pthread_mutex_t *m)
 		pthread_mutexattr_destroy(&a);
 	}
 	return ret;
+#else
+	return 0;
+#endif
 }
+
+#ifdef NO_PTHREADS
+int dummy_pthread_create(pthread_t *pthread, const void *attr,
+			 void *(*fn)(void *), void *data)
+{
+	/*
+	 * Do nothing.
+	 *
+	 * The main purpose of this function is to break compiler's
+	 * flow analysis and avoid -Wunused-variable false warnings.
+	 */
+	return ENOSYS;
+}
+
+int dummy_pthread_init(void *data)
+{
+	/*
+	 * Do nothing.
+	 *
+	 * The main purpose of this function is to break compiler's
+	 * flow analysis or it may realize that functions like
+	 * pthread_mutex_init() is no-op, which means the (static)
+	 * variable is not used/initialized at all and trigger
+	 * -Wunused-variable
+	 */
+	return ENOSYS;
+}
+
+int dummy_pthread_join(pthread_t pthread, void **retval)
+{
+	/*
+	 * Do nothing.
+	 *
+	 * The main purpose of this function is to break compiler's
+	 * flow analysis and avoid -Wunused-variable false warnings.
+	 */
+	return ENOSYS;
+}
+
+#endif

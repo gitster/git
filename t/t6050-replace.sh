@@ -4,8 +4,6 @@
 #
 test_description='Tests replace refs functionality'
 
-exec </dev/null
-
 . ./test-lib.sh
 . "$TEST_DIRECTORY/lib-gpg.sh"
 
@@ -115,6 +113,12 @@ test_expect_success 'test GIT_NO_REPLACE_OBJECTS env variable' '
      GIT_NO_REPLACE_OBJECTS=1 git show $HASH2 | grep "A U Thor"
 '
 
+test_expect_success 'test core.usereplacerefs config option' '
+	test_config core.usereplacerefs false &&
+	git cat-file commit $HASH2 | grep "author A U Thor" &&
+	git show $HASH2 | grep "A U Thor"
+'
+
 cat >tag.sig <<EOF
 object $HASH2
 type commit
@@ -129,8 +133,8 @@ test_expect_success 'tag replaced commit' '
 
 test_expect_success '"git fsck" works' '
      git fsck master >fsck_master.out &&
-     grep "dangling commit $R" fsck_master.out &&
-     grep "dangling tag $(cat .git/refs/tags/mytag)" fsck_master.out &&
+     test_i18ngrep "dangling commit $R" fsck_master.out &&
+     test_i18ngrep "dangling tag $(cat .git/refs/tags/mytag)" fsck_master.out &&
      test -z "$(git fsck)"
 '
 
@@ -351,10 +355,14 @@ test_expect_success 'test --format long' '
 	test_cmp expected actual
 '
 
-test_expect_success 'setup a fake editor' '
-	write_script fakeeditor <<-\EOF
+test_expect_success 'setup fake editors' '
+	write_script fakeeditor <<-\EOF &&
 		sed -e "s/A U Thor/A fake Thor/" "$1" >"$1.new"
 		mv "$1.new" "$1"
+	EOF
+	write_script failingfakeeditor <<-\EOF
+		./fakeeditor "$@"
+		false
 	EOF
 '
 
@@ -372,7 +380,7 @@ test_expect_success '--edit with and without already replaced object' '
 test_expect_success '--edit and change nothing or command failed' '
 	git replace -d "$PARA3" &&
 	test_must_fail env GIT_EDITOR=true git replace --edit "$PARA3" &&
-	test_must_fail env GIT_EDITOR="./fakeeditor;false" git replace --edit "$PARA3" &&
+	test_must_fail env GIT_EDITOR="./failingfakeeditor" git replace --edit "$PARA3" &&
 	GIT_EDITOR=./fakeeditor git replace --edit "$PARA3" &&
 	git replace -l | grep "$PARA3" &&
 	git cat-file commit "$PARA3" | grep "A fake Thor"
@@ -438,6 +446,37 @@ test_expect_success GPG '--graft on a commit with a mergetag' '
 	test_must_fail git replace --graft $HASH10 $HASH8^1 &&
 	git replace --graft $HASH10 $HASH8^1 $HASH9 &&
 	git replace -d $HASH10
+'
+
+test_expect_success '--convert-graft-file' '
+	git checkout -b with-graft-file &&
+	test_commit root2 &&
+	git reset --hard root2^ &&
+	test_commit root1 &&
+	test_commit after-root1 &&
+	test_tick &&
+	git merge -m merge-root2 root2 &&
+
+	: add and convert graft file &&
+	printf "%s\n%s %s\n\n# comment\n%s\n" \
+		$(git rev-parse HEAD^^ HEAD^ HEAD^^ HEAD^2) \
+		>.git/info/grafts &&
+	git status 2>stderr &&
+	test_i18ngrep "hint:.*grafts is deprecated" stderr &&
+	git replace --convert-graft-file 2>stderr &&
+	test_i18ngrep ! "hint:.*grafts is deprecated" stderr &&
+	test_path_is_missing .git/info/grafts &&
+
+	: verify that the history is now "grafted" &&
+	git rev-list HEAD >out &&
+	test_line_count = 4 out &&
+
+	: create invalid graft file and verify that it is not deleted &&
+	test_when_finished "rm -f .git/info/grafts" &&
+	echo $EMPTY_BLOB $EMPTY_TREE >.git/info/grafts &&
+	test_must_fail git replace --convert-graft-file 2>err &&
+	test_i18ngrep "$EMPTY_BLOB $EMPTY_TREE" err &&
+	test_i18ngrep "$EMPTY_BLOB $EMPTY_TREE" .git/info/grafts
 '
 
 test_done

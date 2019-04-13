@@ -26,7 +26,7 @@ check_pushed_commit () {
 # $2 = expected target branch for the push
 # $3 = [optional] repo to check for actual output (repo1 by default)
 test_push_success () {
-	git ${1:+-c push.default="$1"} push &&
+	git ${1:+-c} ${1:+push.default="$1"} push &&
 	check_pushed_commit HEAD "$2" "$3"
 }
 
@@ -34,7 +34,7 @@ test_push_success () {
 # check that push fails and does not modify any remote branch
 test_push_failure () {
 	git --git-dir=repo1 log --no-walk --format='%h %s' --all >expect &&
-	test_must_fail git ${1:+-c push.default="$1"} push &&
+	test_must_fail git ${1:+-c} ${1:+push.default="$1"} push &&
 	git --git-dir=repo1 log --no-walk --format='%h %s' --all >actual &&
 	test_cmp expect actual
 }
@@ -96,6 +96,16 @@ test_expect_success 'push from/to new branch with upstream, matching and simple'
 	test_push_failure simple &&
 	test_push_failure matching &&
 	test_push_failure upstream
+'
+
+test_expect_success 'push ambiguously named branch with upstream, matching and simple' '
+	git checkout -b ambiguous &&
+	test_config branch.ambiguous.remote parent1 &&
+	test_config branch.ambiguous.merge refs/heads/ambiguous &&
+	git tag ambiguous &&
+	test_push_success simple ambiguous &&
+	test_push_success matching ambiguous &&
+	test_push_success upstream ambiguous
 '
 
 test_expect_success 'push from/to new branch with current creates remote branch' '

@@ -52,9 +52,9 @@ static void zlib_post_call(git_zstream *s)
 	bytes_consumed = s->z.next_in - s->next_in;
 	bytes_produced = s->z.next_out - s->next_out;
 	if (s->z.total_out != s->total_out + bytes_produced)
-		die("BUG: total_out mismatch");
+		BUG("total_out mismatch");
 	if (s->z.total_in != s->total_in + bytes_consumed)
-		die("BUG: total_in mismatch");
+		BUG("total_in mismatch");
 
 	s->total_out = s->z.total_out;
 	s->total_in = s->z.total_in;
@@ -159,6 +159,7 @@ void git_deflate_init(git_zstream *strm, int level)
 {
 	int status;
 
+	memset(strm, 0, sizeof(*strm));
 	zlib_pre_call(strm);
 	status = deflateInit(&strm->z, level);
 	zlib_post_call(strm);
@@ -172,6 +173,7 @@ static void do_git_deflate_init(git_zstream *strm, int level, int windowBits)
 {
 	int status;
 
+	memset(strm, 0, sizeof(*strm));
 	zlib_pre_call(strm);
 	status = deflateInit2(&strm->z, level,
 				  Z_DEFLATED, windowBits,

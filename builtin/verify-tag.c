@@ -6,57 +6,19 @@
  * Based on git-verify-tag.sh
  */
 #include "cache.h"
+#include "config.h"
 #include "builtin.h"
 #include "tag.h"
 #include "run-command.h"
 #include <signal.h>
 #include "parse-options.h"
 #include "gpg-interface.h"
+#include "ref-filter.h"
 
 static const char * const verify_tag_usage[] = {
-		N_("git verify-tag [-v | --verbose] <tag>..."),
+		N_("git verify-tag [-v | --verbose] [--format=<format>] <tag>..."),
 		NULL
 };
-
-static int run_gpg_verify(const char *buf, unsigned long size, int verbose)
-{
-	int len;
-
-	len = parse_signature(buf, size);
-	if (verbose)
-		write_in_full(1, buf, len);
-
-	if (size == len)
-		return error("no signature found");
-
-	return verify_signed_buffer(buf, len, buf + len, size - len, NULL, NULL);
-}
-
-static int verify_tag(const char *name, int verbose)
-{
-	enum object_type type;
-	unsigned char sha1[20];
-	char *buf;
-	unsigned long size;
-	int ret;
-
-	if (get_sha1(name, sha1))
-		return error("tag '%s' not found.", name);
-
-	type = sha1_object_info(sha1, NULL);
-	if (type != OBJ_TAG)
-		return error("%s: cannot verify a non-tag object of type %s.",
-				name, typename(type));
-
-	buf = read_sha1_file(sha1, &type, &size);
-	if (!buf)
-		return error("%s: unable to read file.", name);
-
-	ret = run_gpg_verify(buf, size, verbose);
-
-	free(buf);
-	return ret;
-}
 
 static int git_verify_tag_config(const char *var, const char *value, void *cb)
 {
@@ -69,8 +31,12 @@ static int git_verify_tag_config(const char *var, const char *value, void *cb)
 int cmd_verify_tag(int argc, const char **argv, const char *prefix)
 {
 	int i = 1, verbose = 0, had_error = 0;
+	unsigned flags = 0;
+	struct ref_format format = REF_FORMAT_INIT;
 	const struct option verify_tag_options[] = {
 		OPT__VERBOSE(&verbose, N_("print tag contents")),
+		OPT_BIT(0, "raw", &flags, N_("print raw gpg status output"), GPG_VERIFY_RAW),
+		OPT_STRING(0, "format", &format.format, N_("format"), N_("format to use for the output")),
 		OPT_END()
 	};
 
@@ -81,11 +47,32 @@ int cmd_verify_tag(int argc, const char **argv, const char *prefix)
 	if (argc <= i)
 		usage_with_options(verify_tag_usage, verify_tag_options);
 
-	/* sometimes the program was terminated because this signal
-	 * was received in the process of writing the gpg input: */
-	signal(SIGPIPE, SIG_IGN);
-	while (i < argc)
-		if (verify_tag(argv[i++], verbose))
+	if (verbose)
+		flags |= GPG_VERIFY_VERBOSE;
+
+	if (format.format) {
+		if (verify_ref_format(&format))
+			usage_with_options(verify_tag_usage,
+					   verify_tag_options);
+		flags |= GPG_VERIFY_OMIT_STATUS;
+	}
+
+	while (i < argc) {
+		struct object_id oid;
+		const char *name = argv[i++];
+
+		if (get_oid(name, &oid)) {
+			had_error = !!error("tag '%s' not found.", name);
+			continue;
+		}
+
+		if (gpg_verify_tag(&oid, name, flags)) {
 			had_error = 1;
+			continue;
+		}
+
+		if (format.format)
+			pretty_print_ref(name, &oid, &format);
+	}
 	return had_error;
 }

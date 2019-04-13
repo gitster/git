@@ -136,8 +136,8 @@ test_expect_success 'setup: recover' '
 test_expect_success 'Show verbose error when HEAD could not be detached' '
 	>B &&
 	test_must_fail git rebase topic 2>output.err >output.out &&
-	grep "The following untracked working tree files would be overwritten by checkout:" output.err &&
-	grep B output.err
+	test_i18ngrep "The following untracked working tree files would be overwritten by checkout:" output.err &&
+	test_i18ngrep B output.err
 '
 rm -f B
 
@@ -183,13 +183,13 @@ test_expect_success 'cherry-picked commits and fork-point work together' '
 	test_commit final_B B "Final B" &&
 	git rebase &&
 	echo Amended >expect &&
-	test_cmp A expect &&
+	test_cmp expect A &&
 	echo "Final B" >expect &&
-	test_cmp B expect &&
+	test_cmp expect B &&
 	echo C >expect &&
-	test_cmp C expect &&
+	test_cmp expect C &&
 	echo D >expect &&
-	test_cmp D expect
+	test_cmp expect D
 '
 
 test_expect_success 'rebase -q is quiet' '
@@ -200,10 +200,10 @@ test_expect_success 'rebase -q is quiet' '
 
 test_expect_success 'Rebase a commit that sprinkles CRs in' '
 	(
-		echo "One"
-		echo "TwoQ"
-		echo "Three"
-		echo "FQur"
+		echo "One" &&
+		echo "TwoQ" &&
+		echo "Three" &&
+		echo "FQur" &&
 		echo "Five"
 	) | q_to_cr >CR &&
 	git add CR &&
@@ -253,6 +253,62 @@ test_expect_success 'rebase commit with an ancient timestamp' '
 
 	git cat-file commit HEAD >actual &&
 	grep "author .* 34567 +0600$" actual
+'
+
+test_expect_success 'rebase with "From " line in commit message' '
+	git checkout -b preserve-from master~1 &&
+	cat >From_.msg <<EOF &&
+Somebody embedded an mbox in a commit message
+
+This is from so-and-so:
+
+From a@b Mon Sep 17 00:00:00 2001
+From: John Doe <nobody@example.com>
+Date: Sat, 11 Nov 2017 00:00:00 +0000
+Subject: not this message
+
+something
+EOF
+	>From_ &&
+	git add From_ &&
+	git commit -F From_.msg &&
+	git rebase master &&
+	git log -1 --pretty=format:%B >out &&
+	test_cmp From_.msg out
+'
+
+test_expect_success 'rebase--am.sh and --show-current-patch' '
+	test_create_repo conflict-apply &&
+	(
+		cd conflict-apply &&
+		test_commit init &&
+		echo one >>init.t &&
+		git commit -a -m one &&
+		echo two >>init.t &&
+		git commit -a -m two &&
+		git tag two &&
+		test_must_fail git rebase --onto init HEAD^ &&
+		GIT_TRACE=1 git rebase --show-current-patch >/dev/null 2>stderr &&
+		grep "show.*$(git rev-parse two)" stderr
+	)
+'
+
+test_expect_success 'rebase--merge.sh and --show-current-patch' '
+	test_create_repo conflict-merge &&
+	(
+		cd conflict-merge &&
+		test_commit init &&
+		echo one >>init.t &&
+		git commit -a -m one &&
+		echo two >>init.t &&
+		git commit -a -m two &&
+		git tag two &&
+		test_must_fail git rebase --merge --onto init HEAD^ &&
+		git rebase --show-current-patch >actual.patch &&
+		GIT_TRACE=1 git rebase --show-current-patch >/dev/null 2>stderr &&
+		grep "show.*REBASE_HEAD" stderr &&
+		test "$(git rev-parse REBASE_HEAD)" = "$(git rev-parse two)"
+	)
 '
 
 test_done

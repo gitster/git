@@ -30,8 +30,7 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software Foundation,
-   Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.  */
+   along with this program; if not, see <http://www.gnu.org/licenses/>.  */
 
 /* closeout.c - close standard output and standard error
    Copyright (C) 1998-2007 Free Software Foundation, Inc.
@@ -47,8 +46,7 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program; if not, write to the Free Software Foundation,
-   Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.  */
+   along with this program; if not, see <http://www.gnu.org/licenses/>.  */
 
 #include <errno.h>
 #include <stdio.h>
@@ -64,7 +62,7 @@ static void note_variables (const char *string);
 static void subst_from_stdin (void);
 
 int
-main (int argc, char *argv[])
+cmd_main (int argc, const char *argv[])
 {
   /* Default values for command line options.  */
   /* unsigned short int show_variables = 0; */
@@ -230,8 +228,7 @@ cmp_string (const void *pstr1, const void *pstr2)
 static inline void
 string_list_sort (string_list_ty *slp)
 {
-  if (slp->nitems > 0)
-    qsort (slp->item, slp->nitems, sizeof (slp->item[0]), cmp_string);
+  QSORT(slp->item, slp->nitems, cmp_string);
 }
 
 /* Test whether a sorted string list contains a given string.  */

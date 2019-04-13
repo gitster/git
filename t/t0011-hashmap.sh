@@ -4,7 +4,7 @@ test_description='test hashmap and string hash functions'
 . ./test-lib.sh
 
 test_hashmap() {
-	echo "$1" | test-hashmap $3 > actual &&
+	echo "$1" | test-tool hashmap $3 > actual &&
 	echo "$2" > expect &&
 	test_cmp expect actual
 }
@@ -218,7 +218,7 @@ test_expect_success 'grow / shrink' '
 	echo size >> in &&
 	echo 64 51 >> expect &&
 	echo put key52 value52 >> in &&
-	echo NULL >> expect
+	echo NULL >> expect &&
 	echo size >> in &&
 	echo 256 52 >> expect &&
 	for n in $(test_seq 12)
@@ -232,7 +232,7 @@ test_expect_success 'grow / shrink' '
 	echo value40 >> expect &&
 	echo size >> in &&
 	echo 64 39 >> expect &&
-	cat in | test-hashmap > out &&
+	cat in | test-tool hashmap > out &&
 	test_cmp expect out
 
 '

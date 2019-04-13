@@ -8,6 +8,13 @@ has_cr() {
 	tr '\015' Q <"$1" | grep Q >/dev/null
 }
 
+# add or remove CRs to disk file in-place
+# usage: munge_cr <append|remove> <file>
+munge_cr () {
+	"${1}_cr" <"$2" >tmp &&
+	mv tmp "$2"
+}
+
 test_expect_success setup '
 
 	git config core.autocrlf false &&
@@ -28,9 +35,7 @@ test_expect_success setup '
 	for w in Some extra lines here; do echo $w; done >>one &&
 	git diff >patch.file &&
 	patched=$(git hash-object --stdin <one) &&
-	git read-tree --reset -u HEAD &&
-
-	echo happy.
+	git read-tree --reset -u HEAD
 '
 
 test_expect_success 'safecrlf: autocrlf=input, all CRLF' '
@@ -78,7 +83,11 @@ test_expect_success 'safecrlf: print warning only once' '
 	git add doublewarn &&
 	git commit -m "nowarn" &&
 	for w in Oh here is CRLFQ in text; do echo $w; done | q_to_cr >doublewarn &&
-	test $(git add doublewarn 2>&1 | grep "CRLF will be replaced by LF" | wc -l) = 1
+	git add doublewarn 2>err &&
+	if test_have_prereq C_LOCALE_OUTPUT
+	then
+		test $(grep "CRLF will be replaced by LF" err | wc -l) = 1
+	fi
 '
 
 
@@ -86,6 +95,16 @@ test_expect_success 'safecrlf: git diff demotes safecrlf=true to warn' '
 	git config core.autocrlf input &&
 	git config core.safecrlf true &&
 	git diff HEAD
+'
+
+
+test_expect_success 'safecrlf: no warning with safecrlf=false' '
+	git config core.autocrlf input &&
+	git config core.safecrlf false &&
+
+	for w in I am all CRLF; do echo $w; done | append_cr >allcrlf &&
+	git add allcrlf 2>err &&
+	test_must_be_empty err
 '
 
 
@@ -100,22 +119,11 @@ test_expect_success 'update with autocrlf=input' '
 	rm -f tmp one dir/two three &&
 	git read-tree --reset -u HEAD &&
 	git config core.autocrlf input &&
-
-	for f in one dir/two
-	do
-		append_cr <$f >tmp && mv -f tmp $f &&
-		git update-index -- $f || {
-			echo Oops
-			false
-			break
-		}
-	done &&
-
+	munge_cr append one &&
+	munge_cr append dir/two &&
+	git update-index -- one dir/two &&
 	differs=$(git diff-index --cached HEAD) &&
-	test -z "$differs" || {
-		echo Oops "$differs"
-		false
-	}
+	verbose test -z "$differs"
 
 '
 
@@ -124,22 +132,11 @@ test_expect_success 'update with autocrlf=true' '
 	rm -f tmp one dir/two three &&
 	git read-tree --reset -u HEAD &&
 	git config core.autocrlf true &&
-
-	for f in one dir/two
-	do
-		append_cr <$f >tmp && mv -f tmp $f &&
-		git update-index -- $f || {
-			echo "Oops $f"
-			false
-			break
-		}
-	done &&
-
+	munge_cr append one &&
+	munge_cr append dir/two &&
+	git update-index -- one dir/two &&
 	differs=$(git diff-index --cached HEAD) &&
-	test -z "$differs" || {
-		echo Oops "$differs"
-		false
-	}
+	verbose test -z "$differs"
 
 '
 
@@ -148,23 +145,13 @@ test_expect_success 'checkout with autocrlf=true' '
 	rm -f tmp one dir/two three &&
 	git config core.autocrlf true &&
 	git read-tree --reset -u HEAD &&
-
-	for f in one dir/two
-	do
-		remove_cr <"$f" >tmp && mv -f tmp $f &&
-		git update-index -- $f || {
-			echo "Eh? $f"
-			false
-			break
-		}
-	done &&
+	munge_cr remove one &&
+	munge_cr remove dir/two &&
+	git update-index -- one dir/two &&
 	test "$one" = $(git hash-object --stdin <one) &&
 	test "$two" = $(git hash-object --stdin <dir/two) &&
 	differs=$(git diff-index --cached HEAD) &&
-	test -z "$differs" || {
-		echo Oops "$differs"
-		false
-	}
+	verbose test -z "$differs"
 '
 
 test_expect_success 'checkout with autocrlf=input' '
@@ -172,25 +159,13 @@ test_expect_success 'checkout with autocrlf=input' '
 	rm -f tmp one dir/two three &&
 	git config core.autocrlf input &&
 	git read-tree --reset -u HEAD &&
-
-	for f in one dir/two
-	do
-		if has_cr "$f"
-		then
-			echo "Eh? $f"
-			false
-			break
-		else
-			git update-index -- $f
-		fi
-	done &&
+	test_must_fail has_cr one &&
+	test_must_fail has_cr dir/two &&
+	git update-index -- one dir/two &&
 	test "$one" = $(git hash-object --stdin <one) &&
 	test "$two" = $(git hash-object --stdin <dir/two) &&
 	differs=$(git diff-index --cached HEAD) &&
-	test -z "$differs" || {
-		echo Oops "$differs"
-		false
-	}
+	verbose test -z "$differs"
 '
 
 test_expect_success 'apply patch (autocrlf=input)' '
@@ -200,10 +175,7 @@ test_expect_success 'apply patch (autocrlf=input)' '
 	git read-tree --reset -u HEAD &&
 
 	git apply patch.file &&
-	test "$patched" = "$(git hash-object --stdin <one)" || {
-		echo "Eh?  apply without index"
-		false
-	}
+	verbose test "$patched" = "$(git hash-object --stdin <one)"
 '
 
 test_expect_success 'apply patch --cached (autocrlf=input)' '
@@ -213,10 +185,7 @@ test_expect_success 'apply patch --cached (autocrlf=input)' '
 	git read-tree --reset -u HEAD &&
 
 	git apply --cached patch.file &&
-	test "$patched" = $(git rev-parse :one) || {
-		echo "Eh?  apply with --cached"
-		false
-	}
+	verbose test "$patched" = $(git rev-parse :one)
 '
 
 test_expect_success 'apply patch --index (autocrlf=input)' '
@@ -226,11 +195,8 @@ test_expect_success 'apply patch --index (autocrlf=input)' '
 	git read-tree --reset -u HEAD &&
 
 	git apply --index patch.file &&
-	test "$patched" = $(git rev-parse :one) &&
-	test "$patched" = $(git hash-object --stdin <one) || {
-		echo "Eh?  apply with --index"
-		false
-	}
+	verbose test "$patched" = $(git rev-parse :one) &&
+	verbose test "$patched" = $(git hash-object --stdin <one)
 '
 
 test_expect_success 'apply patch (autocrlf=true)' '
@@ -240,10 +206,7 @@ test_expect_success 'apply patch (autocrlf=true)' '
 	git read-tree --reset -u HEAD &&
 
 	git apply patch.file &&
-	test "$patched" = "$(remove_cr <one | git hash-object --stdin)" || {
-		echo "Eh?  apply without index"
-		false
-	}
+	verbose test "$patched" = "$(remove_cr <one | git hash-object --stdin)"
 '
 
 test_expect_success 'apply patch --cached (autocrlf=true)' '
@@ -253,10 +216,7 @@ test_expect_success 'apply patch --cached (autocrlf=true)' '
 	git read-tree --reset -u HEAD &&
 
 	git apply --cached patch.file &&
-	test "$patched" = $(git rev-parse :one) || {
-		echo "Eh?  apply without index"
-		false
-	}
+	verbose test "$patched" = $(git rev-parse :one)
 '
 
 test_expect_success 'apply patch --index (autocrlf=true)' '
@@ -266,11 +226,8 @@ test_expect_success 'apply patch --index (autocrlf=true)' '
 	git read-tree --reset -u HEAD &&
 
 	git apply --index patch.file &&
-	test "$patched" = $(git rev-parse :one) &&
-	test "$patched" = "$(remove_cr <one | git hash-object --stdin)" || {
-		echo "Eh?  apply with --index"
-		false
-	}
+	verbose test "$patched" = $(git rev-parse :one) &&
+	verbose test "$patched" = "$(remove_cr <one | git hash-object --stdin)"
 '
 
 test_expect_success '.gitattributes says two is binary' '
@@ -280,29 +237,9 @@ test_expect_success '.gitattributes says two is binary' '
 	git config core.autocrlf true &&
 	git read-tree --reset -u HEAD &&
 
-	if has_cr dir/two
-	then
-		echo "Huh?"
-		false
-	else
-		: happy
-	fi &&
-
-	if has_cr one
-	then
-		: happy
-	else
-		echo "Huh?"
-		false
-	fi &&
-
-	if has_cr three
-	then
-		echo "Huh?"
-		false
-	else
-		: happy
-	fi
+	test_must_fail has_cr dir/two &&
+	verbose has_cr one &&
+	test_must_fail has_cr three
 '
 
 test_expect_success '.gitattributes says two is input' '
@@ -311,13 +248,7 @@ test_expect_success '.gitattributes says two is input' '
 	echo "two crlf=input" >.gitattributes &&
 	git read-tree --reset -u HEAD &&
 
-	if has_cr dir/two
-	then
-		echo "Huh?"
-		false
-	else
-		: happy
-	fi
+	test_must_fail has_cr dir/two
 '
 
 test_expect_success '.gitattributes says two and three are text' '
@@ -326,21 +257,8 @@ test_expect_success '.gitattributes says two and three are text' '
 	echo "t* crlf" >.gitattributes &&
 	git read-tree --reset -u HEAD &&
 
-	if has_cr dir/two
-	then
-		: happy
-	else
-		echo "Huh?"
-		false
-	fi &&
-
-	if has_cr three
-	then
-		: happy
-	else
-		echo "Huh?"
-		false
-	fi
+	verbose has_cr dir/two &&
+	verbose has_cr three
 '
 
 test_expect_success 'in-tree .gitattributes (1)' '
@@ -352,17 +270,8 @@ test_expect_success 'in-tree .gitattributes (1)' '
 	rm -rf tmp one dir .gitattributes patch.file three &&
 	git read-tree --reset -u HEAD &&
 
-	if has_cr one
-	then
-		echo "Eh? one should not have CRLF"
-		false
-	else
-		: happy
-	fi &&
-	has_cr three || {
-		echo "Eh? three should still have CRLF"
-		false
-	}
+	test_must_fail has_cr one &&
+	verbose has_cr three
 '
 
 test_expect_success 'in-tree .gitattributes (2)' '
@@ -371,17 +280,8 @@ test_expect_success 'in-tree .gitattributes (2)' '
 	git read-tree --reset HEAD &&
 	git checkout-index -f -q -u -a &&
 
-	if has_cr one
-	then
-		echo "Eh? one should not have CRLF"
-		false
-	else
-		: happy
-	fi &&
-	has_cr three || {
-		echo "Eh? three should still have CRLF"
-		false
-	}
+	test_must_fail has_cr one &&
+	verbose has_cr three
 '
 
 test_expect_success 'in-tree .gitattributes (3)' '
@@ -391,17 +291,8 @@ test_expect_success 'in-tree .gitattributes (3)' '
 	git checkout-index -u .gitattributes &&
 	git checkout-index -u one dir/two three &&
 
-	if has_cr one
-	then
-		echo "Eh? one should not have CRLF"
-		false
-	else
-		: happy
-	fi &&
-	has_cr three || {
-		echo "Eh? three should still have CRLF"
-		false
-	}
+	test_must_fail has_cr one &&
+	verbose has_cr three
 '
 
 test_expect_success 'in-tree .gitattributes (4)' '
@@ -411,17 +302,8 @@ test_expect_success 'in-tree .gitattributes (4)' '
 	git checkout-index -u one dir/two three &&
 	git checkout-index -u .gitattributes &&
 
-	if has_cr one
-	then
-		echo "Eh? one should not have CRLF"
-		false
-	else
-		: happy
-	fi &&
-	has_cr three || {
-		echo "Eh? three should still have CRLF"
-		false
-	}
+	test_must_fail has_cr one &&
+	verbose has_cr three
 '
 
 test_expect_success 'checkout with existing .gitattributes' '

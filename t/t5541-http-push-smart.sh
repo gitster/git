@@ -6,11 +6,6 @@
 test_description='test smart pushing over http via http-backend'
 . ./test-lib.sh
 
-if test -n "$NO_CURL"; then
-	skip_all='skipping test, git built without http support'
-	test_done
-fi
-
 ROOT_PATH="$PWD"
 . "$TEST_DIRECTORY"/lib-gpg.sh
 . "$TEST_DIRECTORY"/lib-httpd.sh
@@ -43,25 +38,16 @@ GET  /smart/test_repo.git/info/refs?service=git-upload-pack HTTP/1.1 200
 POST /smart/test_repo.git/git-upload-pack HTTP/1.1 200
 EOF
 test_expect_success 'no empty path components' '
+	# Clear the log, so that it does not affect the "used receive-pack
+	# service" test which reads the log too.
+	test_when_finished ">\"\$HTTPD_ROOT_PATH\"/access.log" &&
+
 	# In the URL, add a trailing slash, and see if git appends yet another
 	# slash.
 	cd "$ROOT_PATH" &&
 	git clone $HTTPD_URL/smart/test_repo.git/ test_repo_clone &&
 
-	sed -e "
-		s/^.* \"//
-		s/\"//
-		s/ [1-9][0-9]*\$//
-		s/^GET /GET  /
-	" >act <"$HTTPD_ROOT_PATH"/access.log &&
-
-	# Clear the log, so that it does not affect the "used receive-pack
-	# service" test which reads the log too.
-	#
-	# We do this before the actual comparison to ensure the log is cleared.
-	echo > "$HTTPD_ROOT_PATH"/access.log &&
-
-	test_cmp exp act
+	check_access_log exp
 '
 
 test_expect_success 'clone remote repository' '
@@ -79,7 +65,7 @@ test_expect_success 'push to remote repository (standard)' '
 	test_tick &&
 	git commit -m path2 &&
 	HEAD=$(git rev-parse --verify HEAD) &&
-	GIT_CURL_VERBOSE=1 git push -v -v 2>err &&
+	GIT_TRACE_CURL=true git push -v -v 2>err &&
 	! grep "Expect: 100-continue" err &&
 	grep "POST git-receive-pack ([0-9]* bytes)" err &&
 	(cd "$HTTPD_DOCUMENT_ROOT_PATH"/test_repo.git &&
@@ -124,12 +110,11 @@ test_expect_success 'rejected update prints status' '
 	git commit -m dev2 &&
 	test_must_fail git push origin dev2 2>act &&
 	sed -e "/^remote: /s/ *$//" <act >cmp &&
-	test_cmp exp cmp
+	test_i18ncmp exp cmp
 '
 rm -f "$HTTPD_DOCUMENT_ROOT_PATH/test_repo.git/hooks/update"
 
 cat >exp <<EOF
-
 GET  /smart/test_repo.git/info/refs?service=git-upload-pack HTTP/1.1 200
 POST /smart/test_repo.git/git-upload-pack HTTP/1.1 200
 GET  /smart/test_repo.git/info/refs?service=git-receive-pack HTTP/1.1 200
@@ -143,13 +128,7 @@ GET  /smart/test_repo.git/info/refs?service=git-receive-pack HTTP/1.1 200
 POST /smart/test_repo.git/git-receive-pack HTTP/1.1 200
 EOF
 test_expect_success 'used receive-pack service' '
-	sed -e "
-		s/^.* \"//
-		s/\"//
-		s/ [1-9][0-9]*\$//
-		s/^GET /GET  /
-	" >act <"$HTTPD_ROOT_PATH"/access.log &&
-	test_cmp exp act
+	check_access_log exp
 '
 
 test_http_push_nonff "$HTTPD_DOCUMENT_ROOT_PATH"/test_repo.git \
@@ -158,7 +137,7 @@ test_http_push_nonff "$HTTPD_DOCUMENT_ROOT_PATH"/test_repo.git \
 test_expect_success 'push fails for non-fast-forward refs unmatched by remote helper' '
 	# create a dissimilarly-named remote ref so that git is unable to match the
 	# two refs (viz. local, remote) unless an explicit refspec is provided.
-	git push origin master:retsam
+	git push origin master:retsam &&
 
 	echo "change changed" > path2 &&
 	git commit -a -m path2 --amend &&
@@ -224,30 +203,30 @@ test_expect_success TTY 'push shows progress when stderr is a tty' '
 	cd "$ROOT_PATH"/test_repo_clone &&
 	test_commit noisy &&
 	test_terminal git push >output 2>&1 &&
-	grep "^Writing objects" output
+	test_i18ngrep "^Writing objects" output
 '
 
 test_expect_success TTY 'push --quiet silences status and progress' '
 	cd "$ROOT_PATH"/test_repo_clone &&
 	test_commit quiet &&
 	test_terminal git push --quiet >output 2>&1 &&
-	test_cmp /dev/null output
+	test_must_be_empty output
 '
 
 test_expect_success TTY 'push --no-progress silences progress but not status' '
 	cd "$ROOT_PATH"/test_repo_clone &&
 	test_commit no-progress &&
 	test_terminal git push --no-progress >output 2>&1 &&
-	grep "^To http" output &&
-	! grep "^Writing objects"
+	test_i18ngrep "^To http" output &&
+	test_i18ngrep ! "^Writing objects" output
 '
 
 test_expect_success 'push --progress shows progress to non-tty' '
 	cd "$ROOT_PATH"/test_repo_clone &&
 	test_commit progress &&
 	git push --progress >output 2>&1 &&
-	grep "^To http" output &&
-	grep "^Writing objects" output
+	test_i18ngrep "^To http" output &&
+	test_i18ngrep "^Writing objects" output
 '
 
 test_expect_success 'http push gives sane defaults to reflog' '
@@ -324,12 +303,6 @@ test_expect_success 'push into half-auth-complete requires password' '
 	test_cmp expect actual
 '
 
-run_with_limited_cmdline () {
-	(ulimit -s 128 && "$@")
-}
-
-test_lazy_prereq CMDLINE_LIMIT 'run_with_limited_cmdline true'
-
 test_expect_success CMDLINE_LIMIT 'push 2000 tags over http' '
 	sha1=$(git rev-parse HEAD) &&
 	test_seq 2000 |
@@ -377,6 +350,27 @@ test_expect_success GPG 'push with post-receive to inspect certificate' '
 		sed -n -e "s/^nonce /NONCE=/p" -e "/^$/q" push-cert
 	) >expect &&
 	test_cmp expect "$HTTPD_DOCUMENT_ROOT_PATH/push-cert-status"
+'
+
+test_expect_success 'push status output scrubs password' '
+	cd "$ROOT_PATH/test_repo_clone" &&
+	git push --porcelain \
+		"$HTTPD_URL_USER_PASS/smart/test_repo.git" \
+		+HEAD:scrub >status &&
+	# should have been scrubbed down to vanilla URL
+	grep "^To $HTTPD_URL/smart/test_repo.git" status
+'
+
+test_expect_success 'colorize errors/hints' '
+	cd "$ROOT_PATH"/test_repo_clone &&
+	test_must_fail git -c color.transport=always -c color.advice=always \
+		-c color.push=always \
+		push origin origin/master^:master 2>act &&
+	test_decode_color <act >decoded &&
+	test_i18ngrep "<RED>.*rejected.*<RESET>" decoded &&
+	test_i18ngrep "<RED>error: failed to push some refs" decoded &&
+	test_i18ngrep "<YELLOW>hint: " decoded &&
+	test_i18ngrep ! "^hint: " decoded
 '
 
 stop_httpd

@@ -75,7 +75,8 @@ static CredDeleteWT CredDeleteW;
 static void load_cred_funcs(void)
 {
 	/* load DLLs */
-	advapi = LoadLibrary("advapi32.dll");
+	advapi = LoadLibraryExA("advapi32.dll", NULL,
+				LOAD_LIBRARY_SEARCH_SYSTEM32);
 	if (!advapi)
 		die("failed to load advapi32.dll");
 
@@ -94,6 +95,12 @@ static WCHAR *wusername, *password, *protocol, *host, *path, target[1024];
 static void write_item(const char *what, LPCWSTR wbuf, int wlen)
 {
 	char *buf;
+
+	if (!wbuf || !wlen) {
+		printf("%s=\n", what);
+		return;
+	}
+
 	int len = WideCharToMultiByte(CP_UTF8, 0, wbuf, wlen, NULL, 0, NULL,
 	    FALSE);
 	buf = xmalloc(len);
@@ -111,14 +118,23 @@ static void write_item(const char *what, LPCWSTR wbuf, int wlen)
  * Match an (optional) expected string and a delimiter in the target string,
  * consuming the matched text by updating the target pointer.
  */
-static int match_part(LPCWSTR *ptarget, LPCWSTR want, LPCWSTR delim)
+
+static LPCWSTR wcsstr_last(LPCWSTR str, LPCWSTR find)
+{
+	LPCWSTR res = NULL, pos;
+	for (pos = wcsstr(str, find); pos; pos = wcsstr(pos + 1, find))
+		res = pos;
+	return res;
+}
+
+static int match_part_with_last(LPCWSTR *ptarget, LPCWSTR want, LPCWSTR delim, int last)
 {
 	LPCWSTR delim_pos, start = *ptarget;
 	int len;
 
 	/* find start of delimiter (or end-of-string if delim is empty) */
 	if (*delim)
-		delim_pos = wcsstr(start, delim);
+		delim_pos = last ? wcsstr_last(start, delim) : wcsstr(start, delim);
 	else
 		delim_pos = start + wcslen(start);
 
@@ -138,15 +154,25 @@ static int match_part(LPCWSTR *ptarget, LPCWSTR want, LPCWSTR delim)
 	return !want || (!wcsncmp(want, start, len) && !want[len]);
 }
 
+static int match_part(LPCWSTR *ptarget, LPCWSTR want, LPCWSTR delim)
+{
+	return match_part_with_last(ptarget, want, delim, 0);
+}
+
+static int match_part_last(LPCWSTR *ptarget, LPCWSTR want, LPCWSTR delim)
+{
+	return match_part_with_last(ptarget, want, delim, 1);
+}
+
 static int match_cred(const CREDENTIALW *cred)
 {
 	LPCWSTR target = cred->TargetName;
-	if (wusername && wcscmp(wusername, cred->UserName))
+	if (wusername && wcscmp(wusername, cred->UserName ? cred->UserName : L""))
 		return 0;
 
 	return match_part(&target, L"git", L":") &&
 		match_part(&target, protocol, L"://") &&
-		match_part(&target, wusername, L"@") &&
+		match_part_last(&target, wusername, L"@") &&
 		match_part(&target, host, L"/") &&
 		match_part(&target, path, L"");
 }
@@ -164,7 +190,7 @@ static void get_credential(void)
 	for (i = 0; i < num_creds; ++i)
 		if (match_cred(creds[i])) {
 			write_item("username", creds[i]->UserName,
-				wcslen(creds[i]->UserName));
+				creds[i]->UserName ? wcslen(creds[i]->UserName) : 0);
 			write_item("password",
 				(LPCWSTR)creds[i]->CredentialBlob,
 				creds[i]->CredentialBlobSize / sizeof(WCHAR));
