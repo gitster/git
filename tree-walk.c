@@ -1,6 +1,5 @@
 #include "cache.h"
 #include "tree-walk.h"
-#include "unpack-trees.h"
 #include "dir.h"
 #include "object-store.h"
 #include "tree.h"
@@ -43,12 +42,6 @@ static int decode_tree_entry(struct tree_desc *desc, const char *buf, unsigned l
 		strbuf_addstr(err, _("empty filename in tree entry"));
 		return -1;
 	}
-#ifdef GIT_WINDOWS_NATIVE
-	if (protect_ntfs && strchr(path, '\\')) {
-		strbuf_addf(err, _("filename in tree entry contains backslash: '%s'"), path);
-		return -1;
-	}
-#endif
 	len = strlen(path) + 1;
 
 	/* Initialize the descriptor entry */
@@ -416,15 +409,20 @@ int traverse_trees(struct index_state *istate,
 		   struct traverse_info *info)
 {
 	int error = 0;
-	struct name_entry *entry = xmalloc(n*sizeof(*entry));
+	struct name_entry entry[MAX_TRAVERSE_TREES];
 	int i;
-	struct tree_desc_x *tx = xcalloc(n, sizeof(*tx));
+	struct tree_desc_x tx[ARRAY_SIZE(entry)];
 	struct strbuf base = STRBUF_INIT;
 	int interesting = 1;
 	char *traverse_path;
 
-	for (i = 0; i < n; i++)
+	if (n >= ARRAY_SIZE(entry))
+		BUG("traverse_trees() called with too many trees (%d)", n);
+
+	for (i = 0; i < n; i++) {
 		tx[i].d = t[i];
+		tx[i].skip = NULL;
+	}
 
 	if (info->prev) {
 		strbuf_make_traverse_path(&base, info->prev,
@@ -512,10 +510,8 @@ int traverse_trees(struct index_state *istate,
 			if (mask & (1ul << i))
 				update_extended_entry(tx + i, entry + i);
 	}
-	free(entry);
 	for (i = 0; i < n; i++)
 		free_extended_entry(tx + i);
-	free(tx);
 	free(traverse_path);
 	info->traverse_path = NULL;
 	strbuf_release(&base);

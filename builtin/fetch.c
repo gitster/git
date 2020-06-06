@@ -335,6 +335,7 @@ static void find_non_local_tags(const struct ref *refs,
 	struct string_list_item *remote_ref_item;
 	const struct ref *ref;
 	struct refname_hash_entry *item = NULL;
+	const int quick_flags = OBJECT_INFO_QUICK | OBJECT_INFO_SKIP_FETCH_OBJECT;
 
 	refname_hash_init(&existing_refs);
 	refname_hash_init(&remote_refs);
@@ -353,10 +354,9 @@ static void find_non_local_tags(const struct ref *refs,
 		 */
 		if (ends_with(ref->name, "^{}")) {
 			if (item &&
-			    !has_object_file_with_flags(&ref->old_oid,
-							OBJECT_INFO_QUICK) &&
+			    !has_object_file_with_flags(&ref->old_oid, quick_flags) &&
 			    !oidset_contains(&fetch_oids, &ref->old_oid) &&
-			    !has_object_file_with_flags(&item->oid, OBJECT_INFO_QUICK) &&
+			    !has_object_file_with_flags(&item->oid, quick_flags) &&
 			    !oidset_contains(&fetch_oids, &item->oid))
 				clear_item(item);
 			item = NULL;
@@ -370,7 +370,7 @@ static void find_non_local_tags(const struct ref *refs,
 		 * fetch.
 		 */
 		if (item &&
-		    !has_object_file_with_flags(&item->oid, OBJECT_INFO_QUICK) &&
+		    !has_object_file_with_flags(&item->oid, quick_flags) &&
 		    !oidset_contains(&fetch_oids, &item->oid))
 			clear_item(item);
 
@@ -391,7 +391,7 @@ static void find_non_local_tags(const struct ref *refs,
 	 * checked to see if it needs fetching.
 	 */
 	if (item &&
-	    !has_object_file_with_flags(&item->oid, OBJECT_INFO_QUICK) &&
+	    !has_object_file_with_flags(&item->oid, quick_flags) &&
 	    !oidset_contains(&fetch_oids, &item->oid))
 		clear_item(item);
 
@@ -906,8 +906,17 @@ static int store_updated_refs(const char *raw_url, const char *remote_name,
 		url = xstrdup("foreign");
 
 	if (!connectivity_checked) {
+		struct check_connected_options opt = CHECK_CONNECTED_INIT;
+
+		if (filter_options.choice)
+			/*
+			 * Since a filter is specified, objects indirectly
+			 * referenced by refs are allowed to be absent.
+			 */
+			opt.check_refs_are_promisor_objects_only = 1;
+
 		rm = ref_map;
-		if (check_connected(iterate_ref_map, &rm, NULL)) {
+		if (check_connected(iterate_ref_map, &rm, &opt)) {
 			rc = error(_("%s did not send all necessary objects\n"), url);
 			goto abort;
 		}
@@ -1866,15 +1875,13 @@ int cmd_fetch(int argc, const char **argv, const char *prefix)
 	    (fetch_write_commit_graph < 0 &&
 	     the_repository->settings.fetch_write_commit_graph)) {
 		int commit_graph_flags = COMMIT_GRAPH_WRITE_SPLIT;
-		struct split_commit_graph_opts split_opts;
-		memset(&split_opts, 0, sizeof(struct split_commit_graph_opts));
 
 		if (progress)
 			commit_graph_flags |= COMMIT_GRAPH_WRITE_PROGRESS;
 
-		write_commit_graph_reachable(get_object_directory(),
+		write_commit_graph_reachable(the_repository->objects->odb,
 					     commit_graph_flags,
-					     &split_opts);
+					     NULL);
 	}
 
 	close_object_store(the_repository->objects);

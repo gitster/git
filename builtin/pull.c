@@ -15,6 +15,7 @@
 #include "sha1-array.h"
 #include "remote.h"
 #include "dir.h"
+#include "rebase.h"
 #include "refs.h"
 #include "refspec.h"
 #include "revision.h"
@@ -26,15 +27,6 @@
 #include "commit-reach.h"
 #include "sequencer.h"
 
-enum rebase_type {
-	REBASE_INVALID = -1,
-	REBASE_FALSE = 0,
-	REBASE_TRUE,
-	REBASE_PRESERVE,
-	REBASE_MERGES,
-	REBASE_INTERACTIVE
-};
-
 /**
  * Parses the value of --rebase. If value is a false value, returns
  * REBASE_FALSE. If value is a true value, returns REBASE_TRUE. If value is
@@ -45,22 +37,9 @@ enum rebase_type {
 static enum rebase_type parse_config_rebase(const char *key, const char *value,
 		int fatal)
 {
-	int v = git_parse_maybe_bool(value);
-
-	if (!v)
-		return REBASE_FALSE;
-	else if (v > 0)
-		return REBASE_TRUE;
-	else if (!strcmp(value, "preserve") || !strcmp(value, "p"))
-		return REBASE_PRESERVE;
-	else if (!strcmp(value, "merges") || !strcmp(value, "m"))
-		return REBASE_MERGES;
-	else if (!strcmp(value, "interactive") || !strcmp(value, "i"))
-		return REBASE_INTERACTIVE;
-	/*
-	 * Please update _git_config() in git-completion.bash when you
-	 * add new rebase modes.
-	 */
+	enum rebase_type v = rebase_parse_value(value);
+	if (v != REBASE_INVALID)
+		return v;
 
 	if (fatal)
 		die(_("Invalid value for %s: %s"), key, value);
@@ -107,6 +86,7 @@ static char *opt_ff;
 static char *opt_verify_signatures;
 static int opt_autostash = -1;
 static int config_autostash;
+static int check_trust_level = 1;
 static struct argv_array opt_strategies = ARGV_ARRAY_INIT;
 static struct argv_array opt_strategy_opts = ARGV_ARRAY_INIT;
 static char *opt_gpg_sign;
@@ -355,6 +335,8 @@ static enum rebase_type config_get_rebase(void)
  */
 static int git_pull_config(const char *var, const char *value, void *cb)
 {
+	int status;
+
 	if (!strcmp(var, "rebase.autostash")) {
 		config_autostash = git_config_bool(var, value);
 		return 0;
@@ -362,7 +344,14 @@ static int git_pull_config(const char *var, const char *value, void *cb)
 		recurse_submodules = git_config_bool(var, value) ?
 			RECURSE_SUBMODULES_ON : RECURSE_SUBMODULES_OFF;
 		return 0;
+	} else if (!strcmp(var, "gpg.mintrustlevel")) {
+		check_trust_level = 0;
 	}
+
+	status = git_gpg_config(var, value, cb);
+	if (status)
+		return status;
+
 	return git_default_config(var, value, cb);
 }
 
@@ -587,7 +576,8 @@ static int pull_into_void(const struct object_id *merge_head,
 			die(_("unable to access commit %s"),
 			    oid_to_hex(merge_head));
 
-		verify_merge_signature(commit, opt_verbosity);
+		verify_merge_signature(commit, opt_verbosity,
+				       check_trust_level);
 	}
 
 	/*

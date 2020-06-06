@@ -19,8 +19,8 @@ test_expect_success 'verify graph with no graph file' '
 
 test_expect_success 'write graph with no packs' '
 	cd "$TRASH_DIRECTORY/full" &&
-	git commit-graph write --object-dir . &&
-	test_path_is_missing info/commit-graph
+	git commit-graph write --object-dir $objdir &&
+	test_path_is_missing $objdir/info/commit-graph
 '
 
 test_expect_success 'exit with correct error on bad input to --stdin-packs' '
@@ -132,7 +132,7 @@ test_expect_success 'commit-graph write progress off for redirected stderr' '
 
 test_expect_success 'commit-graph write force progress on for stderr' '
 	cd "$TRASH_DIRECTORY/full" &&
-	git commit-graph write --progress 2>err &&
+	GIT_PROGRESS_DELAY=0 git commit-graph write --progress 2>err &&
 	test_file_not_empty err
 '
 
@@ -150,7 +150,7 @@ test_expect_success 'commit-graph verify progress off for redirected stderr' '
 
 test_expect_success 'commit-graph verify force progress on for stderr' '
 	cd "$TRASH_DIRECTORY/full" &&
-	git commit-graph verify --progress 2>err &&
+	GIT_PROGRESS_DELAY=0 git commit-graph verify --progress 2>err &&
 	test_file_not_empty err
 '
 
@@ -481,7 +481,7 @@ test_expect_success 'detect bad version' '
 '
 
 test_expect_success 'detect bad hash version' '
-	corrupt_graph_and_verify $GRAPH_BYTE_HASH "\02" \
+	corrupt_graph_and_verify $GRAPH_BYTE_HASH "\03" \
 		"hash version"
 '
 
@@ -629,7 +629,7 @@ test_expect_success 'corrupt commit-graph write (broken parent)' '
 		empty="$(git mktree </dev/null)" &&
 		cat >broken <<-EOF &&
 		tree $empty
-		parent 0000000000000000000000000000000000000000
+		parent $ZERO_OID
 		author whatever <whatever@example.com> 1234 -0000
 		committer whatever <whatever@example.com> 1234 -0000
 
@@ -650,7 +650,7 @@ test_expect_success 'corrupt commit-graph write (missing tree)' '
 		cd repo &&
 		tree="$(git mktree </dev/null)" &&
 		cat >broken <<-EOF &&
-		parent 0000000000000000000000000000000000000000
+		parent $ZERO_OID
 		author whatever <whatever@example.com> 1234 -0000
 		committer whatever <whatever@example.com> 1234 -0000
 

@@ -16,6 +16,7 @@ SYNOPSIS
 'git submodule' [--quiet] deinit [-f|--force] (--all|[--] <path>...)
 'git submodule' [--quiet] update [<options>] [--] [<path>...]
 'git submodule' [--quiet] set-branch [<options>] [--] <path>
+'git submodule' [--quiet] set-url [--] <path> <newurl>
 'git submodule' [--quiet] summary [<options>] [--] [<path>...]
 'git submodule' [--quiet] foreach [--recursive] <command>
 'git submodule' [--quiet] sync [--recursive] [--] [<path>...]
@@ -132,7 +133,7 @@ If you really want to remove a submodule from the repository and commit
 that use linkgit:git-rm[1] instead. See linkgit:gitsubmodules[7] for removal
 options.
 
-update [--init] [--remote] [-N|--no-fetch] [--[no-]recommend-shallow] [-f|--force] [--checkout|--rebase|--merge] [--reference <repository>] [--depth <depth>] [--recursive] [--jobs <n>] [--] [<path>...]::
+update [--init] [--remote] [-N|--no-fetch] [--[no-]recommend-shallow] [-f|--force] [--checkout|--rebase|--merge] [--reference <repository>] [--depth <depth>] [--recursive] [--jobs <n>] [--[no-]single-branch] [--] [<path>...]::
 +
 --
 Update the registered submodules to match what the superproject
@@ -184,6 +185,11 @@ set-branch (-d|--default) [--] <path>::
 	`--default` option removes the submodule.<name>.branch configuration
 	key, which causes the tracking branch to default to 'master'.
 
+set-url [--] <path> <newurl>::
+	Sets the URL of the specified submodule to <newurl>. Then, it will
+	automatically synchronize the submodule's new remote URL
+	configuration.
+
 summary [--cached|--files] [(-n|--summary-limit) <n>] [commit] [--] [<path>...]::
 	Show commit summary between the given commit (defaults to HEAD) and
 	working tree/index. For a submodule in question, a series of commits
@@ -223,7 +229,7 @@ As an example, the command below will show the path and currently
 checked out commit for each submodule:
 +
 --------------
-git submodule foreach 'echo $path `git rev-parse HEAD`'
+git submodule foreach 'echo $sm_path `git rev-parse HEAD`'
 --------------
 
 sync [--recursive] [--] [<path>...]::
@@ -242,7 +248,7 @@ registered submodules, and sync any nested submodules within.
 
 absorbgitdirs::
 	If a git directory of a submodule is inside the submodule,
-	move the git directory of the submodule into its superprojects
+	move the git directory of the submodule into its superproject's
 	`$GIT_DIR/modules` path and then connect the git directory and
 	its working directory by setting the `core.worktree` and adding
 	a .git file pointing to the git directory embedded in the
@@ -423,6 +429,10 @@ options carefully.
 	This option is only valid for the update command.
 	Clone new submodules in parallel with as many jobs.
 	Defaults to the `submodule.fetchJobs` option.
+
+--[no-]single-branch::
+	This option is only valid for the update command.
+	Clone only one branch during update: HEAD or one specified by --branch.
 
 <path>...::
 	Paths to submodule(s). When specified this will restrict the command

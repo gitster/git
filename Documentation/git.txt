@@ -110,9 +110,23 @@ foo.bar= ...`) sets `foo.bar` to the empty string which `git config
 	Do not pipe Git output into a pager.
 
 --git-dir=<path>::
-	Set the path to the repository. This can also be controlled by
-	setting the `GIT_DIR` environment variable. It can be an absolute
-	path or relative path to current working directory.
+	Set the path to the repository (".git" directory). This can also be
+	controlled by setting the `GIT_DIR` environment variable. It can be
+	an absolute path or relative path to current working directory.
++
+Specifying the location of the ".git" directory using this
+option (or `GIT_DIR` environment variable) turns off the
+repository discovery that tries to find a directory with
+".git" subdirectory (which is how the repository and the
+top-level of the working tree are discovered), and tells Git
+that you are at the top level of the working tree.  If you
+are not at the top-level directory of the working tree, you
+should tell Git where the top-level of the working tree is,
+with the `--work-tree=<path>` option (or `GIT_WORK_TREE`
+environment variable)
++
+If you just want to run git as if it was started in `<path>` then use
+`git -C <path>`.
 
 --work-tree=<path>::
 	Set the path to the working tree. It can be an absolute path
@@ -482,13 +496,36 @@ double-quotes and respecting backslash escapes. E.g., the value
 Git Commits
 ~~~~~~~~~~~
 `GIT_AUTHOR_NAME`::
+	The human-readable name used in the author identity when creating commit or
+	tag objects, or when writing reflogs. Overrides the `user.name` and
+	`author.name` configuration settings.
+
 `GIT_AUTHOR_EMAIL`::
+	The email address used in the author identity when creating commit or
+	tag objects, or when writing reflogs. Overrides the `user.email` and
+	`author.email` configuration settings.
+
 `GIT_AUTHOR_DATE`::
+	The date used for the author identity when creating commit or tag objects, or
+	when writing reflogs. See linkgit:git-commit[1] for valid formats.
+
 `GIT_COMMITTER_NAME`::
+	The human-readable name used in the committer identity when creating commit or
+	tag objects, or when writing reflogs. Overrides the `user.name` and
+	`committer.name` configuration settings.
+
 `GIT_COMMITTER_EMAIL`::
+	The email address used in the author identity when creating commit or
+	tag objects, or when writing reflogs. Overrides the `user.email` and
+	`committer.email` configuration settings.
+
 `GIT_COMMITTER_DATE`::
-'EMAIL'::
-	see linkgit:git-commit-tree[1]
+	The date used for the committer identity when creating commit or tag objects, or
+	when writing reflogs. See linkgit:git-commit[1] for valid formats.
+
+`EMAIL`::
+	The email address used in the author and committer identities if no other
+	relevant environment variable or configuration setting has been set.
 
 Git Diffs
 ~~~~~~~~~
@@ -543,6 +580,10 @@ other
 	to an empty string or to the value "cat", Git will not launch
 	a pager.  See also the `core.pager` option in
 	linkgit:git-config[1].
+
+`GIT_PROGRESS_DELAY`::
+	A number controlling how many seconds to delay before showing
+	optional progress indicators. Defaults to 2.
 
 `GIT_EDITOR`::
 	This environment variable overrides `$EDITOR` and `$VISUAL`.

@@ -1146,7 +1146,7 @@ static int ident_to_worktree(const char *src, size_t len,
 	/* are we "faking" in place editing ? */
 	if (src == buf->buf)
 		to_free = strbuf_detach(buf, NULL);
-	hash_object_file(src, len, "blob", &oid);
+	hash_object_file(the_hash_algo, src, len, "blob", &oid);
 
 	strbuf_grow(buf, len + cnt * (the_hash_algo->hexsz + 3));
 	for (;;) {
@@ -1940,7 +1940,7 @@ static struct stream_filter *ident_filter(const struct object_id *oid)
  * the contents cannot be filtered without reading the whole thing
  * in-core.
  *
- * Note that you would be crazy to set CRLF, smuge/clean or ident to a
+ * Note that you would be crazy to set CRLF, smudge/clean or ident to a
  * large binary blob you would want us not to slurp into the memory!
  */
 struct stream_filter *get_stream_filter(const struct index_state *istate,

@@ -120,8 +120,13 @@ char *prefix_path_gently(const char *prefix, int len,
 char *prefix_path(const char *prefix, int len, const char *path)
 {
 	char *r = prefix_path_gently(prefix, len, NULL, path);
-	if (!r)
-		die(_("'%s' is outside repository"), path);
+	if (!r) {
+		const char *hint_path = get_git_work_tree();
+		if (!hint_path)
+			hint_path = get_git_dir();
+		die(_("'%s' is outside repository at '%s'"), path,
+		    absolute_path(hint_path));
+	}
 	return r;
 }
 
@@ -197,9 +202,26 @@ static void NORETURN die_verify_filename(struct repository *r,
  */
 static int looks_like_pathspec(const char *arg)
 {
-	/* anything with a wildcard character */
-	if (!no_wildcard(arg))
-		return 1;
+	const char *p;
+	int escaped = 0;
+
+	/*
+	 * Wildcard characters imply the user is looking to match pathspecs
+	 * that aren't in the filesystem. Note that this doesn't include
+	 * backslash even though it's a glob special; by itself it doesn't
+	 * cause any increase in the match. Likewise ignore backslash-escaped
+	 * wildcard characters.
+	 */
+	for (p = arg; *p; p++) {
+		if (escaped) {
+			escaped = 0;
+		} else if (is_glob_special(*p)) {
+			if (*p == '\\')
+				escaped = 1;
+			else
+				return 1;
+		}
+	}
 
 	/* long-form pathspec magic */
 	if (starts_with(arg, ":("))

@@ -208,7 +208,7 @@ static void cmd_log_init_finish(int argc, const char **argv, const char *prefix,
 	if (!rev->show_notes_given && (!rev->pretty_given || w.notes))
 		rev->show_notes = 1;
 	if (rev->show_notes)
-		init_display_notes(&rev->notes_opt);
+		load_display_notes(&rev->notes_opt);
 
 	if ((rev->diffopt.pickaxe_opts & DIFF_PICKAXE_KINDS_MASK) ||
 	    rev->diffopt.filter || rev->diffopt.flags.follow_renames)
@@ -795,6 +795,8 @@ static const char *signature_file;
 static enum cover_setting config_cover_letter;
 static const char *config_output_directory;
 static enum cover_from_description cover_from_description_mode = COVER_FROM_MESSAGE;
+static int show_notes;
+static struct display_notes_opt notes_opt;
 
 static enum cover_from_description parse_cover_from_description(const char *arg)
 {
@@ -814,8 +816,6 @@ static enum cover_from_description parse_cover_from_description(const char *arg)
 
 static int git_format_config(const char *var, const char *value, void *cb)
 {
-	struct rev_info *rev = cb;
-
 	if (!strcmp(var, "format.headers")) {
 		if (!value)
 			die(_("format.headers without value"));
@@ -902,19 +902,13 @@ static int git_format_config(const char *var, const char *value, void *cb)
 		return 0;
 	}
 	if (!strcmp(var, "format.notes")) {
-		struct strbuf buf = STRBUF_INIT;
 		int b = git_parse_maybe_bool(value);
-		if (!b)
-			return 0;
-		rev->show_notes = 1;
-		if (b < 0) {
-			strbuf_addstr(&buf, value);
-			expand_notes_ref(&buf);
-			string_list_append(&rev->notes_opt.extra_notes_refs,
-					strbuf_detach(&buf, NULL));
-		} else {
-			rev->notes_opt.use_default_notes = 1;
-		}
+		if (b < 0)
+			enable_ref_display_notes(&notes_opt, &show_notes, value);
+		else if (b)
+			enable_default_display_notes(&notes_opt, &show_notes);
+		else
+			disable_display_notes(&notes_opt, &show_notes);
 		return 0;
 	}
 	if (!strcmp(var, "format.coverfromdescription")) {
@@ -1372,7 +1366,7 @@ static int header_callback(const struct option *opt, const char *arg, int unset)
 		string_list_clear(&extra_to, 0);
 		string_list_clear(&extra_cc, 0);
 	} else {
-	    add_header(arg);
+		add_header(arg);
 	}
 	return 0;
 }
@@ -1428,7 +1422,7 @@ static struct commit *get_base_commit(const char *base_commit,
 		base = lookup_commit_reference_by_name(base_commit);
 		if (!base)
 			die(_("unknown commit %s"), base_commit);
-	} else if ((base_commit && !strcmp(base_commit, "auto")) || base_auto) {
+	} else if ((base_commit && !strcmp(base_commit, "auto"))) {
 		struct branch *curr_branch = branch_get(NULL);
 		const char *upstream = branch_get_upstream(curr_branch, NULL);
 		if (upstream) {
@@ -1719,8 +1713,11 @@ int cmd_format_patch(int argc, const char **argv, const char *prefix)
 	extra_to.strdup_strings = 1;
 	extra_cc.strdup_strings = 1;
 	init_log_defaults();
+	init_display_notes(&notes_opt);
+	git_config(git_format_config, NULL);
 	repo_init_revisions(the_repository, &rev, prefix);
-	git_config(git_format_config, &rev);
+	rev.show_notes = show_notes;
+	memcpy(&rev.notes_opt, &notes_opt, sizeof(notes_opt));
 	rev.commit_format = CMIT_FMT_EMAIL;
 	rev.expand_tabs_in_log_default = 0;
 	rev.verbose_header = 1;
@@ -1731,6 +1728,9 @@ int cmd_format_patch(int argc, const char **argv, const char *prefix)
 	memset(&s_r_opt, 0, sizeof(s_r_opt));
 	s_r_opt.def = "HEAD";
 	s_r_opt.revarg_opt = REVARG_COMMITTISH;
+
+	if (base_auto)
+		base_commit = "auto";
 
 	if (default_attach) {
 		rev.mime_boundary = default_attach;
@@ -1836,7 +1836,7 @@ int cmd_format_patch(int argc, const char **argv, const char *prefix)
 		rev.diffopt.flags.binary = 1;
 
 	if (rev.show_notes)
-		init_display_notes(&rev.notes_opt);
+		load_display_notes(&rev.notes_opt);
 
 	if (!output_directory && !use_stdout)
 		output_directory = config_output_directory;
@@ -1995,7 +1995,7 @@ int cmd_format_patch(int argc, const char **argv, const char *prefix)
 	}
 
 	memset(&bases, 0, sizeof(bases));
-	if (base_commit || base_auto) {
+	if (base_commit) {
 		struct commit *base = get_base_commit(base_commit, list, nr);
 		reset_revision_walk();
 		clear_object_flags(UNINTERESTING);

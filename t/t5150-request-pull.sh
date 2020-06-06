@@ -4,6 +4,12 @@ test_description='Test workflows involving pull request.'
 
 . ./test-lib.sh
 
+if ! test_have_prereq PERL
+then
+	skip_all='skipping request-pull tests, perl not available'
+	test_done
+fi
+
 test_expect_success 'setup' '
 
 	git init --bare upstream.git &&
@@ -144,7 +150,6 @@ test_expect_success 'pull request after push' '
 		git request-pull initial origin master:for-upstream >../request
 	) &&
 	sed -nf read-request.sed <request >digest &&
-	cat digest &&
 	{
 		read task &&
 		read repository &&
@@ -173,7 +178,6 @@ test_expect_success 'request asks HEAD to be pulled' '
 		git request-pull initial "$downstream_url" >../request
 	) &&
 	sed -nf read-request.sed <request >digest &&
-	cat digest &&
 	{
 		read task &&
 		read repository &&

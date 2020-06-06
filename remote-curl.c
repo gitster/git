@@ -1026,6 +1026,7 @@ static int fetch_dumb(int nr_heads, struct ref **to_fetch)
 
 	walker = get_http_walker(url.buf);
 	walker->get_verbosely = options.verbosity >= 3;
+	walker->get_progress = options.progress;
 	walker->get_recover = 0;
 	ret = walker_fetch(walker, nr_heads, targets, NULL, NULL);
 	walker_free(walker);
@@ -1255,8 +1256,9 @@ static void parse_push(struct strbuf *buf)
 	int ret;
 
 	do {
-		if (starts_with(buf->buf, "push "))
-			argv_array_push(&specs, buf->buf + 5);
+		const char *arg;
+		if (skip_prefix(buf->buf, "push ", &arg))
+			argv_array_push(&specs, arg);
 		else
 			die(_("http transport does not support %s"), buf->buf);
 

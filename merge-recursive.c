@@ -224,17 +224,6 @@ static struct commit *make_virtual_commit(struct repository *repo,
 	return commit;
 }
 
-/*
- * Since we use get_tree_entry(), which does not put the read object into
- * the object pool, we cannot rely on a == b.
- */
-static int oid_eq(const struct object_id *a, const struct object_id *b)
-{
-	if (!a && !b)
-		return 2;
-	return a && b && oideq(a, b);
-}
-
 enum rename_type {
 	RENAME_NORMAL = 0,
 	RENAME_VIA_DIR,
@@ -805,7 +794,7 @@ static int was_tracked_and_matches(struct merge_options *opt, const char *path,
 
 	/* See if the file we were tracking before matches */
 	ce = opt->priv->orig_index.cache[pos];
-	return (oid_eq(&ce->oid, &blob->oid) && ce->ce_mode == blob->mode);
+	return (oideq(&ce->oid, &blob->oid) && ce->ce_mode == blob->mode);
 }
 
 /*
@@ -1009,10 +998,13 @@ static int update_file_flags(struct merge_options *opt,
 		free(buf);
 	}
 update_index:
-	if (!ret && update_cache)
-		if (add_cacheinfo(opt, contents, path, 0, update_wd,
+	if (!ret && update_cache) {
+		int refresh = (!opt->priv->call_depth &&
+			       contents->mode != S_IFGITLINK);
+		if (add_cacheinfo(opt, contents, path, 0, refresh,
 				  ADD_CACHE_OK_TO_ADD))
 			return -1;
+	}
 	return ret;
 }
 
@@ -1317,7 +1309,7 @@ static int merge_mode_and_contents(struct merge_options *opt,
 			oidcpy(&result->blob.oid, &b->oid);
 		}
 	} else {
-		if (!oid_eq(&a->oid, &o->oid) && !oid_eq(&b->oid, &o->oid))
+		if (!oideq(&a->oid, &o->oid) && !oideq(&b->oid, &o->oid))
 			result->merge = 1;
 
 		/*
@@ -1333,9 +1325,9 @@ static int merge_mode_and_contents(struct merge_options *opt,
 			}
 		}
 
-		if (oid_eq(&a->oid, &b->oid) || oid_eq(&a->oid, &o->oid))
+		if (oideq(&a->oid, &b->oid) || oideq(&a->oid, &o->oid))
 			oidcpy(&result->blob.oid, &b->oid);
-		else if (oid_eq(&b->oid, &o->oid))
+		else if (oideq(&b->oid, &o->oid))
 			oidcpy(&result->blob.oid, &a->oid);
 		else if (S_ISREG(a->mode)) {
 			mmbuffer_t result_buf;
@@ -1368,7 +1360,7 @@ static int merge_mode_and_contents(struct merge_options *opt,
 			switch (opt->recursive_variant) {
 			case MERGE_VARIANT_NORMAL:
 				oidcpy(&result->blob.oid, &a->oid);
-				if (!oid_eq(&a->oid, &b->oid))
+				if (!oideq(&a->oid, &b->oid))
 					result->clean = 0;
 				break;
 			case MERGE_VARIANT_OURS:
@@ -1568,35 +1560,6 @@ static int handle_file_collision(struct merge_options *opt,
 					     b, a);
 	}
 
-	/*
-	 * In the recursive case, we just opt to undo renames
-	 */
-	if (opt->priv->call_depth && (prev_path1 || prev_path2)) {
-		/* Put first file (a->oid, a->mode) in its original spot */
-		if (prev_path1) {
-			if (update_file(opt, 1, a, prev_path1))
-				return -1;
-		} else {
-			if (update_file(opt, 1, a, collide_path))
-				return -1;
-		}
-
-		/* Put second file (b->oid, b->mode) in its original spot */
-		if (prev_path2) {
-			if (update_file(opt, 1, b, prev_path2))
-				return -1;
-		} else {
-			if (update_file(opt, 1, b, collide_path))
-				return -1;
-		}
-
-		/* Don't leave something at collision path if unrenaming both */
-		if (prev_path1 && prev_path2)
-			remove_file(opt, 1, collide_path, 0);
-
-		return 0;
-	}
-
 	/* Remove rename sources if rename/add or rename/rename(2to1) */
 	if (prev_path1)
 		remove_file(opt, 1, prev_path1,
@@ -1723,6 +1686,14 @@ static char *find_path_for_conflict(struct merge_options *opt,
 	return new_path;
 }
 
+/*
+ * Toggle the stage number between "ours" and "theirs" (2 and 3).
+ */
+static inline int flip_stage(int stage)
+{
+	return (2 + 3) - stage;
+}
+
 static int handle_rename_rename_1to2(struct merge_options *opt,
 				     struct rename_conflict_info *ci)
 {
@@ -1749,85 +1720,56 @@ static int handle_rename_rename_1to2(struct merge_options *opt,
 		return -1;
 	free(path_desc);
 
-	if (opt->priv->call_depth) {
-		/*
-		 * FIXME: For rename/add-source conflicts (if we could detect
-		 * such), this is wrong.  We should instead find a unique
-		 * pathname and then either rename the add-source file to that
-		 * unique path, or use that unique path instead of src here.
-		 */
-		if (update_file(opt, 0, &mfi.blob, o->path))
+	if (opt->priv->call_depth)
+		remove_file_from_index(opt->repo->index, o->path);
+
+	/*
+	 * For each destination path, we need to see if there is a
+	 * rename/add collision.  If not, we can write the file out
+	 * to the specified location.
+	 */
+	add = &ci->ren1->dst_entry->stages[flip_stage(2)];
+	if (is_valid(add)) {
+		add->path = mfi.blob.path = a->path;
+		if (handle_file_collision(opt, a->path,
+					  NULL, NULL,
+					  ci->ren1->branch,
+					  ci->ren2->branch,
+					  &mfi.blob, add) < 0)
 			return -1;
-
-		/*
-		 * Above, we put the merged content at the merge-base's
-		 * path.  Now we usually need to delete both a->path and
-		 * b->path.  However, the rename on each side of the merge
-		 * could also be involved in a rename/add conflict.  In
-		 * such cases, we should keep the added file around,
-		 * resolving the conflict at that path in its favor.
-		 */
-		add = &ci->ren1->dst_entry->stages[2 ^ 1];
-		if (is_valid(add)) {
-			if (update_file(opt, 0, add, a->path))
-				return -1;
-		}
-		else
-			remove_file_from_index(opt->repo->index, a->path);
-		add = &ci->ren2->dst_entry->stages[3 ^ 1];
-		if (is_valid(add)) {
-			if (update_file(opt, 0, add, b->path))
-				return -1;
-		}
-		else
-			remove_file_from_index(opt->repo->index, b->path);
 	} else {
-		/*
-		 * For each destination path, we need to see if there is a
-		 * rename/add collision.  If not, we can write the file out
-		 * to the specified location.
-		 */
-		add = &ci->ren1->dst_entry->stages[2 ^ 1];
-		if (is_valid(add)) {
-			add->path = mfi.blob.path = a->path;
-			if (handle_file_collision(opt, a->path,
-						  NULL, NULL,
-						  ci->ren1->branch,
-						  ci->ren2->branch,
-						  &mfi.blob, add) < 0)
-				return -1;
-		} else {
-			char *new_path = find_path_for_conflict(opt, a->path,
-								ci->ren1->branch,
-								ci->ren2->branch);
-			if (update_file(opt, 0, &mfi.blob,
-					new_path ? new_path : a->path))
-				return -1;
-			free(new_path);
-			if (update_stages(opt, a->path, NULL, a, NULL))
-				return -1;
-		}
+		char *new_path = find_path_for_conflict(opt, a->path,
+							ci->ren1->branch,
+							ci->ren2->branch);
+		if (update_file(opt, 0, &mfi.blob,
+				new_path ? new_path : a->path))
+			return -1;
+		free(new_path);
+		if (!opt->priv->call_depth &&
+		    update_stages(opt, a->path, NULL, a, NULL))
+			return -1;
+	}
 
-		add = &ci->ren2->dst_entry->stages[3 ^ 1];
-		if (is_valid(add)) {
-			add->path = mfi.blob.path = b->path;
-			if (handle_file_collision(opt, b->path,
-						  NULL, NULL,
-						  ci->ren1->branch,
-						  ci->ren2->branch,
-						  add, &mfi.blob) < 0)
-				return -1;
-		} else {
-			char *new_path = find_path_for_conflict(opt, b->path,
-								ci->ren2->branch,
-								ci->ren1->branch);
-			if (update_file(opt, 0, &mfi.blob,
-					new_path ? new_path : b->path))
-				return -1;
-			free(new_path);
-			if (update_stages(opt, b->path, NULL, NULL, b))
-				return -1;
-		}
+	add = &ci->ren2->dst_entry->stages[flip_stage(3)];
+	if (is_valid(add)) {
+		add->path = mfi.blob.path = b->path;
+		if (handle_file_collision(opt, b->path,
+					  NULL, NULL,
+					  ci->ren1->branch,
+					  ci->ren2->branch,
+					  add, &mfi.blob) < 0)
+			return -1;
+	} else {
+		char *new_path = find_path_for_conflict(opt, b->path,
+							ci->ren2->branch,
+							ci->ren1->branch);
+		if (update_file(opt, 0, &mfi.blob,
+				new_path ? new_path : b->path))
+			return -1;
+		free(new_path);
+		if (!opt->priv->call_depth &&
+		    update_stages(opt, b->path, NULL, NULL, b))
+			return -1;
 	}
 
 	return 0;
@@ -1857,7 +1799,7 @@ static int handle_rename_rename_2to1(struct merge_options *opt,
 	path_side_1_desc = xstrfmt("version of %s from %s", path, a->path);
 	path_side_2_desc = xstrfmt("version of %s from %s", path, b->path);
 	ostage1 = ci->ren1->branch == opt->branch1 ? 3 : 2;
-	ostage2 = ostage1 ^ 1;
+	ostage2 = flip_stage(ostage1);
 	ci->ren1->src_entry->stages[ostage1].path = a->path;
 	ci->ren2->src_entry->stages[ostage2].path = b->path;
 	if (merge_mode_and_contents(opt, a, c1,
@@ -2836,15 +2778,15 @@ static int process_renames(struct merge_options *opt,
 			dst_other.mode = ren1->dst_entry->stages[other_stage].mode;
 			try_merge = 0;
 
-			if (oid_eq(&src_other.oid, &null_oid) &&
+			if (oideq(&src_other.oid, &null_oid) &&
 			    ren1->dir_rename_original_type == 'A') {
 				setup_rename_conflict_info(RENAME_VIA_DIR,
 							   opt, ren1, NULL);
-			} else if (oid_eq(&src_other.oid, &null_oid)) {
+			} else if (oideq(&src_other.oid, &null_oid)) {
 				setup_rename_conflict_info(RENAME_DELETE,
 							   opt, ren1, NULL);
 			} else if ((dst_other.mode == ren1->pair->two->mode) &&
-				   oid_eq(&dst_other.oid, &ren1->pair->two->oid)) {
+				   oideq(&dst_other.oid, &ren1->pair->two->oid)) {
 				/*
 				 * Added file on the other side identical to
 				 * the file being renamed: clean merge.
@@ -2859,7 +2801,7 @@ static int process_renames(struct merge_options *opt,
 						      1, /* update_cache */
 						      0  /* update_wd    */))
 					clean_merge = -1;
-			} else if (!oid_eq(&dst_other.oid, &null_oid)) {
+			} else if (!oideq(&dst_other.oid, &null_oid)) {
 				/*
 				 * Probably not a clean merge, but it's
 				 * premature to set clean_merge to 0 here,
@@ -3037,7 +2979,7 @@ static int blob_unchanged(struct merge_options *opt,
 
 	if (a->mode != o->mode)
 		return 0;
-	if (oid_eq(&o->oid, &a->oid))
+	if (oideq(&o->oid, &a->oid))
 		return 1;
 	if (!renormalize)
 		return 0;
@@ -3478,7 +3420,7 @@ static int merge_trees_internal(struct merge_options *opt,
 					       opt->subtree_shift);
 	}
 
-	if (oid_eq(&merge_base->object.oid, &merge->object.oid)) {
+	if (oideq(&merge_base->object.oid, &merge->object.oid)) {
 		output(opt, 0, _("Already up to date!"));
 		*result = head;
 		return 1;

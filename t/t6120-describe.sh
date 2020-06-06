@@ -1,28 +1,27 @@
 #!/bin/sh
 
-test_description='test describe
+test_description='test describe'
 
-                       B
-        .--------------o----o----o----x
-       /                   /    /
- o----o----o----o----o----.    /
-       \        A    c        /
-        .------------o---o---o
-                   D,R   e
-'
+#  o---o-----o----o----o-------o----x
+#       \   D,R   e           /
+#        \---o-------------o-'
+#         \  B            /
+#          `-o----o----o-'
+#                 A    c
+#
+# First parent of a merge commit is on the same line, second parent below.
+
 . ./test-lib.sh
 
 check_describe () {
 	expect="$1"
 	shift
-	R=$(git describe "$@" 2>err.actual)
-	S=$?
-	cat err.actual >&3
-	test_expect_success "describe $*" '
-	test $S = 0 &&
+	describe_opts="$@"
+	test_expect_success "describe $describe_opts" '
+	R=$(git describe $describe_opts 2>err.actual) &&
 	case "$R" in
 	$expect)	echo happy ;;
-	*)	echo "Oops - $R is not $expect";
+	*)	echo "Oops - $R is not $expect" &&
 		false ;;
 	esac
 	'
@@ -382,7 +381,7 @@ test_expect_success 'describe tag object' '
 	test_i18ngrep "fatal: test-blob-1 is neither a commit nor blob" actual
 '
 
-test_expect_failure ULIMIT_STACK_SIZE 'name-rev works in a deep repo' '
+test_expect_success ULIMIT_STACK_SIZE 'name-rev works in a deep repo' '
 	i=1 &&
 	while test $i -lt 8000
 	do
@@ -437,6 +436,98 @@ test_expect_success 'name-rev a rev shortly after epoch' '
 	echo "$old_commit_oid no-timestamp-underflow" >expect &&
 	git name-rev $old_commit_oid >actual &&
 	test_cmp expect actual
+'
+
+# A--------------master
+#  \            /
+#   \----------M2
+#    \        /
+#     \---M1-C
+#      \ /
+#       B
+test_expect_success 'name-rev covers all conditions while looking at parents' '
+	git init repo &&
+	(
+		cd repo &&
+
+		echo A >file &&
+		git add file &&
+		git commit -m A &&
+		A=$(git rev-parse HEAD) &&
+
+		git checkout --detach &&
+		echo B >file &&
+		git commit -m B file &&
+		B=$(git rev-parse HEAD) &&
+
+		git checkout $A &&
+		git merge --no-ff $B &&  # M1
+
+		echo C >file &&
+		git commit -m C file &&
+
+		git checkout $A &&
+		git merge --no-ff HEAD@{1} && # M2
+
+		git checkout master &&
+		git merge --no-ff HEAD@{1} &&
+
+		echo "$B master^2^2~1^2" >expect &&
+		git name-rev $B >actual &&
+
+		test_cmp expect actual
+	)
+'
+
+#               B
+#               o
+#                \
+#  o-----o---o----x
+#        A
+#
+test_expect_success 'describe commits with disjoint bases' '
+	git init disjoint1 &&
+	(
+		cd disjoint1 &&
+
+		echo o >> file && git add file && git commit -m o &&
+		echo A >> file && git add file && git commit -m A &&
+		git tag A -a -m A &&
+		echo o >> file && git add file && git commit -m o &&
+
+		git checkout --orphan branch && rm file &&
+		echo B > file2 && git add file2 && git commit -m B &&
+		git tag B -a -m B &&
+		git merge --no-ff --allow-unrelated-histories master -m x &&
+
+		check_describe "A-3-*" HEAD
+	)
+'
+
+#           B
+#   o---o---o------------.
+#                         \
+#                  o---o---x
+#                  A
+#
+test_expect_success 'describe commits with disjoint bases 2' '
+	git init disjoint2 &&
+	(
+		cd disjoint2 &&
+
+		echo A >> file && git add file && GIT_COMMITTER_DATE="2020-01-01 18:00" git commit -m A &&
+		git tag A -a -m A &&
+		echo o >> file && git add file && GIT_COMMITTER_DATE="2020-01-01 18:01" git commit -m o &&
+
+		git checkout --orphan branch &&
+		echo o >> file2 && git add file2 && GIT_COMMITTER_DATE="2020-01-01 15:00" git commit -m o &&
+		echo o >> file2 && git add file2 && GIT_COMMITTER_DATE="2020-01-01 15:01" git commit -m o &&
+		echo B >> file2 && git add file2 && GIT_COMMITTER_DATE="2020-01-01 15:02" git commit -m B &&
+		git tag B -a -m B &&
+		git merge --no-ff --allow-unrelated-histories master -m x &&
+
+		check_describe "B-3-*" HEAD
+	)
 '
 
 test_done

@@ -2662,6 +2662,16 @@ static int find_pos(struct apply_state *state,
 	int backwards_lno, forwards_lno, current_lno;
 
 	/*
+	 * When running with --allow-overlap, it is possible that a hunk is
+	 * seen that pretends to start at the beginning (but no longer does),
+	 * and that *still* needs to match the end. So trust `match_end` more
+	 * than `match_beginning`.
+	 */
+	if (state->allow_overlap && match_beginning && match_end &&
+	    img->nr - preimage->nr != 0)
+		match_beginning = 0;
+
+	/*
 	 * If match_beginning or match_end is specified, there is no
 	 * point starting from a wrong line that will never match and
 	 * wander around and wait for a match at the specified end.
@@ -3147,7 +3157,8 @@ static int apply_binary(struct apply_state *state,
 		 * See if the old one matches what the patch
 		 * applies to.
 		 */
-		hash_object_file(img->buf, img->len, blob_type, &oid);
+		hash_object_file(the_hash_algo, img->buf, img->len, blob_type,
+				 &oid);
 		if (strcmp(oid_to_hex(&oid), patch->old_oid_prefix))
 			return error(_("the patch applies to '%s' (%s), "
 				       "which does not match the "
@@ -3192,7 +3203,8 @@ static int apply_binary(struct apply_state *state,
 				     name);
 
 		/* verify that the result matches */
-		hash_object_file(img->buf, img->len, blob_type, &oid);
+		hash_object_file(the_hash_algo, img->buf, img->len, blob_type,
+				 &oid);
 		if (strcmp(oid_to_hex(&oid), patch->new_oid_prefix))
 			return error(_("binary patch to '%s' creates incorrect result (expecting %s, got %s)"),
 				name, patch->new_oid_prefix, oid_to_hex(&oid));
