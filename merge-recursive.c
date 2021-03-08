@@ -473,7 +473,7 @@ static void get_files_dirs(struct merge_options *opt, struct tree *tree)
 {
 	struct pathspec match_all;
 	memset(&match_all, 0, sizeof(match_all));
-	read_tree_recursive(opt->repo, tree, "", 0, 0,
+	read_tree_recursive(opt->repo, tree, 0,
 			    &match_all, save_files_dirs, opt);
 }
 

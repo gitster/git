@@ -523,7 +523,7 @@ void overlay_tree_on_index(struct index_state *istate,
 
 	if (!fn)
 		fn = read_one_entry_quick;
-	err = read_tree_recursive(the_repository, tree, "", 0, 1, &pathspec, fn, istate);
+	err = read_tree_recursive(the_repository, tree, 1, &pathspec, fn, istate);
 	if (err)
 		die("unable to read tree entries %s", tree_name);
 
