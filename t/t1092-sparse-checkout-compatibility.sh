@@ -2,7 +2,6 @@
 
 test_description='compare full workdir to sparse workdir'
 
-GIT_TEST_CHECK_CACHE_TREE=0
 GIT_TEST_SPLIT_INDEX=0
 GIT_TEST_SPARSE_INDEX=
 
