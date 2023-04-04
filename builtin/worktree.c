@@ -1,5 +1,6 @@
 #include "cache.h"
 #include "abspath.h"
+#include "advice.h"
 #include "checkout.h"
 #include "config.h"
 #include "builtin.h"
