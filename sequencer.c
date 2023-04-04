@@ -2249,6 +2249,9 @@ static int do_pick_commit(struct repository *r,
 		if (opts->commit_use_reference) {
 			strbuf_addstr(&msgbuf,
 				"# *** SAY WHY WE ARE REVERTING ON THE TITLE LINE ***");
+		} else if (starts_with(msg.subject, "Revert \"")) {
+			strbuf_addstr(&msgbuf, "Reapply ");
+			strbuf_addstr(&msgbuf, msg.subject + 7);
 		} else {
 			strbuf_addstr(&msgbuf, "Revert \"");
 			strbuf_addstr(&msgbuf, msg.subject);
