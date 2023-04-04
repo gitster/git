@@ -10,7 +10,9 @@ SYNOPSIS
 --------
 [verse]
 'git worktree add' [-f] [--detach] [--checkout] [--lock [--reason <string>]]
-		   [-b <new-branch>] <path> [<commit-ish>]
+		   [(-b | -B) <new-branch>] <path> [<commit-ish>]
+'git worktree add' [-f] [--lock [--reason <string>]]
+		   --orphan <new-branch> <path>
 'git worktree list' [-v | --porcelain [-z]]
 'git worktree lock' [--reason <string>] <worktree>
 'git worktree move' <worktree> <new-path>
@@ -95,6 +97,15 @@ exist, a new branch based on `HEAD` is automatically created as if
 `-b <branch>` was given.  If `<branch>` does exist, it will be checked out
 in the new worktree, if it's not checked out anywhere else, otherwise the
 command will refuse to create the worktree (unless `--force` is used).
++
+------------
+$ git worktree add --orphan <branch> <path>
+------------
++
+Create a worktree containing no files, with an empty index, and associated
+with a new orphan branch named `<branch>`. The first commit made on this new
+branch will have no parents and will be the root of a new history disconnected
+from any other branches.
 
 list::
 
@@ -221,6 +232,10 @@ This can also be set up as the default behaviour by using the
 --dry-run::
 	With `prune`, do not remove anything; just report what it would
 	remove.
+
+--orphan <new-branch>::
+	With `add`, make the new worktree and index empty, associating
+	the worktree with a new orphan branch named `<new-branch>`.
 
 --porcelain::
 	With `list`, output in an easy-to-parse format for scripts.
