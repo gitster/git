@@ -1571,11 +1571,11 @@ test_expect_success 'git config --edit respects core.editor' '
 # malformed configuration files
 test_expect_success 'barf on syntax error' '
 	cat >.git/config <<-\EOF &&
-	# broken section line
+	# broken key=value
 	[section]
 	key garbage
 	EOF
-	test_must_fail git config --get section.key >actual 2>error &&
+	test_must_fail git config --get section.key 2>error &&
 	test_i18ngrep " line 3 " error
 '
 
@@ -1585,17 +1585,17 @@ test_expect_success 'barf on incomplete section header' '
 	[section
 	key = value
 	EOF
-	test_must_fail git config --get section.key >actual 2>error &&
+	test_must_fail git config --get section.key 2>error &&
 	test_i18ngrep " line 2 " error
 '
 
 test_expect_success 'barf on incomplete string' '
 	cat >.git/config <<-\EOF &&
-	# broken section line
+	# broken value string
 	[section]
 	key = "value string
 	EOF
-	test_must_fail git config --get section.key >actual 2>error &&
+	test_must_fail git config --get section.key 2>error &&
 	test_i18ngrep " line 3 " error
 '
 
