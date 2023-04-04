@@ -22,7 +22,7 @@ int cmd_for_each_ref(int argc, const char **argv, const char *prefix)
 	int i;
 	struct ref_sorting *sorting;
 	struct string_list sorting_options = STRING_LIST_INIT_DUP;
-	int maxcount = 0, icase = 0;
+	int maxcount = 0, icase = 0, omit_empty_lines = 0;
 	struct ref_array array;
 	struct ref_filter filter;
 	struct ref_format format = REF_FORMAT_INIT;
@@ -40,6 +40,8 @@ int cmd_for_each_ref(int argc, const char **argv, const char *prefix)
 			N_("quote placeholders suitably for python"), QUOTE_PYTHON),
 		OPT_BIT(0 , "tcl",  &format.quote_style,
 			N_("quote placeholders suitably for Tcl"), QUOTE_TCL),
+		OPT_BOOL('n' , "omit-empty-lines",  &omit_empty_lines,
+			N_("do not output a newline after empty formatted refs")),
 
 		OPT_GROUP(""),
 		OPT_INTEGER( 0 , "count", &maxcount, N_("show only <n> matched refs")),
@@ -61,8 +63,6 @@ int cmd_for_each_ref(int argc, const char **argv, const char *prefix)
 	memset(&array, 0, sizeof(array));
 	memset(&filter, 0, sizeof(filter));
 
-	format.format = "%(objectname) %(objecttype)\t%(refname)";
-
 	git_config(git_default_config, NULL);
 
 	parse_options(argc, argv, prefix, opts, for_each_ref_usage, 0);
@@ -74,6 +74,12 @@ int cmd_for_each_ref(int argc, const char **argv, const char *prefix)
 		error("more than one quoting style?");
 		usage_with_options(for_each_ref_usage, opts);
 	}
+	if (omit_empty_lines && !format.format) {
+		error("--omit-empty-lines without --format does not make sense");
+		usage_with_options(for_each_ref_usage, opts);
+	}
+	if (!format.format)
+		format.format = "%(objectname) %(objecttype)\t%(refname)";
 	if (verify_ref_format(&format))
 		usage_with_options(for_each_ref_usage, opts);
 
@@ -112,7 +118,8 @@ int cmd_for_each_ref(int argc, const char **argv, const char *prefix)
 		if (format_ref_array_item(array.items[i], &format, &output, &err))
 			die("%s", err.buf);
 		fwrite(output.buf, 1, output.len, stdout);
-		putchar('\n');
+		if (!omit_empty_lines || output.len > 0)
+			putchar('\n');
 	}
 
 	strbuf_release(&err);
