@@ -27,6 +27,10 @@ int cmd_diff_files(int argc, const char **argv, const char *prefix)
 		usage(diff_files_usage);
 
 	git_config(git_diff_basic_config, NULL); /* no "diff" UI options */
+
+	prepare_repo_settings(the_repository);
+	the_repository->settings.command_requires_full_index = 0;
+
 	repo_init_revisions(the_repository, &rev, prefix);
 	rev.abbrev = 0;
 
@@ -80,6 +84,10 @@ int cmd_diff_files(int argc, const char **argv, const char *prefix)
 		result = -1;
 		goto cleanup;
 	}
+
+	if (pathspec_needs_expanded_index(the_repository->index, &rev.diffopt.pathspec))
+		ensure_full_index(the_repository->index);
+
 	result = run_diff_files(&rev, options);
 	result = diff_result_code(&rev.diffopt, result);
 cleanup:
