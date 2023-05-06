@@ -78,6 +78,12 @@ linkgit:git-config[1].
 --dry-run::
 	Show what would be done, without making any changes.
 
+--porcelain::
+	Print the output to standard output in an easy-to-parse format for
+	scripts. See section OUTPUT in linkgit:git-fetch[1] for details.
++
+This is incompatible with `--recurse-submodules=[yes|on-demand]`.
+
 ifndef::git-pull[]
 --[no-]write-fetch-head::
 	Write the list of remote refs fetched in the `FETCH_HEAD`

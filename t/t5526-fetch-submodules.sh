@@ -1180,4 +1180,35 @@ test_expect_success 'fetch --all with --recurse-submodules with multiple' '
 	test_line_count = 2 fetch-subs
 '
 
+test_expect_success "fetch --all with --no-recurse-submodules only fetches superproject" '
+	test_when_finished "git -C downstream remote remove second" &&
+
+	# We need to add a second remote, otherwise --all falls back to the
+	# normal fetch-one case.
+	git -C downstream remote add second .. &&
+	git -C downstream fetch --all &&
+
+	add_submodule_commits &&
+	add_superproject_commits &&
+	old_commit=$(git rev-parse --short HEAD~) &&
+	new_commit=$(git rev-parse --short HEAD) &&
+
+	git -C downstream fetch --all --no-recurse-submodules >actual.out 2>actual.err &&
+
+	cat >expect.out <<-EOF &&
+	Fetching origin
+	Fetching second
+	EOF
+
+	cat >expect.err <<-EOF &&
+	From $(test-tool path-utils real_path .)/.
+	   $old_commit..$new_commit  super      -> origin/super
+	From ..
+	   $old_commit..$new_commit  super      -> second/super
+	EOF
+
+	test_cmp expect.out actual.out &&
+	test_cmp expect.err actual.err
+'
+
 test_done
