@@ -131,5 +131,8 @@ test_perf_on_all git describe --dirty
 test_perf_on_all 'echo >>new && git describe --dirty'
 test_perf_on_all git diff-files
 test_perf_on_all git diff-files $SPARSE_CONE/a
+test_perf_on_all 'echo >>a && git diff-index HEAD'
+test_perf_on_all git diff-index HEAD "**a"
+test_perf_on_all git diff-index --cached HEAD
 
 test_done
