@@ -1,10 +1,11 @@
-#include "cache.h"
+#include "builtin.h"
 #include "config.h"
 #include "diff.h"
 #include "diff-merges.h"
 #include "commit.h"
+#include "preload-index.h"
+#include "repository.h"
 #include "revision.h"
-#include "builtin.h"
 #include "setup.h"
 #include "submodule.h"
 

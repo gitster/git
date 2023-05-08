@@ -4,7 +4,7 @@
 #include "ll-merge.h"
 #include "blob.h"
 #include "merge-blobs.h"
-#include "object-store.h"
+#include "object-store-ll.h"
 
 static int fill_mmfile_blob(mmfile_t *f, struct blob *obj)
 {
