@@ -7,6 +7,7 @@
 #include "repository.h"
 #include "revision.h"
 #include "setup.h"
+#include "sparse-index.h"
 #include "submodule.h"
 
 static const char diff_cache_usage[] =
