@@ -14,7 +14,7 @@
  * "cale", "peedy", or "ins" instead of "ort"?)
  */
 
-#include "cache.h"
+#include "git-compat-util.h"
 #include "merge-ort.h"
 
 #include "alloc.h"
@@ -34,10 +34,13 @@
 #include "match-trees.h"
 #include "mem-pool.h"
 #include "object-name.h"
-#include "object-store.h"
+#include "object-store-ll.h"
 #include "oid-array.h"
+#include "path.h"
 #include "promisor-remote.h"
+#include "read-cache-ll.h"
 #include "revision.h"
+#include "sparse-index.h"
 #include "strmap.h"
 #include "submodule-config.h"
 #include "submodule.h"
