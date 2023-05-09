@@ -108,10 +108,10 @@ some output processing may assume ref names in UTF-8.
   before the current one.
 
 '[<branchname>]@\{upstream\}', e.g. 'master@\{upstream\}', '@\{u\}'::
-  A branch B may be set up to build on top of a branch X (configured with
-  `branch.<name>.merge`) at a remote R (configured with
-  `branch.<name>.remote`). B@{u} refers to the remote-tracking branch for
-  the branch X taken from remote R, typically found at `refs/remotes/R/X`.
+  A branch 'B' may be set up to build on top of a branch 'X' (configured with
+  `branch.<name>.merge`) at a remote 'R' (configured with
+  `branch.<name>.remote`). 'B@\{u}' refers to the remote-tracking branch for
+  the branch 'X' taken from remote 'R', typically found at `refs/remotes/R/X`.
 
 '[<branchname>]@\{push\}', e.g. 'master@\{push\}', '@\{push\}'::
   The suffix '@\{push}' reports the branch "where we would push to" if
@@ -140,7 +140,7 @@ from one location and push to another. In a non-triangular workflow,
 This suffix is also accepted when spelled in uppercase, and means the same
 thing no matter the case.
 
-'<rev>{caret}[<n>]', e.g. 'HEAD{caret}, v1.5.1{caret}0'::
+'<rev>{caret}[<n>]', e.g. 'HEAD{caret}', 'v1.5.1{caret}0'::
   A suffix '{caret}' to a revision parameter means the first parent of
   that commit object.  '{caret}<n>' means the <n>th parent (i.e.
   '<rev>{caret}'
@@ -148,7 +148,7 @@ thing no matter the case.
   '<rev>{caret}0' means the commit itself and is used when '<rev>' is the
   object name of a tag object that refers to a commit object.
 
-'<rev>{tilde}[<n>]', e.g. 'HEAD{tilde}, master{tilde}3'::
+'<rev>{tilde}[<n>]', e.g. 'HEAD{tilde}', 'master{tilde}3'::
   A suffix '{tilde}' to a revision parameter means the first parent of
   that commit object.
   A suffix '{tilde}<n>' to a revision parameter means the commit
@@ -289,8 +289,8 @@ The '..' (two-dot) Range Notation::
  The '{caret}r1 r2' set operation appears so often that there is a shorthand
  for it.  When you have two commits 'r1' and 'r2' (named according
  to the syntax explained in SPECIFYING REVISIONS above), you can ask
- for commits that are reachable from r2 excluding those that are reachable
- from r1 by '{caret}r1 r2' and it can be written as 'r1..r2'.
+ for commits that are reachable from 'r2' excluding those that are reachable
+ from 'r1' by '{caret}r1 r2' and it can be written as 'r1..r2'.
 
 The '\...' (three-dot) Symmetric Difference Notation::
  A similar notation 'r1\...r2' is called symmetric difference
@@ -299,7 +299,7 @@ The '\...' (three-dot) Symmetric Difference Notation::
  It is the set of commits that are reachable from either one of
  'r1' (left side) or 'r2' (right side) but not from both.
 
-In these two shorthand notations, you can omit one end and let it default to HEAD.
+In these two shorthand notations, you can omit one end and let it default to `HEAD`.
 For example, 'origin..' is a shorthand for 'origin..HEAD' and asks "What
 did I do since I forked from the origin branch?"  Similarly, '..origin'
 is a shorthand for 'HEAD..origin' and asks "What did the origin do since
@@ -351,22 +351,22 @@ Revision Range Summary
 ----------------------
 
 '<rev>'::
-	Include commits that are reachable from <rev> (i.e. <rev> and its
+	Include commits that are reachable from '<rev>' (i.e. '<rev>' and its
 	ancestors).
 
 '{caret}<rev>'::
-	Exclude commits that are reachable from <rev> (i.e. <rev> and its
+	Exclude commits that are reachable from '<rev>' (i.e. '<rev>' and its
 	ancestors).
 
 '<rev1>..<rev2>'::
-	Include commits that are reachable from <rev2> but exclude
-	those that are reachable from <rev1>.  When either <rev1> or
-	<rev2> is omitted, it defaults to `HEAD`.
+	Include commits that are reachable from '<rev2>' but exclude
+	those that are reachable from '<rev1>'.  When either '<rev1>' or
+	'<rev2>' is omitted, it defaults to `HEAD`.
 
 '<rev1>\...<rev2>'::
-	Include commits that are reachable from either <rev1> or
-	<rev2> but exclude those that are reachable from both.  When
-	either <rev1> or <rev2> is omitted, it defaults to `HEAD`.
+	Include commits that are reachable from either '<rev1>' or
+	'<rev2>' but exclude those that are reachable from both.  When
+	either '<rev1>' or '<rev2>' is omitted, it defaults to `HEAD`.
 
 '<rev>{caret}@', e.g. 'HEAD{caret}@'::
   A suffix '{caret}' followed by an at sign is the same as listing
@@ -378,7 +378,7 @@ Revision Range Summary
   as giving commit '<rev>' and all its parents prefixed with
   '{caret}' to exclude them (and their ancestors).
 
-'<rev>{caret}-<n>', e.g. 'HEAD{caret}-, HEAD{caret}-2'::
+'<rev>{caret}-<n>', e.g. 'HEAD{caret}-', 'HEAD{caret}-2'::
 	Equivalent to '<rev>{caret}<n>..<rev>', with '<n>' = 1 if not
 	given.
 
