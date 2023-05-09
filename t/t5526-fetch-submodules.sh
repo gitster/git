@@ -1180,4 +1180,23 @@ test_expect_success 'fetch --all with --recurse-submodules with multiple' '
 	test_line_count = 2 fetch-subs
 '
 
+test_expect_success "fetch --all with --no-recurse-submodules only fetches superproject" '
+	test_when_finished "rm -rf src_clone" &&
+
+	git clone --recurse-submodules src src_clone &&
+	(
+		cd src_clone &&
+		git remote add secondary ../src &&
+		git config submodule.recurse true &&
+		git config fetch.parallel 0 &&
+		git fetch --all --no-recurse-submodules 2>../actual
+	) &&
+
+	cat >expect <<-EOF &&
+	From ../src
+	 * [new branch]      master     -> secondary/master
+	EOF
+	test_cmp expect actual
+'
+
 test_done
