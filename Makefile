@@ -1142,6 +1142,7 @@ LIB_OBJS += sigchain.o
 LIB_OBJS += sparse-index.o
 LIB_OBJS += split-index.o
 LIB_OBJS += stable-qsort.o
+LIB_OBJS += statinfo.o
 LIB_OBJS += strbuf.o
 LIB_OBJS += streaming.o
 LIB_OBJS += string-list.o
@@ -1951,7 +1952,7 @@ endif
 	BASIC_CFLAGS += \
 		-DSHA1DC_NO_STANDARD_INCLUDES \
 		-DSHA1DC_INIT_SAFE_HASH_DEFAULT=0 \
-		-DSHA1DC_CUSTOM_INCLUDE_SHA1_C="\"cache.h\"" \
+		-DSHA1DC_CUSTOM_INCLUDE_SHA1_C="\"git-compat-util.h\"" \
 		-DSHA1DC_CUSTOM_INCLUDE_UBC_CHECK_C="\"git-compat-util.h\""
 endif
 endif
