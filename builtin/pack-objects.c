@@ -44,6 +44,7 @@
 #include "pack-mtimes.h"
 #include "parse-options.h"
 #include "wrapper.h"
+#include "run-command.h"
 
 /*
  * Objects we are going to pack are collected in the `to_pack` structure.
@@ -3543,11 +3544,85 @@ static void enumerate_cruft_objects(void)
 	stop_progress(&progress_state);
 }
 
+static int enumerate_extra_cruft_tips_1(struct rev_info *revs, const char *args)
+{
+	struct child_process cmd = CHILD_PROCESS_INIT;
+	struct strbuf buf = STRBUF_INIT;
+	FILE *out;
+	int ret = 0;
+
+	cmd.use_shell = 1;
+	cmd.out = -1;
+
+	strvec_push(&cmd.args, args);
+
+	if (start_command(&cmd))
+		return -1;
+
+	out = xfdopen(cmd.out, "r");
+	while (strbuf_getline(&buf, out) != EOF) {
+		struct object_id oid;
+		struct object *obj;
+		int type;
+		const char *rest;
+
+		if (parse_oid_hex(buf.buf, &oid, &rest) || *rest) {
+			ret = error(_("invalid extra cruft tip: '%s'"), buf.buf);
+			goto done;
+		}
+
+		type = oid_object_info(the_repository, &oid, NULL);
+		if (type < 0)
+			continue;
+
+		obj = lookup_object_by_type(the_repository, &oid, type);
+		if (!obj)
+			continue;
+
+		display_progress(progress_state, ++nr_seen);
+		add_pending_object(revs, obj, "");
+	}
+
+	ret = finish_command(&cmd);
+
+done:
+	if (out)
+		fclose(out);
+	strbuf_release(&buf);
+	child_process_clear(&cmd);
+
+	return ret;
+}
+
+static void add_extra_cruft_tips_to_traversal(struct rev_info *revs)
+{
+	const struct string_list *programs;
+	int ret = 0;
+	size_t i;
+
+	if (git_config_get_string_multi("pack.extracrufttips", &programs))
+		return;
+
+	if (progress)
+		progress_state = start_progress(_("Enumerating extra cruft tips"), 0);
+	nr_seen = 0;
+	for (i = 0; i < programs->nr; i++) {
+		ret = enumerate_extra_cruft_tips_1(revs,
+						   programs->items[i].string);
+		if (ret)
+			break;
+	}
+	stop_progress(&progress_state);
+
+	if (ret)
+		die(_("unable to enumerate additional cruft tips"));
+}
+
 static void enumerate_and_traverse_cruft_objects(struct string_list *fresh_packs)
 {
 	struct packed_git *p;
 	struct rev_info revs;
-	int ret;
+	int ret = 0;
 
 	repo_init_revisions(the_repository, &revs, NULL);
 
@@ -3560,11 +3635,15 @@ static void enumerate_and_traverse_cruft_objects(struct string_list *fresh_packs
 
 	revs.ignore_missing_links = 1;
 
-	if (progress)
-		progress_state = start_progress(_("Enumerating cruft objects"), 0);
-	ret = add_unseen_recent_objects_to_traversal(&revs, cruft_expiration,
-						     set_cruft_mtime, 1);
-	stop_progress(&progress_state);
+	if (cruft_expiration) {
+		if (progress)
+			progress_state = start_progress(_("Enumerating cruft objects"), 0);
+		ret = add_unseen_recent_objects_to_traversal(&revs, cruft_expiration,
+							     set_cruft_mtime, 1);
+		stop_progress(&progress_state);
+	}
+
+	add_extra_cruft_tips_to_traversal(&revs);
 
 	if (ret)
 		die(_("unable to add cruft objects"));
@@ -3639,8 +3718,19 @@ static void read_cruft_objects(void)
 
 	if (cruft_expiration)
 		enumerate_and_traverse_cruft_objects(&fresh_packs);
-	else
+	else {
+		/*
+		 * call both enumerate_cruft_objects() and
+		 * enumerate_and_traverse_cruft_objects(), since:
+		 *
+		 *   - the former is required to implement non-pruning GCs
+		 *   - the latter is a noop for "cruft_expiration == 0", but
+		 *     picks up any additional tips mentioned via
+		 *     `pack.extraCruftTips`.
+		 */
 		enumerate_cruft_objects();
+		enumerate_and_traverse_cruft_objects(&fresh_packs);
+	}
 
 	strbuf_release(&buf);
 	string_list_clear(&discard_packs, 0);
