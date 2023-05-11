@@ -148,8 +148,7 @@ the same local time zone.
 	`^refs/remotes/origin/(?!tags/wanted-tag|wanted-branch).*$`
 	can be used to allow only certain refs.
 +
-[verse]
-config key: svn-remote.<name>.ignore-refs
+ config key: svn-remote.<name>.ignore-refs
 +
 If the ignore-refs configuration key is set, and the command-line
 option is also given, both regular expressions will be used.
@@ -161,8 +160,7 @@ option is also given, both regular expressions will be used.
 	(including automatic fetches due to 'clone', 'dcommit',
 	'rebase', etc) on a given repository.
 +
-[verse]
-config key: svn-remote.<name>.ignore-paths
+ config key: svn-remote.<name>.ignore-paths
 +
 If the ignore-paths configuration key is set, and the command-line
 option is also given, both regular expressions will be used.
@@ -191,8 +189,7 @@ Skip "branches" and "tags" of first level directories;;
 	'rebase', etc) on a given repository. `--ignore-paths` takes
 	precedence over `--include-paths`.
 +
-[verse]
-config key: svn-remote.<name>.include-paths
+ config key: svn-remote.<name>.include-paths
 
 --log-window-size=<n>;;
 	Fetch <n> log entries per request when scanning Subversion history.
@@ -267,9 +264,8 @@ Use of 'dcommit' is preferred to 'set-tree' (below).
 	reused if a user is later given access to an alternate transport
 	method (e.g. `svn+ssh://` or `https://`) for commit.
 +
-[verse]
-config key: svn-remote.<name>.commiturl
-config key: svn.commiturl (overwrites all svn-remote.<name>.commiturl options)
+ config key: svn-remote.<name>.commiturl
+ config key: svn.commiturl (overwrites all svn-remote.<name>.commiturl options)
 +
 Note that the SVN URL of the commiturl config key includes the SVN branch.
 If you rather want to set the commit URL for an entire SVN repository use
@@ -286,8 +282,7 @@ discouraged.
 	branches, use a single space character between the branches
 	(`--mergeinfo="/branches/foo:1-10 /branches/bar:3,5-6,8"`)
 +
-[verse]
-config key: svn.pushmergeinfo
+ config key: svn.pushmergeinfo
 +
 This option will cause git-svn to attempt to automatically populate the
 svn:mergeinfo property in the SVN repository when possible. Currently, this can
@@ -608,8 +603,7 @@ removed by default if there are no files left in them.  Git
 cannot version empty directories.  Enabling this flag will make
 the commit to SVN act like Git.
 +
-[verse]
-config key: svn.rmdir
+ config key: svn.rmdir
 
 -e::
 --edit::
@@ -619,8 +613,7 @@ Edit the commit message before committing to SVN.  This is off by
 default for objects that are commits, and forced on when committing
 tree objects.
 +
-[verse]
-config key: svn.edit
+ config key: svn.edit
 
 -l<num>::
 --find-copies-harder::
@@ -629,9 +622,8 @@ config key: svn.edit
 They are both passed directly to 'git diff-tree'; see
 linkgit:git-diff-tree[1] for more information.
 +
-[verse]
-config key: svn.l
-config key: svn.findcopiesharder
+ config key: svn.l
+ config key: svn.findcopiesharder
 
 -A<filename>::
 --authors-file=<filename>::
@@ -648,8 +640,7 @@ will abort operation. The user will then have to add the
 appropriate entry.  Re-running the previous 'git svn' command
 after the authors-file is modified should continue operation.
 +
-[verse]
-config key: svn.authorsfile
+ config key: svn.authorsfile
 
 --authors-prog=<filename>::
 	If this option is specified, for each SVN committer name that
@@ -664,8 +655,7 @@ relative to the current directory for 'init' and 'clone' and relative
 to the root of the working tree for 'fetch'. If 'filename' is
 not found, it is searched like any other command in '$PATH'.
 +
-[verse]
-config key: svn.authorsProg
+ config key: svn.authorsProg
 
 -q::
 --quiet::
@@ -703,8 +693,7 @@ creating the branch or tag.
 	'dcommit' operations), look for the first `From:` line or `Signed-off-by` trailer
 	in the log message and use that as the author string.
 +
-[verse]
-config key: svn.useLogAuthor
+ config key: svn.useLogAuthor
 
 --add-author-from::
 	When committing to svn from Git (as part of 'set-tree' or 'dcommit'
@@ -713,8 +702,7 @@ config key: svn.useLogAuthor
 	Git commit's author string.  If you use this, then `--use-log-author`
 	will retrieve a valid author string for all commits.
 +
-[verse]
-config key: svn.addAuthorFrom
+ config key: svn.addAuthorFrom
 
 ADVANCED OPTIONS
 ----------------
@@ -748,8 +736,7 @@ ADVANCED OPTIONS
 	process. This feature is enabled by default, use
 	--no-follow-parent to disable it.
 +
-[verse]
-config key: svn.followparent
+ config key: svn.followparent
 
 CONFIG FILE-ONLY OPTIONS
 ------------------------
