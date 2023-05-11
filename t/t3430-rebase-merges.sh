@@ -595,4 +595,11 @@ test_expect_success '--rebase-merges with message matched with onto label' '
 	EOF
 '
 
+test_expect_success 'progress shows the correct total' '
+	git checkout -b progress H &&
+	git rebase --rebase-merges --force-rebase --verbose A 2> err &&
+	grep "^Rebasing.*14.$" err >progress &&
+	test_line_count = 14 progress
+'
+
 test_done

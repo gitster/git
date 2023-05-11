@@ -2689,7 +2689,7 @@ int todo_list_parse_insn_buffer(struct repository *r, char *buf,
 	char *p = buf, *next_p;
 	int i, res = 0, fixup_okay = file_exists(rebase_path_done());
 
-	todo_list->current = todo_list->nr = 0;
+	todo_list->current = todo_list->nr = todo_list->total_nr = 0;
 
 	for (i = 1; *p; i++, p = next_p) {
 		char *eol = strchrnul(p, '\n');
@@ -2708,7 +2708,8 @@ int todo_list_parse_insn_buffer(struct repository *r, char *buf,
 			item->arg_offset = p - buf;
 			item->arg_len = (int)(eol - p);
 			item->commit = NULL;
-		}
+		} else if (item->command == TODO_COMMENT)
+			todo_list->total_nr--;
 
 		if (fixup_okay)
 			; /* do nothing */
@@ -4293,7 +4294,7 @@ void todo_list_filter_update_refs(struct repository *r,
 		if (!is_null_oid(&rec->after))
 			continue;
 
-		for (j = 0; !found && j < todo_list->total_nr; j++) {
+		for (j = 0; !found && j < todo_list->nr; j++) {
 			struct todo_item *item = &todo_list->items[j];
 			const char *arg = todo_list->buf.buf + item->arg_offset;
 
@@ -4323,7 +4324,7 @@ void todo_list_filter_update_refs(struct repository *r,
 	 * For each todo_item, check if its ref is in the update_refs list.
 	 * If not, then add it as an un-updated ref.
 	 */
-	for (i = 0; i < todo_list->total_nr; i++) {
+	for (i = 0; i < todo_list->nr; i++) {
 		struct todo_item *item = &todo_list->items[i];
 		const char *arg = todo_list->buf.buf + item->arg_offset;
 		int j, found = 0;
@@ -6121,7 +6122,7 @@ int complete_action(struct repository *r, struct replay_opts *opts, unsigned fla
 	struct todo_list new_todo = TODO_LIST_INIT;
 	struct strbuf *buf = &todo_list->buf, buf2 = STRBUF_INIT;
 	struct object_id oid = onto->object.oid;
-	int res;
+	int new_total_nr, res;
 
 	repo_find_unique_abbrev_r(r, shortonto, &oid,
 				  DEFAULT_ABBREV);
@@ -6149,6 +6150,7 @@ int complete_action(struct repository *r, struct replay_opts *opts, unsigned fla
 		return error(_("nothing to do"));
 	}
 
+	new_total_nr = todo_list->total_nr - count_commands(todo_list);
 	res = edit_todo_list(r, todo_list, &new_todo, shortrevisions,
 			     shortonto, flags);
 	if (res == -1)
@@ -6171,11 +6173,13 @@ int complete_action(struct repository *r, struct replay_opts *opts, unsigned fla
 		return -1;
 	}
 
+	new_total_nr += count_commands(&new_todo);
+	new_todo.total_nr = new_total_nr;
+
 	/* Expand the commit IDs */
 	todo_list_to_strbuf(r, &new_todo, &buf2, -1, 0);
 	strbuf_swap(&new_todo.buf, &buf2);
 	strbuf_release(&buf2);
-	new_todo.total_nr -= new_todo.nr;
 	if (todo_list_parse_insn_buffer(r, new_todo.buf.buf, &new_todo) < 0)
 		BUG("invalid todo list after expanding IDs:\n%s",
 		    new_todo.buf.buf);
