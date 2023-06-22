@@ -4,6 +4,7 @@
  * Copyright (C) Eric Biederman, 2005
  */
 #include "builtin.h"
+#include "attr.h"
 #include "config.h"
 #include "editor.h"
 #include "ident.h"
@@ -36,17 +37,84 @@ static const char *default_branch(int flag)
 	return git_default_branch_name(1);
 }
 
+static const char *shell_path(int flag)
+{
+	return SHELL_PATH;
+}
+
+static const char *git_attr_val_system(int flag)
+{
+	if (git_attr_system()) {
+		char *file = xstrdup(git_etc_gitattributes());
+		normalize_path_copy(file, file);
+		return file;
+	}
+	return NULL;
+}
+
+static const char *git_attr_val_global(int flag)
+{
+	char *file = xstrdup(get_home_gitattributes());
+	if (file) {
+		normalize_path_copy(file, file);
+		return file;
+	}
+	return NULL;
+}
+
+static const char *git_config_val_system(int flag)
+{
+	if (git_config_system()) {
+		char *file = git_system_config();
+		normalize_path_copy(file, file);
+		return file;
+	}
+	return NULL;
+}
+
+static const char *git_config_val_global(int flag)
+{
+	struct strbuf buf = STRBUF_INIT;
+	char *user, *xdg;
+	size_t unused;
+
+	git_global_config(&user, &xdg);
+	if (xdg && *xdg) {
+		normalize_path_copy(xdg, xdg);
+		strbuf_addf(&buf, "%s\n", xdg);
+	}
+	if (user && *user) {
+		normalize_path_copy(user, user);
+		strbuf_addf(&buf, "%s\n", user);
+	}
+	free(xdg);
+	free(user);
+	strbuf_trim_trailing_newline(&buf);
+	if (buf.len == 0) {
+		strbuf_release(&buf);
+		return NULL;
+	}
+	return strbuf_detach(&buf, &unused);
+}
+
 struct git_var {
 	const char *name;
 	const char *(*read)(int);
+	int multivalued;
+	int free;
 };
 static struct git_var git_vars[] = {
-	{ "GIT_COMMITTER_IDENT", git_committer_info },
-	{ "GIT_AUTHOR_IDENT",   git_author_info },
-	{ "GIT_EDITOR", editor },
-	{ "GIT_SEQUENCE_EDITOR", sequence_editor },
-	{ "GIT_PAGER", pager },
-	{ "GIT_DEFAULT_BRANCH", default_branch },
+	{ "GIT_COMMITTER_IDENT", git_committer_info, 0, 0 },
+	{ "GIT_AUTHOR_IDENT",   git_author_info, 0, 0 },
+	{ "GIT_EDITOR", editor, 0, 0 },
+	{ "GIT_SEQUENCE_EDITOR", sequence_editor, 0, 0 },
+	{ "GIT_PAGER", pager, 0, 0 },
+	{ "GIT_DEFAULT_BRANCH", default_branch, 0, 9 },
+	{ "GIT_SHELL_PATH", shell_path, 0, 0 },
+	{ "GIT_ATTR_SYSTEM", git_attr_val_system, 0, 1 },
+	{ "GIT_ATTR_GLOBAL", git_attr_val_global, 0, 1 },
+	{ "GIT_CONFIG_SYSTEM", git_config_val_system, 0, 1 },
+	{ "GIT_CONFIG_GLOBAL", git_config_val_global, 1, 1 },
 	{ "", NULL },
 };
 
@@ -56,8 +124,21 @@ static void list_vars(void)
 	const char *val;
 
 	for (ptr = git_vars; ptr->read; ptr++)
-		if ((val = ptr->read(0)))
-			printf("%s=%s\n", ptr->name, val);
+		if ((val = ptr->read(0))) {
+			if (ptr->multivalued && *val) {
+				struct string_list list = STRING_LIST_INIT_DUP;
+				int i;
+
+				string_list_split(&list, val, '\n', -1);
+				for (i = 0; i < list.nr; i++)
+					printf("%s=%s\n", ptr->name, list.items[i].string);
+				string_list_clear(&list, 0);
+			} else {
+				printf("%s=%s\n", ptr->name, val);
+			}
+			if (ptr->free)
+				free((void *)val);
+		}
 }
 
 static const struct git_var *get_git_var(const char *var)
@@ -104,6 +185,8 @@ int cmd_var(int argc, const char **argv, const char *prefix UNUSED)
 		return 1;
 
 	printf("%s\n", val);
+	if (git_var->free)
+		free((void *)val);
 
 	return 0;
 }
