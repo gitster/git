@@ -159,6 +159,26 @@ test_expect_success MINGW 'GIT_SHELL_PATH points to a suitable shell' '
 	grep "sh\$" shell
 '
 
+test_expect_success 'GIT_ATTR_SYSTEM points to the correct location' '
+	test_must_fail env GIT_ATTR_NOSYSTEM=1 git var GIT_ATTR_SYSTEM &&
+	(
+		sane_unset GIT_ATTR_NOSYSTEM &&
+		git var GIT_ATTR_SYSTEM >path &&
+		test "$(cat path)" != ""
+	)
+'
+
+test_expect_success 'GIT_ATTR_GLOBAL points to the correct location' '
+	TRASHDIR="$(test-tool path-utils normalize_path_copy "$(pwd)")" &&
+	XDG_CONFIG_HOME="$TRASHDIR/.config" git var GIT_ATTR_GLOBAL >path &&
+	test "$(cat path)" = "$TRASHDIR/.config/git/attributes" &&
+	(
+		sane_unset XDG_CONFIG_HOME &&
+		HOME="$TRASHDIR" git var GIT_ATTR_GLOBAL >path &&
+		test "$(cat path)" = "$TRASHDIR/.config/git/attributes"
+	)
+'
+
 # For git var -l, we check only a representative variable;
 # testing the whole output would make our test too brittle with
 # respect to unrelated changes in the test suite's environment.

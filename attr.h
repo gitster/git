@@ -227,4 +227,8 @@ void git_attr_set_direction(enum git_attr_direction new_direction);
 
 void attr_start(void);
 
+const char *git_etc_gitattributes(void);
+const char *get_home_gitattributes(void);
+int git_attr_system(void);
+
 #endif /* ATTR_H */

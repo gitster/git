@@ -870,7 +870,7 @@ static struct attr_stack *read_attr(struct index_state *istate,
 	return res;
 }
 
-static const char *git_etc_gitattributes(void)
+const char *git_etc_gitattributes(void)
 {
 	static const char *system_wide;
 	if (!system_wide)
@@ -878,7 +878,7 @@ static const char *git_etc_gitattributes(void)
 	return system_wide;
 }
 
-static const char *get_home_gitattributes(void)
+const char *get_home_gitattributes(void)
 {
 	if (!git_attributes_file)
 		git_attributes_file = xdg_config_home("attributes");
@@ -886,7 +886,7 @@ static const char *get_home_gitattributes(void)
 	return git_attributes_file;
 }
 
-static int git_attr_system(void)
+int git_attr_system(void)
 {
 	return !git_env_bool("GIT_ATTR_NOSYSTEM", 0);
 }
