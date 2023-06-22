@@ -10,6 +10,8 @@
 #include "ident.h"
 #include "pager.h"
 #include "refs.h"
+#include "path.h"
+#include "strbuf.h"
 
 static const char var_usage[] = "git var (-l | <variable>)";
 
