@@ -417,9 +417,9 @@ test_wt_add_orphan_hint () {
 		grep "hint: If you meant to create a worktree containing a new orphan branch" actual &&
 		if [ $use_branch -eq 1 ]
 		then
-			grep -E "^hint:[ ]+git worktree add --orphan -b [^ ]+ [^ ]+$" actual
+			grep -E "^hint: +git worktree add --orphan -b [^ ]+ [^ ]+$" actual
 		else
-			grep -E "^hint:[ ]+git worktree add --orphan [^ ]+$" actual
+			grep -E "^hint: +git worktree add --orphan [^ ]+$" actual
 		fi
 
 	'
@@ -709,8 +709,8 @@ test_dwim_orphan () {
 	local info_text="No possible source branch, inferring '--orphan'" &&
 	local fetch_error_text="fatal: No local or remote refs exist despite at least one remote" &&
 	local orphan_hint="hint: If you meant to create a worktree containing a new orphan branch" &&
-	local invalid_ref_regex="^fatal: invalid reference: .*" &&
-	local bad_combo_regex="^fatal: '[a-z-]\+' and '[a-z-]\+' cannot be used together" &&
+	local invalid_ref_regex="^fatal: invalid reference: " &&
+	local bad_combo_regex="^fatal: '[-a-z]*' and '[-a-z-]*' cannot be used together" &&
 
 	local git_ns="repo" &&
 	local dashc_args="-C $git_ns" &&
