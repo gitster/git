@@ -10,8 +10,7 @@ usage: some-command [options] <args>...
 
 An option group Header
     -C[...]               option C with an optional argument
-    -d, --[no-]data[=...]
-                          short and long option with an optional argument
+    -d, --[no-]data[=...] short and long option with an optional argument
 
 Argument hints
     -B <arg>              short option required argument
@@ -27,11 +26,9 @@ Argument hints
     --[no-]pair <key=value>
                           with an equals sign in the hint
     --[no-]aswitch        help te=t contains? fl*g characters!`
-    --[no-]bswitch <hint>
-                          hint has trailing tab character
+    --[no-]bswitch <hint> hint has trailing tab character
     --[no-]cswitch        switch has trailing tab character
-    --[no-]short-hint <a>
-                          with a one symbol hint
+    --[no-]short-hint <a> with a one symbol hint
 
 Extras
     --[no-]extra1         line above used to cause a segfault but no longer does
