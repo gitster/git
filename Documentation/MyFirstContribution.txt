@@ -1256,6 +1256,37 @@ index 88f126184c..38da593a60 100644
 [[now-what]]
 == My Patch Got Emailed - Now What?
 
+After you sent out your first patch, you may find mistakes in it, or
+a different and better way to achieve the goal of the patch.  But
+please resist the temptation to send a new version immediately.
+
+ - If the mistakes you found are minor, send a reply to your patch as
+   if you were a reviewer and mention that you will fix them in an
+   updated version.
+
+ - On the other hand, if you think you want to change the course so
+   drastically that reviews on the initial patch would become
+   useless, send a reply to your patch to say so immediately to
+   avoid wasting others' time (e.g. "I am working on a better
+   approach, so please ignore this patch, and wait for the updated
+   version.")
+
+Then give reviewers enough time to process your initial patch before
+sending an updated version (unless you retracted the initial patch,
+that is).
+
+Now, the above is a good practice if you sent your initial patch
+prematurely without polish.  But a better approach of course is to
+avoid sending your patch prematurely in the first place.
+
+Keep in mind that people in the development community do not have to
+see your patch immediately after you wrote it.  Instead of seeing
+the initial version right now, that will be followed by several
+updated "oops, I like this version better than the previous one"
+versions over 2 days, reviewers would more appreciate if a single
+polished version came 2 days late and that version with fewer
+mistakes were the only one they need to review.
+
 [[reviewing]]
 === Responding to Reviews
 
