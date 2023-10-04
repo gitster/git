@@ -32,16 +32,21 @@ int trailer_set_if_missing(enum trailer_if_missing *item, const char *value);
 struct trailer_info {
 	/*
 	 * True if there is a blank line before the location pointed to by
-	 * trailer_start.
+	 * trailer_block_start.
 	 */
 	int blank_line_before_trailer;
 
 	/*
-	 * Pointers to the start and end of the trailer block found. If there
-	 * is no trailer block found, these 2 pointers point to the end of the
-	 * input string.
+	 * Offsets to the trailer block start and end positions in the input
+	 * string. If no trailer block is found, these are set to 0.
 	 */
-	const char *trailer_start, *trailer_end;
+	size_t trailer_block_start, trailer_block_end;
+
+	/*
+	 * Offset to the end of the log message in the input (may not be the
+	 * same as the end of the input).
+	 */
+	size_t end_of_log_message;
 
 	/*
 	 * Array of trailers found.
