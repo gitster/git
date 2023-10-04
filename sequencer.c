@@ -1063,6 +1063,7 @@ static int run_git_commit(const char *defmsg,
 			  unsigned int flags)
 {
 	struct child_process cmd = CHILD_PROCESS_INIT;
+	int res;
 
 	if ((flags & CLEANUP_MSG) && (flags & VERBATIM_MSG))
 		BUG("CLEANUP_MSG and VERBATIM_MSG are mutually exclusive");
@@ -1120,10 +1121,16 @@ static int run_git_commit(const char *defmsg,
 	if (!(flags & EDIT_MSG))
 		strvec_push(&cmd.args, "--allow-empty-message");
 
+	sigchain_push(SIGINT, SIG_IGN);
+	sigchain_push(SIGQUIT, SIG_IGN);
 	if (is_rebase_i(opts) && !(flags & EDIT_MSG))
-		return run_command_silent_on_success(&cmd);
+		res = run_command_silent_on_success(&cmd);
 	else
-		return run_command(&cmd);
+		res = run_command(&cmd);
+	sigchain_pop(SIGINT);
+	sigchain_pop(SIGQUIT);
+
+	return res;
 }
 
 static int rest_is_empty(const struct strbuf *sb, int start)
@@ -3654,10 +3661,14 @@ static int do_exec(struct repository *r, const char *command_line)
 	struct child_process cmd = CHILD_PROCESS_INIT;
 	int dirty, status;
 
+	sigchain_push(SIGINT, SIG_IGN);
+	sigchain_push(SIGQUIT, SIG_IGN);
 	fprintf(stderr, _("Executing: %s\n"), command_line);
 	cmd.use_shell = 1;
 	strvec_push(&cmd.args, command_line);
 	status = run_command(&cmd);
+	sigchain_pop(SIGINT);
+	sigchain_pop(SIGQUIT);
 
 	/* force re-reading of the cache */
 	discard_index(r->index);
@@ -4137,7 +4148,11 @@ static int do_merge(struct repository *r,
 				NULL, 0);
 		rollback_lock_file(&lock);
 
+		sigchain_push(SIGINT, SIG_IGN);
+		sigchain_push(SIGQUIT, SIG_IGN);
 		ret = run_command(&cmd);
+		sigchain_pop(SIGINT);
+		sigchain_pop(SIGQUIT);
 
 		/* force re-reading of the cache */
 		if (!ret) {
