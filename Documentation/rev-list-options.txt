@@ -231,6 +231,15 @@ explicitly.
 	Upon seeing an invalid object name in the input, pretend as if
 	the bad input was not given.
 
+--ignore-missing-links::
+	During traversal, if an object that is referenced does not
+	exist, instead of dying of a repository corruption, pretend as
+	if the reference itself does not exist. Running the command
+	with the `--boundary` option makes these missing commits,
+	together with the commits on the edge of revision ranges
+	(i.e. true boundary objects), appear on the output, prefixed
+	with '-'.
+
 ifndef::git-rev-list[]
 --bisect::
 	Pretend as if the bad bisection ref `refs/bisect/bad`
