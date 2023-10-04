@@ -1,0 +1,12 @@
+attr.tree:
+	A <tree-ish> to read gitattributes from instead of the worktree. See
+	linkgit:gitattributes[5]. This is equivalent to setting the
+	`GIT_ATTR_SOURCE` environment variable, or passing in --attr-source to
+	the Git command.
+
+attr.allowInvalidSource::
+	If `attr.tree` cannot resolve to a valid tree object, ignore
+	`attr.tree` instead of erroring out, and fall back to looking for
+	attributes in the default locations. Useful when passing `HEAD` into
+	`attr-source` since it allows `HEAD` to point to an unborn branch in
+	cases like an empty repository.

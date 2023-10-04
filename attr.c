@@ -1202,14 +1202,31 @@ void set_git_attr_source(const char *tree_object_name)
 
 static void compute_default_attr_source(struct object_id *attr_source)
 {
+	int attr_source_from_config = 0;
+
 	if (!default_attr_source_tree_object_name)
 		default_attr_source_tree_object_name = getenv(GIT_ATTR_SOURCE_ENVIRONMENT);
+
+	if (!default_attr_source_tree_object_name) {
+		char *attr_tree;
+
+		if (!git_config_get_string("attr.tree", &attr_tree)) {
+			attr_source_from_config = 1;
+			default_attr_source_tree_object_name = attr_tree;
+		}
+	}
 
 	if (!default_attr_source_tree_object_name || !is_null_oid(attr_source))
 		return;
 
-	if (repo_get_oid_treeish(the_repository, default_attr_source_tree_object_name, attr_source))
-		die(_("bad --attr-source or GIT_ATTR_SOURCE"));
+	if (repo_get_oid_treeish(the_repository, default_attr_source_tree_object_name, attr_source)) {
+		int allow_invalid_attr_source = 0;
+
+		git_config_get_bool("attr.allowinvalidsource", &allow_invalid_attr_source);
+
+		if (!(allow_invalid_attr_source && attr_source_from_config))
+			die(_("bad --attr-source or GIT_ATTR_SOURCE"));
+	}
 }
 
 static struct object_id *default_attr_source(void)

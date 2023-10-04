@@ -40,6 +40,10 @@ attr_check_source () {
 	test_cmp expect actual &&
 	test_must_be_empty err
 
+	git $git_opts -c "attr.tree=$source" check-attr test -- "$path" >actual 2>err &&
+	test_cmp expect actual &&
+	test_must_be_empty err
+
 	GIT_ATTR_SOURCE="$source" git $git_opts check-attr test -- "$path" >actual 2>err &&
 	test_cmp expect actual &&
 	test_must_be_empty err
@@ -340,6 +344,51 @@ test_expect_success 'bare repository: check that .gitattribute is ignored' '
 		attr_check a/i unspecified &&
 		attr_check subdir/a/i unspecified
 	)
+'
+
+bad_attr_source_err="fatal: bad --attr-source or GIT_ATTR_SOURCE"
+
+test_expect_success 'attr.allowInvalidSource when HEAD is unborn' '
+	test_when_finished rm -rf empty &&
+	echo $bad_attr_source_err >expect_err &&
+	echo "f/path: test: unspecified" >expect &&
+	git init empty &&
+	test_must_fail git -C empty --attr-source=HEAD check-attr test -- f/path 2>err &&
+	test_cmp expect_err err &&
+	git -C empty -c attr.tree=HEAD -c attr.allowInvalidSource=true check-attr test -- f/path >actual 2>err &&
+	test_must_be_empty err &&
+	test_cmp expect actual
+'
+
+test_expect_success 'attr.allowInvalidSource when --attr-source points to non-existing ref' '
+	test_when_finished rm -rf empty &&
+	echo $bad_attr_source_err >expect_err &&
+	echo "f/path: test: unspecified" >expect &&
+	git init empty &&
+	test_must_fail git -C empty --attr-source=refs/does/not/exist check-attr test -- f/path 2>err &&
+	test_cmp expect_err err &&
+	git -C empty -c attr.tree=refs/does/not/exist -c attr.allowInvalidSource=true check-attr test -- f/path >actual 2>err &&
+	test_must_be_empty err &&
+	test_cmp expect actual
+'
+
+test_expect_success 'bad attr source defaults to reading .gitattributes file' '
+	test_when_finished rm -rf empty &&
+	git init empty &&
+	echo "f/path test=val" >empty/.gitattributes &&
+	echo "f/path: test: val" >expect &&
+	git -C empty -c attr.tree=HEAD -c attr.allowInvalidSource=true check-attr test -- f/path >actual 2>err &&
+	test_must_be_empty err &&
+	test_cmp expect actual
+'
+
+test_expect_success 'attr.allowInvalidSource has no effect on --attr-source' '
+	test_when_finished rm -rf empty &&
+	echo $bad_attr_source_err >expect_err &&
+	echo "f/path: test: unspecified" >expect &&
+	git init empty &&
+	test_must_fail git -C empty -c attr.allowInvalidSource=true --attr-source=HEAD check-attr test -- f/path 2>err &&
+	test_cmp expect_err err
 '
 
 test_expect_success 'bare repository: with --source' '
