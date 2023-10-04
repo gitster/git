@@ -2270,13 +2270,14 @@ enum resume_type {
 
 struct resume_mode {
 	enum resume_type mode;
+	int mode_int;
 	enum show_patch_type sub_mode;
 };
 
 static int parse_opt_show_current_patch(const struct option *opt, const char *arg, int unset)
 {
 	int *opt_value = opt->value;
-	struct resume_mode *resume = container_of(opt_value, struct resume_mode, mode);
+	struct resume_mode *resume = container_of(opt_value, struct resume_mode, mode_int);
 
 	/*
 	 * Please update $__git_showcurrentpatch in git-completion.bash
@@ -2300,13 +2301,13 @@ static int parse_opt_show_current_patch(const struct option *opt, const char *ar
 				     "--show-current-patch", arg);
 	}
 
-	if (resume->mode == RESUME_SHOW_PATCH && new_value != resume->sub_mode)
+	if (resume->mode_int == RESUME_SHOW_PATCH && new_value != resume->sub_mode)
 		return error(_("options '%s=%s' and '%s=%s' "
 					   "cannot be used together"),
 			     "--show-current-patch", arg,
 			     "--show-current-patch", valid_modes[resume->sub_mode]);
 
-	resume->mode = RESUME_SHOW_PATCH;
+	resume->mode_int = RESUME_SHOW_PATCH;
 	resume->sub_mode = new_value;
 	return 0;
 }
@@ -2317,7 +2318,7 @@ int cmd_am(int argc, const char **argv, const char *prefix)
 	int binary = -1;
 	int keep_cr = -1;
 	int patch_format = PATCH_FORMAT_UNKNOWN;
-	struct resume_mode resume = { .mode = RESUME_FALSE };
+	struct resume_mode resume = { .mode_int = RESUME_FALSE };
 	int in_progress;
 	int ret = 0;
 
@@ -2388,27 +2389,27 @@ int cmd_am(int argc, const char **argv, const char *prefix)
 			PARSE_OPT_NOARG),
 		OPT_STRING(0, "resolvemsg", &state.resolvemsg, NULL,
 			N_("override error message when patch failure occurs")),
-		OPT_CMDMODE(0, "continue", &resume.mode,
+		OPT_CMDMODE(0, "continue", &resume.mode_int,
 			N_("continue applying patches after resolving a conflict"),
 			RESUME_RESOLVED),
-		OPT_CMDMODE('r', "resolved", &resume.mode,
+		OPT_CMDMODE('r', "resolved", &resume.mode_int,
 			N_("synonyms for --continue"),
 			RESUME_RESOLVED),
-		OPT_CMDMODE(0, "skip", &resume.mode,
+		OPT_CMDMODE(0, "skip", &resume.mode_int,
 			N_("skip the current patch"),
 			RESUME_SKIP),
-		OPT_CMDMODE(0, "abort", &resume.mode,
+		OPT_CMDMODE(0, "abort", &resume.mode_int,
 			N_("restore the original branch and abort the patching operation"),
 			RESUME_ABORT),
-		OPT_CMDMODE(0, "quit", &resume.mode,
+		OPT_CMDMODE(0, "quit", &resume.mode_int,
 			N_("abort the patching operation but keep HEAD where it is"),
 			RESUME_QUIT),
-		{ OPTION_CALLBACK, 0, "show-current-patch", &resume.mode,
+		{ OPTION_CALLBACK, 0, "show-current-patch", &resume.mode_int,
 		  "(diff|raw)",
 		  N_("show the patch being applied"),
 		  PARSE_OPT_CMDMODE | PARSE_OPT_OPTARG | PARSE_OPT_NONEG | PARSE_OPT_LITERAL_ARGHELP,
 		  parse_opt_show_current_patch, RESUME_SHOW_PATCH },
-		OPT_CMDMODE(0, "allow-empty", &resume.mode,
+		OPT_CMDMODE(0, "allow-empty", &resume.mode_int,
 			N_("record the empty patch as an empty commit"),
 			RESUME_ALLOW_EMPTY),
 		OPT_BOOL(0, "committer-date-is-author-date",
@@ -2440,6 +2441,7 @@ int cmd_am(int argc, const char **argv, const char *prefix)
 		am_load(&state);
 
 	argc = parse_options(argc, argv, prefix, options, usage, 0);
+	resume.mode = resume.mode_int;
 
 	if (binary >= 0)
 		fprintf_ln(stderr, _("The -b/--binary option has been a no-op for long time, and\n"

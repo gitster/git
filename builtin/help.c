@@ -51,6 +51,7 @@ static enum help_action {
 	HELP_ACTION_CONFIG_FOR_COMPLETION,
 	HELP_ACTION_CONFIG_SECTIONS_FOR_COMPLETION,
 } cmd_mode;
+static int cmd_mode_int;
 
 static const char *html_path;
 static int verbose = 1;
@@ -59,7 +60,7 @@ static int exclude_guides;
 static int show_external_commands = -1;
 static int show_aliases = -1;
 static struct option builtin_help_options[] = {
-	OPT_CMDMODE('a', "all", &cmd_mode, N_("print all available commands"),
+	OPT_CMDMODE('a', "all", &cmd_mode_int, N_("print all available commands"),
 		    HELP_ACTION_ALL),
 	OPT_BOOL(0, "external-commands", &show_external_commands,
 		 N_("show external commands in --all")),
@@ -72,19 +73,19 @@ static struct option builtin_help_options[] = {
 			HELP_FORMAT_INFO),
 	OPT__VERBOSE(&verbose, N_("print command description")),
 
-	OPT_CMDMODE('g', "guides", &cmd_mode, N_("print list of useful guides"),
+	OPT_CMDMODE('g', "guides", &cmd_mode_int, N_("print list of useful guides"),
 		    HELP_ACTION_GUIDES),
-	OPT_CMDMODE(0, "user-interfaces", &cmd_mode,
+	OPT_CMDMODE(0, "user-interfaces", &cmd_mode_int,
 		    N_("print list of user-facing repository, command and file interfaces"),
 		    HELP_ACTION_USER_INTERFACES),
-	OPT_CMDMODE(0, "developer-interfaces", &cmd_mode,
+	OPT_CMDMODE(0, "developer-interfaces", &cmd_mode_int,
 		    N_("print list of file formats, protocols and other developer interfaces"),
 		    HELP_ACTION_DEVELOPER_INTERFACES),
-	OPT_CMDMODE('c', "config", &cmd_mode, N_("print all configuration variable names"),
+	OPT_CMDMODE('c', "config", &cmd_mode_int, N_("print all configuration variable names"),
 		    HELP_ACTION_CONFIG),
-	OPT_CMDMODE_F(0, "config-for-completion", &cmd_mode, "",
+	OPT_CMDMODE_F(0, "config-for-completion", &cmd_mode_int, "",
 		    HELP_ACTION_CONFIG_FOR_COMPLETION, PARSE_OPT_HIDDEN),
-	OPT_CMDMODE_F(0, "config-sections-for-completion", &cmd_mode, "",
+	OPT_CMDMODE_F(0, "config-sections-for-completion", &cmd_mode_int, "",
 		    HELP_ACTION_CONFIG_SECTIONS_FOR_COMPLETION, PARSE_OPT_HIDDEN),
 
 	OPT_END(),
@@ -640,6 +641,7 @@ int cmd_help(int argc, const char **argv, const char *prefix)
 	argc = parse_options(argc, argv, prefix, builtin_help_options,
 			builtin_help_usage, 0);
 	parsed_help_format = help_format;
+	cmd_mode = cmd_mode_int;
 
 	if (cmd_mode != HELP_ACTION_ALL &&
 	    (show_external_commands >= 0 ||

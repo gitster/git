@@ -83,10 +83,11 @@ static enum parse_opt_result opt_command_mode_error(
 	 * already, and report that this is not compatible with it.
 	 */
 	for (that = all_opts; that->type != OPTION_END; that++) {
+		int *value_int = opt->value_int ? opt->value_int : opt->value;
 		if (that == opt ||
 		    !(that->flags & PARSE_OPT_CMDMODE) ||
 		    that->value != opt->value ||
-		    that->defval != *(int *)opt->value)
+		    that->defval != *value_int)
 			continue;
 
 		if (that->long_name)
@@ -110,6 +111,7 @@ static enum parse_opt_result get_value(struct parse_opt_ctx_t *p,
 	const char *s, *arg;
 	const int unset = flags & OPT_UNSET;
 	int err;
+	int *value_int = opt->value_int ? opt->value_int : opt->value;
 
 	if (unset && p->opt)
 		return error(_("%s takes no value"), optname(opt, flags));
@@ -123,7 +125,7 @@ static enum parse_opt_result get_value(struct parse_opt_ctx_t *p,
 	 * is not a grave error, so let it pass.
 	 */
 	if ((opt->flags & PARSE_OPT_CMDMODE) &&
-	    *(int *)opt->value && *(int *)opt->value != opt->defval)
+	    *value_int && *value_int != opt->defval)
 		return opt_command_mode_error(opt, all_opts, flags);
 
 	switch (opt->type) {
@@ -132,33 +134,33 @@ static enum parse_opt_result get_value(struct parse_opt_ctx_t *p,
 
 	case OPTION_BIT:
 		if (unset)
-			*(int *)opt->value &= ~opt->defval;
+			*value_int &= ~opt->defval;
 		else
-			*(int *)opt->value |= opt->defval;
+			*value_int |= opt->defval;
 		return 0;
 
 	case OPTION_NEGBIT:
 		if (unset)
-			*(int *)opt->value |= opt->defval;
+			*value_int |= opt->defval;
 		else
-			*(int *)opt->value &= ~opt->defval;
+			*value_int &= ~opt->defval;
 		return 0;
 
 	case OPTION_BITOP:
 		if (unset)
 			BUG("BITOP can't have unset form");
-		*(int *)opt->value &= ~opt->extra;
-		*(int *)opt->value |= opt->defval;
+		*value_int &= ~opt->extra;
+		*value_int |= opt->defval;
 		return 0;
 
 	case OPTION_COUNTUP:
-		if (*(int *)opt->value < 0)
-			*(int *)opt->value = 0;
-		*(int *)opt->value = unset ? 0 : *(int *)opt->value + 1;
+		if (*value_int < 0)
+			*value_int = 0;
+		*value_int = unset ? 0 : *value_int + 1;
 		return 0;
 
 	case OPTION_SET_INT:
-		*(int *)opt->value = unset ? 0 : opt->defval;
+		*value_int = unset ? 0 : opt->defval;
 		return 0;
 
 	case OPTION_STRING:
@@ -207,11 +209,11 @@ static enum parse_opt_result get_value(struct parse_opt_ctx_t *p,
 	}
 	case OPTION_INTEGER:
 		if (unset) {
-			*(int *)opt->value = 0;
+			*value_int = 0;
 			return 0;
 		}
 		if (opt->flags & PARSE_OPT_OPTARG && !p->opt) {
-			*(int *)opt->value = opt->defval;
+			*value_int = opt->defval;
 			return 0;
 		}
 		if (get_arg(p, opt, flags, &arg))
@@ -219,7 +221,7 @@ static enum parse_opt_result get_value(struct parse_opt_ctx_t *p,
 		if (!*arg)
 			return error(_("%s expects a numerical value"),
 				     optname(opt, flags));
-		*(int *)opt->value = strtol(arg, (char **)&s, 10);
+		*value_int = strtol(arg, (char **)&s, 10);
 		if (*s)
 			return error(_("%s expects a numerical value"),
 				     optname(opt, flags));
@@ -484,6 +486,8 @@ static void parse_options_check(const struct option *opts)
 		if (opts->type == OPTION_SET_INT && !opts->defval &&
 		    opts->long_name && !(opts->flags & PARSE_OPT_NONEG))
 			optbug(opts, "OPTION_SET_INT 0 should not be negatable");
+		if (opts->value && opts->value_int)
+			optbug(opts, "only a single value type supported");
 		switch (opts->type) {
 		case OPTION_COUNTUP:
 		case OPTION_BIT:

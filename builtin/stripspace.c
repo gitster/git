@@ -33,13 +33,14 @@ int cmd_stripspace(int argc, const char **argv, const char *prefix)
 {
 	struct strbuf buf = STRBUF_INIT;
 	enum stripspace_mode mode = STRIP_DEFAULT;
+	int mode_int = mode;
 	int nongit;
 
 	const struct option options[] = {
-		OPT_CMDMODE('s', "strip-comments", &mode,
+		OPT_CMDMODE('s', "strip-comments", &mode_int,
 			    N_("skip and remove all lines starting with comment character"),
 			    STRIP_COMMENTS),
-		OPT_CMDMODE('c', "comment-lines", &mode,
+		OPT_CMDMODE('c', "comment-lines", &mode_int,
 			    N_("prepend comment character and space to each line"),
 			    COMMENT_LINES),
 		OPT_END()
@@ -49,6 +50,7 @@ int cmd_stripspace(int argc, const char **argv, const char *prefix)
 	if (argc)
 		usage_with_options(stripspace_usage, options);
 
+	mode = mode_int;
 	if (mode == STRIP_COMMENTS || mode == COMMENT_LINES) {
 		setup_git_directory_gently(&nongit);
 		git_config(git_default_config, NULL);

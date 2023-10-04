@@ -1061,6 +1061,7 @@ static int check_exec_cmd(const char *cmd)
 int cmd_rebase(int argc, const char **argv, const char *prefix)
 {
 	struct rebase_options options = REBASE_OPTIONS_INIT;
+	int action;
 	const char *branch_name;
 	int ret, flags, total_argc, in_progress = 0;
 	int keep_base = 0;
@@ -1116,18 +1117,18 @@ int cmd_rebase(int argc, const char **argv, const char *prefix)
 		OPT_BIT(0, "no-ff", &options.flags,
 			N_("cherry-pick all commits, even if unchanged"),
 			REBASE_FORCE),
-		OPT_CMDMODE(0, "continue", &options.action, N_("continue"),
+		OPT_CMDMODE(0, "continue", &action, N_("continue"),
 			    ACTION_CONTINUE),
-		OPT_CMDMODE(0, "skip", &options.action,
+		OPT_CMDMODE(0, "skip", &action,
 			    N_("skip current patch and continue"), ACTION_SKIP),
-		OPT_CMDMODE(0, "abort", &options.action,
+		OPT_CMDMODE(0, "abort", &action,
 			    N_("abort and check out the original branch"),
 			    ACTION_ABORT),
-		OPT_CMDMODE(0, "quit", &options.action,
+		OPT_CMDMODE(0, "quit", &action,
 			    N_("abort but keep HEAD where it is"), ACTION_QUIT),
-		OPT_CMDMODE(0, "edit-todo", &options.action, N_("edit the todo list "
+		OPT_CMDMODE(0, "edit-todo", &action, N_("edit the todo list "
 			    "during an interactive rebase"), ACTION_EDIT_TODO),
-		OPT_CMDMODE(0, "show-current-patch", &options.action,
+		OPT_CMDMODE(0, "show-current-patch", &action,
 			    N_("show the patch file being applied or merged"),
 			    ACTION_SHOW_CURRENT_PATCH),
 		OPT_CALLBACK_F(0, "apply", &options, NULL,
@@ -1233,10 +1234,12 @@ int cmd_rebase(int argc, const char **argv, const char *prefix)
 	if (options.type != REBASE_UNSPECIFIED)
 		in_progress = 1;
 
+	action = options.action;
 	total_argc = argc;
 	argc = parse_options(argc, argv, prefix,
 			     builtin_rebase_options,
 			     builtin_rebase_usage, 0);
+	options.action = action;
 
 	if (preserve_merges_selected)
 		die(_("--preserve-merges was replaced by --rebase-merges\n"

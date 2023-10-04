@@ -554,12 +554,13 @@ int cmd_replace(int argc, const char **argv, const char *prefix)
 		MODE_CONVERT_GRAFT_FILE,
 		MODE_REPLACE
 	} cmdmode = MODE_UNSPECIFIED;
+	int cmdmode_int = cmdmode;
 	struct option options[] = {
-		OPT_CMDMODE('l', "list", &cmdmode, N_("list replace refs"), MODE_LIST),
-		OPT_CMDMODE('d', "delete", &cmdmode, N_("delete replace refs"), MODE_DELETE),
-		OPT_CMDMODE('e', "edit", &cmdmode, N_("edit existing object"), MODE_EDIT),
-		OPT_CMDMODE('g', "graft", &cmdmode, N_("change a commit's parents"), MODE_GRAFT),
-		OPT_CMDMODE(0, "convert-graft-file", &cmdmode, N_("convert existing graft file"), MODE_CONVERT_GRAFT_FILE),
+		OPT_CMDMODE('l', "list", &cmdmode_int, N_("list replace refs"), MODE_LIST),
+		OPT_CMDMODE('d', "delete", &cmdmode_int, N_("delete replace refs"), MODE_DELETE),
+		OPT_CMDMODE('e', "edit", &cmdmode_int, N_("edit existing object"), MODE_EDIT),
+		OPT_CMDMODE('g', "graft", &cmdmode_int, N_("change a commit's parents"), MODE_GRAFT),
+		OPT_CMDMODE(0, "convert-graft-file", &cmdmode_int, N_("convert existing graft file"), MODE_CONVERT_GRAFT_FILE),
 		OPT_BOOL_F('f', "force", &force, N_("replace the ref if it exists"),
 			   PARSE_OPT_NOCOMPLETE),
 		OPT_BOOL(0, "raw", &raw, N_("do not pretty-print contents for --edit")),
@@ -572,6 +573,7 @@ int cmd_replace(int argc, const char **argv, const char *prefix)
 
 	argc = parse_options(argc, argv, prefix, options, git_replace_usage, 0);
 
+	cmdmode = cmdmode_int;
 	if (!cmdmode)
 		cmdmode = argc ? MODE_REPLACE : MODE_LIST;
 

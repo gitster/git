@@ -346,7 +346,8 @@ int cmd_ls_tree(int argc, const char **argv, const char *prefix)
 	int i, full_tree = 0;
 	int full_name = !prefix || !*prefix;
 	read_tree_fn_t fn = NULL;
-	enum ls_tree_cmdmode cmdmode = MODE_DEFAULT;
+	enum ls_tree_cmdmode cmdmode;
+	int cmdmode_int = MODE_DEFAULT;
 	int null_termination = 0;
 	struct ls_tree_options options = { 0 };
 	const struct option ls_tree_options[] = {
@@ -358,13 +359,13 @@ int cmd_ls_tree(int argc, const char **argv, const char *prefix)
 			LS_SHOW_TREES),
 		OPT_BOOL('z', NULL, &null_termination,
 			 N_("terminate entries with NUL byte")),
-		OPT_CMDMODE('l', "long", &cmdmode, N_("include object size"),
+		OPT_CMDMODE('l', "long", &cmdmode_int, N_("include object size"),
 			    MODE_LONG),
-		OPT_CMDMODE(0, "name-only", &cmdmode, N_("list only filenames"),
+		OPT_CMDMODE(0, "name-only", &cmdmode_int, N_("list only filenames"),
 			    MODE_NAME_ONLY),
-		OPT_CMDMODE(0, "name-status", &cmdmode, N_("list only filenames"),
+		OPT_CMDMODE(0, "name-status", &cmdmode_int, N_("list only filenames"),
 			    MODE_NAME_STATUS),
-		OPT_CMDMODE(0, "object-only", &cmdmode, N_("list only objects"),
+		OPT_CMDMODE(0, "object-only", &cmdmode_int, N_("list only objects"),
 			    MODE_OBJECT_ONLY),
 		OPT_BOOL(0, "full-name", &full_name, N_("use full path names")),
 		OPT_BOOL(0, "full-tree", &full_tree,
@@ -384,6 +385,7 @@ int cmd_ls_tree(int argc, const char **argv, const char *prefix)
 	argc = parse_options(argc, argv, prefix, ls_tree_options,
 			     ls_tree_usage, 0);
 	options.null_termination = null_termination;
+	cmdmode = cmdmode_int;
 
 	if (full_tree)
 		prefix = NULL;
