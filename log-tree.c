@@ -41,6 +41,7 @@ static char decoration_colors[][COLOR_MAXLEN] = {
 	GIT_COLOR_BOLD_MAGENTA,	/* REF_STASH */
 	GIT_COLOR_BOLD_CYAN,	/* REF_HEAD */
 	GIT_COLOR_BOLD_BLUE,	/* GRAFTED */
+	GIT_COLOR_NIL,		/* SYMBOLS */
 };
 
 static const char *color_decorate_slots[] = {
@@ -50,6 +51,7 @@ static const char *color_decorate_slots[] = {
 	[DECORATION_REF_STASH]	= "stash",
 	[DECORATION_REF_HEAD]	= "HEAD",
 	[DECORATION_GRAFTED]	= "grafted",
+	[DECORATION_SYMBOLS]	= "symbols",
 };
 
 static const char *decorate_get_color(int decorate_use_color, enum decoration_type ix)
@@ -312,7 +314,7 @@ void format_decorations(struct strbuf *sb,
 {
 	const struct name_decoration *decoration;
 	const struct name_decoration *current_and_HEAD;
-	const char *color_commit, *color_reset;
+	const char *color_symbols, *color_reset;
 
 	const char *prefix = " (";
 	const char *suffix = ")";
@@ -337,7 +339,10 @@ void format_decorations(struct strbuf *sb,
 			tag = opts->tag;
 	}
 
-	color_commit = diff_get_color(use_color, DIFF_COMMIT);
+	color_symbols = decorate_get_color(use_color, DECORATION_SYMBOLS);
+	if (color_is_nil(color_symbols))
+		color_symbols = diff_get_color(use_color, DIFF_COMMIT);
+
 	color_reset = decorate_get_color(use_color, DECORATION_NONE);
 
 	current_and_HEAD = current_pointed_by_HEAD(decoration);
@@ -352,7 +357,7 @@ void format_decorations(struct strbuf *sb,
 				decorate_get_color(use_color, decoration->type);
 
 			if (*prefix) {
-				strbuf_addstr(sb, color_commit);
+				strbuf_addstr(sb, color_symbols);
 				strbuf_addstr(sb, prefix);
 				strbuf_addstr(sb, color_reset);
 			}
@@ -369,7 +374,7 @@ void format_decorations(struct strbuf *sb,
 
 			if (current_and_HEAD &&
 			    decoration->type == DECORATION_REF_HEAD) {
-				strbuf_addstr(sb, color_commit);
+				strbuf_addstr(sb, color_symbols);
 				strbuf_addstr(sb, pointer);
 				strbuf_addstr(sb, color_reset);
 				strbuf_addstr(sb, decorate_get_color(use_color, current_and_HEAD->type));
@@ -382,7 +387,7 @@ void format_decorations(struct strbuf *sb,
 		decoration = decoration->next;
 	}
 	if (*suffix) {
-		strbuf_addstr(sb, color_commit);
+		strbuf_addstr(sb, color_symbols);
 		strbuf_addstr(sb, suffix);
 		strbuf_addstr(sb, color_reset);
 	}

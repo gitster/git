@@ -56,6 +56,7 @@ enum decoration_type {
 	DECORATION_REF_STASH,
 	DECORATION_REF_HEAD,
 	DECORATION_GRAFTED,
+	DECORATION_SYMBOLS,
 };
 
 void add_name_decoration(enum decoration_type type, const char *name, struct object *obj);
