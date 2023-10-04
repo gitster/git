@@ -692,6 +692,36 @@ EOF
 '
 
 
+test_expect_success 'status when bisecting while rebasing' '
+	git reset --hard main &&
+	FAKE_LINES="exec_exit_15" &&
+	export FAKE_LINES &&
+	test_when_finished "git rebase --abort" &&
+	ONTO=$(git rev-parse --short HEAD^) &&
+	test_must_fail git rebase -i HEAD^ &&
+	git checkout -b bisect_while_rebasing &&
+	test_when_finished "git bisect reset" &&
+	git bisect start &&
+	TGT=$(git rev-parse --short two_bisect) &&
+	cat >expected <<EOF &&
+On branch bisect_while_rebasing
+Last command done (1 command done):
+   exec exit 15
+No commands remaining.
+You are currently editing a commit while rebasing branch '\''bisect'\'' on '\''$ONTO'\''.
+  (use "git commit --amend" to amend the current commit)
+  (use "git rebase --continue" once you are satisfied with your changes)
+
+You are currently bisecting, started from branch '\''bisect_while_rebasing'\''.
+  (use "git bisect reset" to get back to the original branch)
+
+nothing to commit (use -u to show untracked files)
+EOF
+	git status --untracked-files=no >actual &&
+	test_cmp expected actual
+'
+
+
 test_expect_success 'status when rebase --apply conflicts with statushints disabled' '
 	git reset --hard main &&
 	git checkout -b statushints_disabled &&
