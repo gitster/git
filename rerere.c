@@ -390,12 +390,8 @@ static int handle_conflict(struct strbuf *out, struct rerere_io *io,
 			strbuf_addbuf(out, &two);
 			rerere_strbuf_putconflict(out, '>', marker_size);
 			if (ctx) {
-				the_hash_algo->update_fn(ctx, one.buf ?
-							 one.buf : "",
-							 one.len + 1);
-				the_hash_algo->update_fn(ctx, two.buf ?
-							 two.buf : "",
-							 two.len + 1);
+				the_hash_algo->update_fn(ctx, one.buf, one.len + 1);
+				the_hash_algo->update_fn(ctx, two.buf, two.len + 1);
 			}
 			break;
 		} else if (hunk == RR_SIDE_1)
@@ -454,7 +450,7 @@ static int handle_path(unsigned char *hash, struct rerere_io *io, int marker_siz
 
 /*
  * Scan the path for conflicts, do the "handle_path()" thing above, and
- * return the number of conflict hunks found.
+ * return true iff conflict hunks were found.
  */
 static int handle_file(struct index_state *istate,
 		       const char *path, unsigned char *hash, const char *output)
@@ -499,9 +495,11 @@ static int handle_file(struct index_state *istate,
 }
 
 /*
- * Look at a cache entry at "i" and see if it is not conflicting,
- * conflicting and we are willing to handle, or conflicting and
- * we are unable to handle, and return the determination in *type.
+ * Look at a cache entry at "i" and see if it is not conflicting
+ * (RESOLVED), conflicting and we are willing to handle (THREE_STAGED),
+ * or conflicting and we are unable to handle (PUNTED), and return the
+ * determination in *type.
+ *
  * Return the cache index to be looked at next, by skipping the
  * stages we have already looked at in this invocation of this
  * function.
@@ -509,6 +507,7 @@ static int handle_file(struct index_state *istate,
 static int check_one_conflict(struct index_state *istate, int i, int *type)
 {
 	const struct cache_entry *e = istate->cache[i];
+	unsigned int seen_stages = 0;
 
 	if (!ce_stage(e)) {
 		*type = RESOLVED;
@@ -516,24 +515,17 @@ static int check_one_conflict(struct index_state *istate, int i, int *type)
 	}
 
 	*type = PUNTED;
-	while (i < istate->cache_nr && ce_stage(istate->cache[i]) == 1)
-		i++;
-
-	/* Only handle regular files with both stages #2 and #3 */
-	if (i + 1 < istate->cache_nr) {
-		const struct cache_entry *e2 = istate->cache[i];
-		const struct cache_entry *e3 = istate->cache[i + 1];
-		if (ce_stage(e2) == 2 &&
-		    ce_stage(e3) == 3 &&
-		    ce_same_name(e, e3) &&
-		    S_ISREG(e2->ce_mode) &&
-		    S_ISREG(e3->ce_mode))
-			*type = THREE_STAGED;
+	for (; i < istate->cache_nr; i++) {
+		const struct cache_entry *n = istate->cache[i];
+		if (!ce_same_name(n, e))
+			break;
+		if (S_ISREG(n->ce_mode))
+			seen_stages |= 1u << (ce_stage(n) - 1);
 	}
 
-	/* Skip the entries with the same name */
-	while (i < istate->cache_nr && ce_same_name(e, istate->cache[i]))
-		i++;
+	if ((seen_stages & 6) == 6)
+		*type = THREE_STAGED; /* has both stages #2 and #3 */
+
 	return i;
 }
 
@@ -621,7 +613,7 @@ static int try_merge(struct index_state *istate,
 
 	if (read_mmfile(&base, rerere_path(id, "preimage")) ||
 	    read_mmfile(&other, rerere_path(id, "postimage"))) {
-		ret = LL_MERGE_CONFLICT;
+		ret = LL_MERGE_ERROR;
 	} else {
 		/*
 		 * A three-way merge. Note that this honors user-customizable
