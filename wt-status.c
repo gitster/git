@@ -2620,15 +2620,12 @@ int has_uncommitted_changes(struct repository *r,
 	return result;
 }
 
-/**
- * If the work tree has unstaged or uncommitted changes, dies with the
- * appropriate message.
- */
-int require_clean_work_tree(struct repository *r,
-			    const char *action,
-			    const char *hint,
-			    int ignore_submodules,
-			    int gently)
+static int require_clean_index_or_work_tree(struct repository *r,
+				     const char *action,
+				     const char *hint,
+				     int ignore_submodules,
+				     int check_index_only,
+				     int gently)
 {
 	struct lock_file lock_file = LOCK_INIT;
 	int err = 0, fd;
@@ -2639,10 +2636,12 @@ int require_clean_work_tree(struct repository *r,
 		repo_update_index_if_able(r, &lock_file);
 	rollback_lock_file(&lock_file);
 
-	if (has_unstaged_changes(r, ignore_submodules)) {
-		/* TRANSLATORS: the action is e.g. "pull with rebase" */
-		error(_("cannot %s: You have unstaged changes."), _(action));
-		err = 1;
+	if (!check_index_only) {
+		if (has_unstaged_changes(r, ignore_submodules)) {
+			/* TRANSLATORS: the action is e.g. "pull with rebase" */
+			error(_("cannot %s: You have unstaged changes."), _(action));
+			err = 1;
+		}
 	}
 
 	if (has_uncommitted_changes(r, ignore_submodules)) {
@@ -2666,4 +2665,40 @@ int require_clean_work_tree(struct repository *r,
 	}
 
 	return err;
+}
+
+/**
+ * If the work tree has unstaged or uncommitted changes, dies with the
+ * appropriate message.
+ */
+int require_clean_work_tree(struct repository *r,
+			    const char *action,
+			    const char *hint,
+			    int ignore_submodules,
+			    int gently)
+{
+	return require_clean_index_or_work_tree(r,
+						action,
+						hint,
+						ignore_submodules,
+						0,
+						gently);
+}
+
+/**
+ * If the work tree has uncommitted changes, dies with the appropriate
+ * message.
+ */
+int require_clean_index(struct repository *r,
+			const char *action,
+			const char *hint,
+			int ignore_submodules,
+			int gently)
+{
+	return require_clean_index_or_work_tree(r,
+						action,
+						hint,
+						ignore_submodules,
+						1,
+						gently);
 }
