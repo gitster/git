@@ -7,7 +7,7 @@
  */
 
 #include "git-compat-util.h"
-#include "parse.h"
+#include "config.h"
 #include "environment.h"
 #include "exec-cmd.h"
 #include "attr.h"
