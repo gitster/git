@@ -24,6 +24,9 @@ enum fetch_negotiation_setting {
 	FETCH_NEGOTIATION_NOOP,
 };
 
+#define REF_STORAGE_FORMAT_UNKNOWN 0
+#define REF_STORAGE_FORMAT_FILES   1
+
 struct repo_settings {
 	int initialized;
 
@@ -162,6 +165,9 @@ struct repository {
 
 	/* Repository's compatibility hash algorithm. */
 	const struct git_hash_algo *compat_hash_algo;
+
+	/* Repository's reference storage format, as serialized on disk. */
+	int ref_storage_format;
 
 	/* A unique-id for tracing purposes. */
 	int trace2_repo_id;

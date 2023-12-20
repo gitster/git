@@ -116,6 +116,7 @@ struct repository_format {
 	int is_bare;
 	int hash_algo;
 	int compat_hash_algo;
+	int ref_storage_format;
 	int sparse_index;
 	char *work_tree;
 	struct string_list unknown_extensions;
@@ -132,6 +133,7 @@ struct repository_format {
 	.version = -1, \
 	.is_bare = -1, \
 	.hash_algo = GIT_HASH_SHA1, \
+	.ref_storage_format = REF_STORAGE_FORMAT_FILES, \
 	.unknown_extensions = STRING_LIST_INIT_DUP, \
 	.v1_only_extensions = STRING_LIST_INIT_DUP, \
 }
@@ -176,10 +178,13 @@ void check_repository_format(struct repository_format *fmt);
 
 int init_db(const char *git_dir, const char *real_git_dir,
 	    const char *template_dir, int hash_algo,
+	    int ref_storage_format,
 	    const char *initial_branch, int init_shared_repository,
 	    unsigned int flags);
-void initialize_repository_version(int hash_algo, int reinit);
-void create_reference_database(const char *initial_branch, int quiet);
+void initialize_repository_version(int hash_algo, int ref_storage_format,
+				   int reinit);
+void create_reference_database(int ref_storage_format,
+			       const char *initial_branch, int quiet);
 
 /*
  * NOTE NOTE NOTE!!
