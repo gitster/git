@@ -311,7 +311,7 @@ static int has_entries_with_high_bit(struct repository *r, struct tree *t)
 		struct tree_desc desc;
 		struct name_entry entry;
 
-		init_tree_desc(&desc, t->buffer, t->size);
+		init_tree_desc(&desc, &t->object.oid, t->buffer, t->size);
 		while (tree_entry(&desc, &entry)) {
 			size_t i;
 			for (i = 0; i < entry.pathlen; i++) {
