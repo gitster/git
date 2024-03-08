@@ -1,6 +1,8 @@
 #ifndef PAGER_H
 #define PAGER_H
 
+#include <stdint.h>
+
 struct child_process;
 
 const char *git_pager(int stdout_is_tty);

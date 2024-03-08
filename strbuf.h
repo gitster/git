@@ -1,6 +1,8 @@
 #ifndef STRBUF_H
 #define STRBUF_H
 
+#include "git-compat-util.h"
+
 /*
  * NOTE FOR STRBUF DEVELOPERS
  *
