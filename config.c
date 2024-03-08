@@ -1565,11 +1565,11 @@ static int git_default_core_config(const char *var, const char *value,
 			return config_error_nonbool(var);
 		else if (!strcasecmp(value, "auto"))
 			auto_comment_line_char = 1;
-		else if (value[0] && !value[1]) {
-			comment_line_char = value[0];
+		else if (value[0]) {
+			comment_line_str = xstrdup(value);
 			auto_comment_line_char = 0;
 		} else
-			return error(_("core.commentChar should only be one ASCII character"));
+			return error(_("core.commentChar must have at least one character"));
 		return 0;
 	}
 
