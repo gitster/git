@@ -1,0 +1,112 @@
+using System.Linq;
+using System;
+
+class Example : IDisposable
+{
+	string Method(int RIGHT)
+	{
+		// Method calls
+		MethodCall();
+		MethodCall(1, 2);
+		MethodCall(
+			1, 2);
+		
+		// Assignments
+		var constantAssignment = "test";
+		var methodAssignment = MethodCall();
+		var multiLineMethodAssignment = MethodCall(
+			);
+		
+		// Initializations/disposal
+		new Example();
+		new Example(
+			);
+		new Example { };
+		using (this) 
+		{
+		}
+		var def =
+			this is default(
+				Example);
+		
+		// Iteration statements
+		do { } while (true);
+		do MethodCall(
+			); while (true);
+		while (true);
+		while (true) {
+			break;
+		}
+		for (int i = 0; i < 10; ++i)
+		{
+		}
+		foreach (int i in Enumerable.Range(0, 10))
+		{
+		}
+		int[] numbers = [5, 4, 1, 3, 9, 8, 6, 7, 2, 0];
+		
+		// Control
+		if (false)
+		{
+			return "out";
+		}
+		else { }
+		if (true) MethodCall(
+			);
+		else MethodCall(
+			);
+		switch ("test")
+		{
+			case "one":
+				return MethodCall(
+					);
+			case "two":
+				break;
+		}
+		(int, int) tuple = (1, 4);
+		switch (tuple)
+		{
+			case (1, 4):
+				MethodCall();
+		}
+		
+		// Exceptions
+		try
+		{
+			throw new Exception("fail");
+		}
+		catch (Exception)
+		{
+		}
+		finally
+		{
+		}
+		try { } catch (Exception) {}
+		try
+		{
+			throw GetException(
+				);
+		}
+		catch (Exception) { }
+		
+		// Others
+		lock (this)
+		{
+		}
+		unsafe
+		{
+			byte[] bytes = [1, 2, 3];
+			fixed (byte* pointerToFirst = bytes)
+			{
+			}
+		}
+		
+		return "ChangeMe";
+	}
+	
+	public void Dispose() {}
+	
+	string MethodCall(int a = 0, int b = 0) => "test";
+	Exception GetException() => new Exception("fail");
+	int[] Numbers() => [0, 1];
+}
