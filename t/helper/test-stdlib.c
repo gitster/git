@@ -129,9 +129,9 @@ static void strbuf_funcs(void) {
 	fprintf(stderr, "at line %d\n", __LINE__);
 	strbuf_addstr(sb, "foo");
 	fprintf(stderr, "at line %d\n", __LINE__);
-	strbuf_add_commented_lines(sb, "foo", 3, '#');
+	strbuf_add_commented_lines(sb, "foo", 3, "#");
 	fprintf(stderr, "at line %d\n", __LINE__);
-	strbuf_commented_addf(sb, '#', "%s", "foo");
+	strbuf_commented_addf(sb, "#", "%s", "foo");
 	fprintf(stderr, "at line %d\n", __LINE__);
 	strbuf_addbuf_percentquote(sb, &sb3);
 	fprintf(stderr, "at line %d\n", __LINE__);
