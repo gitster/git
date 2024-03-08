@@ -1431,6 +1431,29 @@ __git_count_arguments ()
 	printf "%d" $c
 }
 
+# Complete actual dir (not pathspec), respecting any -C options.
+#
+# Usage: __git_complete_refs [<option>]...
+# --cur=<word>: The current dir to be completed.  Defaults to the current word.
+__git_complete_dir ()
+{
+	local cur_="$cur"
+
+	while test $# != 0; do
+		case "$1" in
+		--cur=*)	cur_="${1##--cur=}" ;;
+		*)		return 1 ;;
+		esac
+		shift
+	done
+
+        # This rev-parse invocation amounts to a pwd which respects -C options
+	local context_dir=$(__git rev-parse --show-toplevel --show-prefix 2>/dev/null | paste -s -d '/' 2>/dev/null)
+	[ -d "$context_dir" ] || return 1
+
+	COMPREPLY=$(cd "$context_dir" 2>/dev/null && compgen -d -- "$cur_")
+}
+
 __git_whitespacelist="nowarn warn error error-all fix"
 __git_patchformat="mbox stgit stgit-series hg mboxrd"
 __git_showcurrentpatch="diff raw"
@@ -1447,6 +1470,10 @@ _git_am ()
 	case "$cur" in
 	--whitespace=*)
 		__gitcomp "$__git_whitespacelist" "" "${cur##--whitespace=}"
+		return
+		;;
+	--directory=*)
+		__git_complete_dir --cur="${cur##--directory=}"
 		return
 		;;
 	--patch-format=*)
@@ -1980,7 +2007,17 @@ __git_format_patch_extra_options="
 
 _git_format_patch ()
 {
+	case "$prev,$cur" in
+	-o,*)
+		__git_complete_dir
+		return
+		;;
+	esac
 	case "$cur" in
+	--output-directory=*)
+		__git_complete_dir --cur="${cur##--output-directory=}"
+		return
+		;;
 	--thread=*)
 		__gitcomp "
 			deep shallow
