@@ -265,42 +265,54 @@ jobs:
         vector:
           - jobname: linux-sha256
             cc: clang
+            cxx: clang++
             pool: ubuntu-latest
           - jobname: linux-reftable
             cc: clang
+            cxx: clang++
             pool: ubuntu-latest
           - jobname: linux-gcc
             cc: gcc
+            cxx: g++
             cc_package: gcc-8
             pool: ubuntu-20.04
           - jobname: linux-TEST-vars
             cc: gcc
+            cxx: g++
             cc_package: gcc-8
             pool: ubuntu-20.04
           - jobname: osx-clang
             cc: clang
+            cxx: clang++
             pool: macos-13
           - jobname: osx-reftable
             cc: clang
+            cxx: clang++
             pool: macos-13
           - jobname: osx-gcc
             cc: gcc
+            cxx: g++
             cc_package: gcc-13
             pool: macos-13
           - jobname: linux-gcc-default
             cc: gcc
+            cxx: g++
             pool: ubuntu-latest
           - jobname: linux-leaks
             cc: gcc
+            cxx: g++
             pool: ubuntu-latest
           - jobname: linux-reftable-leaks
             cc: gcc
+            cxx: g++
             pool: ubuntu-latest
           - jobname: linux-asan-ubsan
             cc: clang
+            cxx: clang++
             pool: ubuntu-latest
     env:
       CC: ${{matrix.vector.cc}}
+      CXX: ${{matrix.vector.cxx}}
       CC_PACKAGE: ${{matrix.vector.cc_package}}
       jobname: ${{matrix.vector.jobname}}
       runs_on_pool: ${{matrix.vector.pool}}
