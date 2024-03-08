@@ -1315,10 +1315,12 @@ __git_find_last_on_cmdline ()
 	while test $# -gt 1; do
 		case "$1" in
 		--show-idx)	show_idx=y ;;
+		--)		shift && break ;;
 		*)		return 1 ;;
 		esac
 		shift
 	done
+	[ $# -eq 1 ] || return 1   # return 1 if we got wrong # of non-opts
 	local wordlist="$1"
 
 	while [ $c -gt "$__git_cmd_idx" ]; do
@@ -2582,7 +2584,9 @@ _git_send_email ()
 		return
 		;;
 	esac
-	__git_complete_revlist
+	if [ "$(__git_find_last_on_cmdline -- "--format-patch --no-format-patch")" != "--no-format-patch" ]; then
+		__git_complete_revlist
+	fi
 }
 
 _git_stage ()
