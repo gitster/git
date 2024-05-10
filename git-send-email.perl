@@ -1361,7 +1361,6 @@ sub smtp_host_string {
 
 # Returns 1 if authentication succeeded or was not necessary
 # (smtp_user was not specified), and 0 otherwise.
-
 sub smtp_auth_maybe {
 	if (!defined $smtp_authuser || $auth || (defined $smtp_auth && $smtp_auth eq "none")) {
 		return 1;
@@ -1510,6 +1509,7 @@ Message-ID: $message_id
 sub send_message {
 	my ($recipients_ref, $to, $date, $gitversion, $cc, $ccline, $header) = gen_header();
 	my @recipients = @$recipients_ref;
+	my $confirm_shown = 0;
 
 	my @sendmail_parameters = ('-i', @recipients);
 	my $raw_from = $sender;
@@ -1555,6 +1555,7 @@ EOF
 		} elsif (/^a/i) {
 			$confirm = 'never';
 		}
+		$confirm_shown = 1;
 	}
 
 	unshift (@sendmail_parameters, @smtp_server_options);
@@ -1576,7 +1577,6 @@ EOF
 		print $sm "$header\n$message";
 		close $sm or die $!;
 	} else {
-
 		if (!defined $smtp_server) {
 			die __("The required SMTP server is not properly defined.")
 		}
@@ -1664,9 +1664,13 @@ EOF
 		$smtp->code =~ /250|200/ or die sprintf(__("Failed to send %s\n"), $subject).$smtp->message;
 	}
 	if ($quiet) {
-		printf($dry_run ? __("Dry-Sent %s\n") : __("Sent %s\n"), $subject);
+		print "\n" if ($confirm_shown);
+		printf($dry_run ? __("Dry-Sent %s") : __("Sent %s"), $subject);
+		print "\n";
 	} else {
-		print($dry_run ? __("Dry-OK. Log says:\n") : __("OK. Log says:\n"));
+		print "\n";
+		print($dry_run ? __("Dry-OK. Log says:") : __("OK. Log says:"));
+		print "\n";
 		if (!defined $sendmail_cmd && !file_name_is_absolute($smtp_server)) {
 			print "Server: $smtp_server\n";
 			print "MAIL FROM:<$raw_from>\n";
@@ -1686,10 +1690,11 @@ EOF
 		print $header, "\n";
 		if ($smtp) {
 			print __("Result: "), $smtp->code, ' ',
-				($smtp->message =~ /\n([^\n]+\n)$/s), "\n";
+				($smtp->message =~ /\n([^\n]+\n)$/s);
 		} else {
-			print __("Result: OK\n");
+			print __("Result: OK");
 		}
+		print "\n";
 	}
 
 	return 1;
@@ -1920,7 +1925,7 @@ sub pre_process_file {
 sub process_file {
 	my ($t) = @_;
 
-        pre_process_file($t, $quiet);
+	pre_process_file($t, $quiet);
 
 	my $message_was_sent = send_message();
 	if ($message_was_sent == -1) {
