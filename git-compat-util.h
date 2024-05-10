@@ -344,6 +344,7 @@ static inline const char *precompose_string_if_needed(const char *in)
 	return in;
 }
 
+#define precompose_strbuf_if_needed(a)
 #define probe_utf8_pathname_composition()
 #endif
 

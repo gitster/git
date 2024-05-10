@@ -30,6 +30,7 @@ typedef struct {
 
 const char *precompose_argv_prefix(int argc, const char **argv, const char *prefix);
 const char *precompose_string_if_needed(const char *in);
+void precompose_strbuf_if_needed(struct strbuf *sb);
 void probe_utf8_pathname_composition(void);
 
 PREC_DIR *precompose_utf8_opendir(const char *dirname);

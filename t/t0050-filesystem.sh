@@ -156,4 +156,15 @@ test_expect_success CASE_INSENSITIVE_FS 'checkout with no pathspec and a case in
 	)
 '
 
+test_expect_success 'git ls-files under NFD' '
+	(
+		mkdir -p "somewhere/$aumlcdiar" &&
+		mypwd=$PWD &&
+		cd "somewhere/$aumlcdiar" &&
+		git init &&
+		git --literal-pathspecs ls-files "$mypwd/somewhere/$aumlcdiar" 2>err &&
+		>expected &&
+		test_cmp expected err
+	)
+'
 test_done
