@@ -318,6 +318,21 @@ static int include_by_branch(const char *cond, size_t cond_len)
 	return ret;
 }
 
+static int include_by_hostname(const char *cond, size_t cond_len)
+{
+	int ret;
+	char my_host[HOST_NAME_MAX + 1];
+	struct strbuf pattern = STRBUF_INIT;
+
+	if (xgethostname(my_host, sizeof(my_host)))
+		return 0;
+
+	strbuf_add(&pattern, cond, cond_len);
+	ret = !wildmatch(pattern.buf, my_host, 0);
+	strbuf_release(&pattern);
+	return ret;
+}
+
 static int add_remote_url(const char *var, const char *value,
 			  const struct config_context *ctx UNUSED, void *data)
 {
@@ -407,6 +422,8 @@ static int include_condition_is_true(const struct key_value_info *kvi,
 	else if (skip_prefix_mem(cond, cond_len, "hasconfig:remote.*.url:", &cond,
 				   &cond_len))
 		return include_by_remote_url(inc, cond, cond_len);
+	else if (skip_prefix_mem(cond, cond_len, "hostname:", &cond, &cond_len))
+		return include_by_hostname(cond, cond_len);
 
 	/* unknown conditionals are always false */
 	return 0;

@@ -88,6 +88,7 @@ static struct test_cmd cmds[] = {
 	{ "truncate", cmd__truncate },
 	{ "userdiff", cmd__userdiff },
 	{ "urlmatch-normalization", cmd__urlmatch_normalization },
+	{ "xgethostname", cmd__xgethostname },
 	{ "xml-encode", cmd__xml_encode },
 	{ "wildmatch", cmd__wildmatch },
 #ifdef GIT_WINDOWS_NATIVE
