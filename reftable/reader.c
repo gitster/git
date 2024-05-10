@@ -841,8 +841,8 @@ int reftable_reader_print_blocks(const char *tablename)
 		},
 	};
 	struct reftable_block_source src = { 0 };
-	struct table_iter ti = TABLE_ITER_INIT;
 	struct reftable_reader *r = NULL;
+	struct table_iter ti = { 0 };
 	size_t i;
 	int err;
 
@@ -854,11 +854,13 @@ int reftable_reader_print_blocks(const char *tablename)
 	if (err < 0)
 		goto done;
 
+	table_iter_init(&ti, r);
+
 	printf("header:\n");
 	printf("  block_size: %d\n", r->block_size);
 
 	for (i = 0; i < ARRAY_SIZE(sections); i++) {
-		err = reader_start(r, &ti, sections[i].type, 0);
+		err = table_iter_seek_start(&ti, sections[i].type, 0);
 		if (err < 0)
 			goto done;
 		if (err > 0)
