@@ -1340,6 +1340,7 @@ static void write_pack_file(void)
 				    hash_to_hex(hash));
 
 			if (write_bitmap_index) {
+				bitmap_writer_init(the_repository);
 				bitmap_writer_set_checksum(hash);
 				bitmap_writer_build_type_index(
 					&to_pack, written_list, nr_written);
@@ -1360,7 +1361,7 @@ static void write_pack_file(void)
 				stop_progress(&progress_state);
 
 				bitmap_writer_show_progress(progress);
-				bitmap_writer_select_commits(indexed_commits, indexed_commits_nr, -1);
+				bitmap_writer_select_commits(indexed_commits, indexed_commits_nr);
 				if (bitmap_writer_build(&to_pack) < 0)
 					die(_("failed to write bitmap index"));
 				bitmap_writer_finish(written_list, nr_written,
