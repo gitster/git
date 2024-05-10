@@ -3,7 +3,7 @@
 
 #include "git-compat-util.h"
 #include "strmap.h"
-#include "khash.h"
+#include "khashl.h"
 #include "ewah/ewok.h"
 
 struct commit;

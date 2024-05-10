@@ -13,7 +13,7 @@
 #include "fsmonitor--daemon.h"
 #include "repository.h"
 #include "simple-ipc.h"
-#include "khash.h"
+#include "khashl.h"
 #include "run-command.h"
 #include "trace.h"
 #include "trace2.h"
@@ -650,7 +650,7 @@ static int fsmonitor_parse_client_token(const char *buf_token,
 	return 0;
 }
 
-KHASH_INIT(str, const char *, int, 0, kh_str_hash_func, kh_str_hash_equal)
+KHASHL_SET_INIT(KH_LOCAL, kh_str, str, const char *, kh_hash_str, kh_eq_str)
 
 static int do_handle_client(struct fsmonitor_daemon_state *state,
 			    const char *command,
