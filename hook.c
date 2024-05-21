@@ -8,7 +8,6 @@
 #include "strbuf.h"
 #include "environment.h"
 #include "setup.h"
-#include "copy.h"
 
 const char *find_hook(const char *name)
 {
