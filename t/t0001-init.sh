@@ -584,7 +584,7 @@ test_expect_success 'init with --ref-format=files' '
 	test_cmp expect actual
 '
 
-backends="files"
+backends="files reftable"
 for from_format in $backends
 do
 	test_expect_success "re-init with same format ($from_format)" '
