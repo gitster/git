@@ -94,6 +94,16 @@ const char *precompose_string_if_needed(const char *in)
 	return in;
 }
 
+void precompose_strbuf_if_needed(struct strbuf *sb)
+{
+	char *buf_prec = (char *)precompose_string_if_needed(sb->buf);
+	if (buf_prec != sb->buf) {
+		size_t buf_prec_len = strlen(buf_prec);
+		free(strbuf_detach(sb, NULL));
+		strbuf_attach(sb, buf_prec, buf_prec_len, buf_prec_len + 1);
+	}
+}
+
 const char *precompose_argv_prefix(int argc, const char **argv, const char *prefix)
 {
 	int i = 0;
