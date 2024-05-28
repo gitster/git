@@ -2215,6 +2215,39 @@ test_expect_success 'bad labels and refs rejected when parsing todo list' '
 	test_path_is_missing execed
 '
 
+test_expect_success 'non-merge commands reject merge commits' '
+	test_when_finished "test_might_fail git rebase --abort" &&
+	git checkout E &&
+	git merge I &&
+	oid=$(git rev-parse HEAD) &&
+	cat >todo <<-EOF &&
+	pick $oid
+	reword $oid
+	edit $oid
+	fixup $oid
+	squash $oid
+	EOF
+	(
+		set_replace_editor todo &&
+		test_must_fail git rebase -i HEAD 2>actual
+	) &&
+	cat >expect <<-EOF &&
+	error: ${SQ}pick${SQ} does not accept merge commits, please use ${SQ}merge -C${SQ}
+	error: invalid line 1: pick $oid
+	error: ${SQ}reword${SQ} does not accept merge commits, please use ${SQ}merge -c${SQ}
+	error: invalid line 2: reword $oid
+	error: ${SQ}edit${SQ} does not accept merge commits, please use ${SQ}merge -C${SQ} followed by ${SQ}break${SQ}
+	error: invalid line 3: edit $oid
+	error: cannot squash merge commit into another commit
+	error: invalid line 4: fixup $oid
+	error: cannot squash merge commit into another commit
+	error: invalid line 5: squash $oid
+	You can fix this with ${SQ}git rebase --edit-todo${SQ} and then run ${SQ}git rebase --continue${SQ}.
+	Or you can abort the rebase with ${SQ}git rebase --abort${SQ}.
+	EOF
+	test_cmp expect actual
+'
+
 # This must be the last test in this file
 test_expect_success '$EDITOR and friends are unchanged' '
 	test_editor_unchanged
