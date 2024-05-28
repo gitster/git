@@ -58,11 +58,11 @@ compared case sensitively. These subsection names follow the same
 restrictions as section names.
 
 All the other lines (and the remainder of the line after the section
-header) are recognized as setting variables, in the form
-'name = value' (or just 'name', which is a short-hand to say that
-the variable is the boolean "true").
-The variable names are case-insensitive, allow only alphanumeric characters
-and `-`, and must start with an alphabetic character.
+header) are recognized as setting variables, in the form 'name = value'
+(or just 'name', which is a short-hand to say that the variable is the
+boolean "true").  The variable names are case-insensitive, allow only
+alphanumeric characters and `-`, and must start with an alphabetic
+character.
 
 Whitespace characters surrounding `name`, `=` and `value` are discarded.
 Internal whitespace characters within 'value' are retained verbatim.
@@ -97,10 +97,10 @@ to be included. The variable takes a pathname as its value, and is
 subject to tilde expansion. These variables can be given multiple times.
 
 The contents of the included file are inserted immediately, as if they
-had been found at the location of the include directive. If the value of the
-variable is a relative path, the path is considered to
-be relative to the configuration file in which the include directive
-was found.  See below for examples.
+had been found at the location of the include directive.  If the value of
+the variable is a relative path, the path is considered to be relative to
+the configuration file in which the include directive was found.  See
+below for examples.
 
 Conditional includes
 ~~~~~~~~~~~~~~~~~~~~
