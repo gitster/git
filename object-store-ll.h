@@ -163,7 +163,7 @@ struct raw_object_store {
 	 */
 	struct object_directory *odb;
 	struct object_directory **odb_tail;
-	struct kh_odb_path_map *odb_by_path;
+	struct odb_path_map *odb_by_path;
 
 	int loaded_alternates;
 

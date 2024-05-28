@@ -1,7 +1,7 @@
 #ifndef LOOSE_H
 #define LOOSE_H
 
-#include "khash.h"
+#include "khashl.h"
 
 struct loose_object_map {
 	kh_oid_map_t *to_compat;

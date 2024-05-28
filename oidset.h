@@ -1,7 +1,7 @@
 #ifndef OIDSET_H
 #define OIDSET_H
 
-#include "khash.h"
+#include "khashl.h"
 
 /**
  * This API is similar to oid-array, in that it maintains a set of object ids

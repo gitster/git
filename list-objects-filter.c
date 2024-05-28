@@ -704,7 +704,7 @@ static void filter_combine__free(void *filter_data)
 	for (sub = 0; sub < d->nr; sub++) {
 		list_objects_filter__free(d->sub[sub].filter);
 		oidset_clear(&d->sub[sub].seen);
-		if (d->sub[sub].omits.set.size)
+		if (kh_size(&d->sub[sub].omits.set))
 			BUG("expected oidset to be cleared already");
 	}
 	free(d->sub);
