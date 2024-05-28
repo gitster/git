@@ -20,6 +20,7 @@
 #include "reflog-walk.h"
 #include "oidset.h"
 #include "packfile.h"
+#include "missing.h"
 
 static const char rev_list_usage[] =
 "git rev-list [<options>] <commit>... [--] [<path>...]\n"
@@ -71,12 +72,6 @@ static struct oidset omitted_objects;
 static int arg_print_omitted; /* print objects omitted by filter */
 
 static struct oidset missing_objects;
-enum missing_action {
-	MA_ERROR = 0,    /* fail if any missing objects are encountered */
-	MA_ALLOW_ANY,    /* silently allow ALL missing objects */
-	MA_PRINT,        /* print ALL missing objects in special section */
-	MA_ALLOW_PROMISOR, /* silently allow all missing PROMISOR objects */
-};
 static enum missing_action arg_missing_action;
 
 /* display only the oid of each object encountered */
@@ -392,34 +387,6 @@ static void print_disk_usage(off_t size)
 	strbuf_release(&sb);
 }
 
-static inline int parse_missing_action_value(const char *value)
-{
-	if (!strcmp(value, "error")) {
-		arg_missing_action = MA_ERROR;
-		return 1;
-	}
-
-	if (!strcmp(value, "allow-any")) {
-		arg_missing_action = MA_ALLOW_ANY;
-		fetch_if_missing = 0;
-		return 1;
-	}
-
-	if (!strcmp(value, "print")) {
-		arg_missing_action = MA_PRINT;
-		fetch_if_missing = 0;
-		return 1;
-	}
-
-	if (!strcmp(value, "allow-promisor")) {
-		arg_missing_action = MA_ALLOW_PROMISOR;
-		fetch_if_missing = 0;
-		return 1;
-	}
-
-	return 0;
-}
-
 static int try_bitmap_count(struct rev_info *revs,
 			    int filter_provided_objects)
 {
@@ -569,10 +536,16 @@ int cmd_rev_list(int argc, const char **argv, const char *prefix)
 	for (i = 1; i < argc; i++) {
 		const char *arg = argv[i];
 		if (skip_prefix(arg, "--missing=", &arg)) {
+			int res;
 			if (revs.exclude_promisor_objects)
 				die(_("options '%s' and '%s' cannot be used together"), "--exclude-promisor-objects", "--missing");
-			if (parse_missing_action_value(arg))
+			res = parse_missing_action_value(arg);
+			if (res >= 0) {
+				if (res != MA_ERROR)
+					fetch_if_missing = 0;
+				arg_missing_action = res;
 				break;
+			}
 		}
 	}
 
