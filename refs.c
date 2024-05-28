@@ -2609,7 +2609,7 @@ static int migrate_one_ref(const char *refname, const struct object_id *oid,
 		if (ret < 0)
 			goto done;
 	} else {
-		ret = ref_transaction_create(data->transaction, refname, oid,
+		ret = ref_transaction_create(data->transaction, refname, oid, NULL,
 					     REF_SKIP_CREATE_REFLOG | REF_SKIP_OID_VERIFICATION,
 					     NULL, data->errbuf);
 		if (ret < 0)
