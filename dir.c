@@ -30,6 +30,7 @@
 #include "symlinks.h"
 #include "trace2.h"
 #include "tree.h"
+#include "hex.h"
 
 /*
  * Tells read_directory_recursive how a file or directory should be treated.
@@ -1159,6 +1160,12 @@ static int add_patterns(const char *fname, const char *base, int baselen,
 		}
 	}
 
+	if (size > INT_MAX) {
+		warning("ignoring excessively large pattern file: %s", fname);
+		free(buf);
+		return -1;
+	}
+
 	add_patterns_from_buffer(buf, size, base, baselen, pl);
 	free(buf);
 	return 0;
@@ -1214,6 +1221,13 @@ int add_patterns_from_blob_to_list(
 	r = do_read_blob(oid, NULL, &size, &buf);
 	if (r != 1)
 		return r;
+
+	if (size > INT_MAX) {
+		warning("ignoring excessively large pattern blob: %s",
+			oid_to_hex(oid));
+		free(buf);
+		return -1;
+	}
 
 	add_patterns_from_buffer(buf, size, base, baselen, pl);
 	free(buf);
