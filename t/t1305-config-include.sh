@@ -357,4 +357,46 @@ test_expect_success 'include cycles are detected' '
 	grep "exceeded maximum include depth" stderr
 '
 
+test_expect_success 'conditional include, hostname' '
+	cat >>.git/config <<-EOF &&
+	[includeIf "hostname:$(test-tool xgethostname)a"]
+		path = bar12
+	EOF
+	cat >>.git/bar12 <<-EOF &&
+	[test]
+		twelve=12
+	EOF
+
+	test_must_fail git config test.twelve &&
+
+	cat >>.git/config <<-EOF &&
+	[includeIf "hostname:$(test-tool xgethostname)"]
+		path = bar12
+	EOF
+	echo 12 >expect &&
+	git config test.twelve >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success 'conditional include, hostname, wildcard' '
+	cat >>.git/config <<-EOF &&
+	[includeIf "hostname:$(test-tool xgethostname)a*"]
+		path = bar13
+	EOF
+	cat >>.git/bar13 <<-EOF &&
+	[test]
+		thirteen = 13
+	EOF
+
+	test_must_fail git config test.thirteen &&
+
+	cat >>.git/config <<-EOF &&
+	[includeIf "hostname:$(test-tool xgethostname)*"]
+		path = bar13
+	EOF
+	echo 13 >expect &&
+	git config test.thirteen >actual &&
+	test_cmp expect actual
+'
+
 test_done
