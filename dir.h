@@ -62,7 +62,6 @@ struct path_pattern {
 	 */
 	struct pattern_list *pl;
 
-	const char *pattern;
 	int patternlen;
 	int nowildcardlen;
 	const char *base;
@@ -74,6 +73,8 @@ struct path_pattern {
 	 * and from -1 decrementing for patterns from CLI args.
 	 */
 	int srcpos;
+
+	char pattern[FLEX_ARRAY];
 };
 
 /* used for hashmaps for cone patterns */
