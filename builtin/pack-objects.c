@@ -39,6 +39,7 @@
 #include "promisor-remote.h"
 #include "pack-mtimes.h"
 #include "parse-options.h"
+#include "missing.h"
 
 /*
  * Objects we are going to pack are collected in the `to_pack` structure.
@@ -250,11 +251,6 @@ static unsigned long window_memory_limit = 0;
 
 static struct string_list uri_protocols = STRING_LIST_INIT_NODUP;
 
-enum missing_action {
-	MA_ERROR = 0,      /* fail if any missing objects are encountered */
-	MA_ALLOW_ANY,      /* silently allow ALL missing objects */
-	MA_ALLOW_PROMISOR, /* silently allow all missing PROMISOR objects */
-};
 static enum missing_action arg_missing_action;
 static show_object_fn fn_show_object;
 
@@ -3838,30 +3834,25 @@ static void show_object__ma_allow_promisor(struct object *obj, const char *name,
 static int option_parse_missing_action(const struct option *opt UNUSED,
 				       const char *arg, int unset)
 {
+	int res;
+	static show_object_fn const fn[] = {
+		[MA_ERROR] = show_object,
+		[MA_ALLOW_ANY] = show_object__ma_allow_any,
+		[MA_ALLOW_PROMISOR] = show_object__ma_allow_promisor,
+	};
+
 	assert(arg);
 	assert(!unset);
 
-	if (!strcmp(arg, "error")) {
-		arg_missing_action = MA_ERROR;
-		fn_show_object = show_object;
-		return 0;
-	}
+	res = parse_missing_action_value_for_packing(arg);
+	if (res < 0 || ARRAY_SIZE(fn) <= res)
+		die(_("invalid value for '%s': '%s'"), "--missing", arg);
 
-	if (!strcmp(arg, "allow-any")) {
-		arg_missing_action = MA_ALLOW_ANY;
+	fn_show_object = fn[res];
+	arg_missing_action = res;
+	if (res != MA_ERROR)
 		fetch_if_missing = 0;
-		fn_show_object = show_object__ma_allow_any;
-		return 0;
-	}
 
-	if (!strcmp(arg, "allow-promisor")) {
-		arg_missing_action = MA_ALLOW_PROMISOR;
-		fetch_if_missing = 0;
-		fn_show_object = show_object__ma_allow_promisor;
-		return 0;
-	}
-
-	die(_("invalid value for '%s': '%s'"), "--missing", arg);
 	return 0;
 }
 
