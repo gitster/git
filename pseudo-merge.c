@@ -209,7 +209,7 @@ static int find_pseudo_merge_group_for_ref(const char *refname,
 	uint32_t i;
 	int has_bitmap;
 
-	if (!peel_iterated_oid(oid, &peeled))
+	if (!peel_iterated_oid(the_repository, oid, &peeled))
 		oid = &peeled;
 
 	c = lookup_commit(the_repository, oid);
@@ -434,7 +434,8 @@ void select_pseudo_merges(struct bitmap_writer *writer,
 		progress = start_progress("Selecting pseudo-merge commits",
 					  writer->pseudo_merge_groups.nr);
 
-	for_each_ref(find_pseudo_merge_group_for_ref, writer);
+	refs_for_each_ref(get_main_ref_store(the_repository),
+			  find_pseudo_merge_group_for_ref, writer);
 
 	for (i = 0; i < writer->pseudo_merge_groups.nr; i++) {
 		struct pseudo_merge_group *group;
