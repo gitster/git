@@ -12,10 +12,10 @@ sub start_child {
 	if (not defined $pid) {
 		die "fork failed: $!"
 	} elsif ($pid == 0) {
-		open STDIN, "<&", $in;
+		open STDIN, "<&", $in if $in;
 		open STDOUT, ">&", $out;
 		open STDERR, ">&", $err;
-		close $in;
+		close $in if $in;
 		close $out;
 		exec(@$argv) or die "cannot exec '$argv->[0]': $!"
 	}
@@ -78,28 +78,32 @@ sub copy_stdio {
 }
 
 if ($#ARGV < 1) {
-	die "usage: test-terminal program args";
+	die "usage: test-terminal [--no-stdin-pty] program args";
 }
+my $no_stdin_pty = $ARGV[0] eq '--no-stdin-pty';
+shift @ARGV if $no_stdin_pty;
 $ENV{TERM} = 'vt100';
-my $parent_in = new IO::Pty;
+my $parent_in = $no_stdin_pty ? undef : IO::Pty->new;
 my $parent_out = new IO::Pty;
 my $parent_err = new IO::Pty;
-$parent_in->set_raw();
+$parent_in->set_raw() if $parent_in;
 $parent_out->set_raw();
 $parent_err->set_raw();
-$parent_in->slave->set_raw();
+$parent_in->slave->set_raw() if $parent_in;
 $parent_out->slave->set_raw();
 $parent_err->slave->set_raw();
-my $pid = start_child(\@ARGV, $parent_in->slave, $parent_out->slave, $parent_err->slave);
-close $parent_in->slave;
+my $pid = start_child(\@ARGV,$parent_in ? $parent_in->slave : undef, $parent_out->slave, $parent_err->slave);
+close $parent_in->slave if $parent_in;
 close $parent_out->slave;
 close $parent_err->slave;
-my $in_pid = copy_stdin($parent_in);
+my $in_pid = $no_stdin_pty ? 0 : copy_stdin($parent_in);
 copy_stdio($parent_out, $parent_err);
 my $ret = finish_child($pid);
-# If the child process terminates before our copy_stdin() process is able to
-# write all of its data to $parent_in, the copy_stdin() process could stall.
-# Send SIGTERM to it to ensure it terminates.
-kill 'TERM', $in_pid;
-finish_child($in_pid);
+if ($in_pid) {
+	# If the child process terminates before our copy_stdin() process is able to
+	# write all of its data to $parent_in, the copy_stdin() process could stall.
+	# Send SIGTERM to it to ensure it terminates.
+	kill 'TERM', $in_pid;
+	finish_child($in_pid);
+}
 exit($ret);

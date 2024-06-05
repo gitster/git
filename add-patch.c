@@ -5,6 +5,7 @@
 #include "environment.h"
 #include "gettext.h"
 #include "object-name.h"
+#include "pager.h"
 #include "read-cache-ll.h"
 #include "repository.h"
 #include "strbuf.h"
@@ -1389,6 +1390,7 @@ N_("j - leave this hunk undecided, see next undecided hunk\n"
    "s - split the current hunk into smaller hunks\n"
    "e - manually edit the current hunk\n"
    "p - print the current hunk\n"
+   "| - use pager to show the current hunk, or use |<program> to customize\n"
    "? - print help\n");
 
 static int patch_update_file(struct add_p_state *s,
@@ -1401,6 +1403,7 @@ static int patch_update_file(struct add_p_state *s,
 	struct child_process cp = CHILD_PROCESS_INIT;
 	int colored = !!s->colored.len, quit = 0;
 	enum prompt_mode_type prompt_mode_type;
+	const char* pager = NULL;
 	enum {
 		ALLOW_GOTO_PREVIOUS_HUNK = 1 << 0,
 		ALLOW_GOTO_PREVIOUS_UNDECIDED_HUNK = 1 << 1,
@@ -1449,9 +1452,15 @@ static int patch_update_file(struct add_p_state *s,
 		strbuf_reset(&s->buf);
 		if (file_diff->hunk_nr) {
 			if (rendered_hunk_index != hunk_index) {
+				if (pager)
+					setup_custom_pager(pager);
 				render_hunk(s, hunk, 0, colored, &s->buf);
 				fputs(s->buf.buf, stdout);
 				rendered_hunk_index = hunk_index;
+				if (pager) {
+					wait_for_pager();
+					pager = NULL;
+				}
 			}
 
 			strbuf_reset(&s->buf);
@@ -1485,6 +1494,7 @@ static int patch_update_file(struct add_p_state *s,
 				strbuf_addstr(&s->buf, ",e");
 			}
 			strbuf_addstr(&s->buf, ",p");
+			strbuf_addstr(&s->buf, ",|");
 		}
 		if (file_diff->deleted)
 			prompt_mode_type = PROMPT_DELETION;
@@ -1512,8 +1522,8 @@ static int patch_update_file(struct add_p_state *s,
 			continue;
 		ch = tolower(s->answer.buf[0]);
 
-		/* 'g' takes a hunk number and '/' takes a regexp */
-		if (s->answer.len != 1 && (ch != 'g' && ch != '/')) {
+		/* 'g' takes a hunk number, '/' takes a regexp and '|' takes a program */
+		if (s->answer.len != 1 && (ch != 'g' && ch != '/' && ch != '|')) {
 			err(s, _("Only one letter is expected, got '%s'"), s->answer.buf);
 			continue;
 		}
@@ -1673,6 +1683,17 @@ soft_increment:
 				goto soft_increment;
 			}
 		} else if (s->answer.buf[0] == 'p') {
+			rendered_hunk_index = -1;
+		} else if (ch == '|') {
+			strbuf_remove(&s->answer, 0, 1);
+			if (s->s.use_single_key && s->answer.len == 0) {
+				printf("%s", _("program? "));
+				fflush(stdout);
+				strbuf_getline(&s->answer, stdin);
+				strbuf_trim_trailing_newline(&s->answer);
+			}
+			strbuf_trim(&s->answer);
+			pager = s->answer.buf;
 			rendered_hunk_index = -1;
 		} else if (s->answer.buf[0] == '?') {
 			const char *p = _(help_patch_remainder), *eol = p;

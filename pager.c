@@ -14,6 +14,7 @@ int pager_use_color = 1;
 
 static struct child_process pager_process;
 static char *pager_program;
+static int old_fd1 = -1, old_fd2 = -1;
 
 /* Is the value coming back from term_columns() just a guess? */
 static int term_columns_guessed;
@@ -23,19 +24,41 @@ static void close_pager_fds(void)
 {
 	/* signal EOF to pager */
 	close(1);
-	close(2);
+	if (old_fd2 != -1)
+		close(2);
 }
 
 static void wait_for_pager_atexit(void)
 {
+	if (old_fd1 == -1)
+		return;
+
 	fflush(stdout);
 	fflush(stderr);
 	close_pager_fds();
 	finish_command(&pager_process);
 }
 
+void wait_for_pager(void)
+{
+	if (old_fd1 == -1)
+		return;
+
+	wait_for_pager_atexit();
+	unsetenv("GIT_PAGER_IN_USE");
+	dup2(old_fd1, 1);
+	old_fd1 = -1;
+	if (old_fd2 != -1) {
+		dup2(old_fd2, 2);
+		old_fd2 = -1;
+	}
+}
+
 static void wait_for_pager_signal(int signo)
 {
+	if (old_fd1 == -1)
+		return;
+
 	close_pager_fds();
 	finish_command_in_signal(&pager_process);
 	sigchain_pop(signo);
@@ -51,14 +74,13 @@ static int core_pager_config(const char *var, const char *value,
 	return 0;
 }
 
-const char *git_pager(int stdout_is_tty)
+static const char *git_pager_custom(int stdout_is_tty, const char* pager)
 {
-	const char *pager;
-
 	if (!stdout_is_tty)
 		return NULL;
 
-	pager = getenv("GIT_PAGER");
+	if (!pager || !*pager)
+		pager = getenv("GIT_PAGER");
 	if (!pager) {
 		if (!pager_program)
 			read_early_config(core_pager_config, NULL);
@@ -72,6 +94,11 @@ const char *git_pager(int stdout_is_tty)
 		pager = NULL;
 
 	return pager;
+}
+
+const char *git_pager(int stdout_is_tty)
+{
+	return git_pager_custom(stdout_is_tty, NULL);
 }
 
 static void setup_pager_env(struct strvec *env)
@@ -109,9 +136,11 @@ void prepare_pager_args(struct child_process *pager_process, const char *pager)
 	pager_process->trace2_child_class = "pager";
 }
 
-void setup_pager(void)
+void setup_custom_pager(const char* pager)
 {
-	const char *pager = git_pager(isatty(1));
+	static int once = 0;
+
+	pager = git_pager_custom(isatty(1), pager);
 
 	if (!pager)
 		return;
@@ -140,14 +169,18 @@ void setup_pager(void)
 		return;
 
 	/* original process continues, but writes to the pipe */
+	old_fd1 = dup(1);
 	dup2(pager_process.in, 1);
-	if (isatty(2))
+	if (isatty(2)) {
+		old_fd2 = dup(2);
 		dup2(pager_process.in, 2);
+	}
 	close(pager_process.in);
 
-	/* this makes sure that the parent terminates after the pager */
-	sigchain_push_common(wait_for_pager_signal);
-	atexit(wait_for_pager_atexit);
+	if (!once++) {
+		sigchain_push_common(wait_for_pager_signal);
+		atexit(wait_for_pager_atexit);
+	}
 }
 
 int pager_in_use(void)
