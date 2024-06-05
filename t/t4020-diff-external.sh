@@ -172,6 +172,39 @@ test_expect_success 'no diff with -diff' '
 	grep Binary out
 '
 
+check_external_exit_code () {
+	expect_code=$1
+	command_code=$2
+	option=$3
+
+	command="exit $command_code;"
+	desc="external diff '$command'"
+
+	test_expect_success "$desc via attribute with $option" "
+		test_config diff.foo.command \"$command\" &&
+		echo \"file diff=foo\" >.gitattributes &&
+		test_expect_code $expect_code git diff $option
+	"
+
+	test_expect_success "$desc via diff.external with $option" "
+		test_config diff.external \"$command\" &&
+		>.gitattributes &&
+		test_expect_code $expect_code git diff $option
+	"
+
+	test_expect_success "$desc via GIT_EXTERNAL_DIFF with $option" "
+		>.gitattributes &&
+		test_expect_code $expect_code env \
+			GIT_EXTERNAL_DIFF=\"$command\" \
+			git diff $option
+	"
+}
+
+check_external_exit_code   1 0 --exit-code
+check_external_exit_code   1 0 --quiet
+check_external_exit_code 128 1 --exit-code
+check_external_exit_code   1 1 --quiet # we don't even call the program
+
 echo NULZbetweenZwords | perl -pe 'y/Z/\000/' > file
 
 test_expect_success 'force diff with "diff"' '
