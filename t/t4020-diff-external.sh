@@ -172,6 +172,50 @@ test_expect_success 'no diff with -diff' '
 	grep Binary out
 '
 
+check_external_exit_code () {
+	expect_code=$1
+	command_code=$2
+	trust_exit_code=$3
+	option=$4
+
+	command="exit $command_code;"
+	desc="external diff '$command' with trustExitCode=$trust_exit_code"
+
+	test_expect_success "$desc via attribute with $option" "
+		test_config diff.foo.command \"$command\" &&
+		test_config diff.foo.trustExitCode $trust_exit_code &&
+		echo \"file diff=foo\" >.gitattributes &&
+		test_expect_code $expect_code git diff $option
+	"
+
+	test_expect_success "$desc via diff.external with $option" "
+		test_config diff.external \"$command\" &&
+		test_config diff.trustExitCode $trust_exit_code &&
+		>.gitattributes &&
+		test_expect_code $expect_code git diff $option
+	"
+
+	test_expect_success "$desc via GIT_EXTERNAL_DIFF with $option" "
+		>.gitattributes &&
+		test_expect_code $expect_code env \
+			GIT_EXTERNAL_DIFF=\"$command\" \
+			GIT_EXTERNAL_DIFF_TRUST_EXIT_CODE=$trust_exit_code \
+			git diff $option
+	"
+}
+
+check_external_exit_code   1 0 off --exit-code
+check_external_exit_code   1 0 off --quiet
+check_external_exit_code 128 1 off --exit-code
+check_external_exit_code   1 1 off --quiet # we don't even call the program
+
+check_external_exit_code   0 0 on --exit-code
+check_external_exit_code   0 0 on --quiet
+check_external_exit_code   1 1 on --exit-code
+check_external_exit_code   1 1 on --quiet
+check_external_exit_code 128 2 on --exit-code
+check_external_exit_code 128 2 on --quiet
+
 echo NULZbetweenZwords | perl -pe 'y/Z/\000/' > file
 
 test_expect_success 'force diff with "diff"' '

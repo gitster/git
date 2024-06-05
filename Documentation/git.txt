@@ -644,6 +644,13 @@ parameter, <path>.
 For each path `GIT_EXTERNAL_DIFF` is called, two environment variables,
 `GIT_DIFF_PATH_COUNTER` and `GIT_DIFF_PATH_TOTAL` are set.
 
+`GIT_EXTERNAL_DIFF_TRUST_EXIT_CODE`::
+	Setting this environment variable indicates the the program
+	specified with `GIT_EXTERNAL_DIFF` returns exit code 1 if it
+	finds significant changes and 0 if it doesn't, like diff(1).
+	If it's not set, the program is expected to always return
+	exit code 0.
+
 `GIT_DIFF_PATH_COUNTER`::
 	A 1-based counter incremented by one for every path.
 
