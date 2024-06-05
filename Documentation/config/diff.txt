@@ -79,6 +79,13 @@ diff.external::
 	you want to use an external diff program only on a subset of
 	your files, you might want to use linkgit:gitattributes[5] instead.
 
+diff.trustExitCode::
+	If this boolean value is set to true then the `diff.external`
+	command is expected to return exit code 1 if it finds
+	significant changes and 0 if it doesn't, like diff(1).  If it's
+	false then the `diff.external` command is expected to always
+	return exit code 0.  Defaults to false.
+
 diff.ignoreSubmodules::
 	Sets the default value of --ignore-submodules. Note that this
 	affects only 'git diff' Porcelain, and not lower level 'diff'
@@ -163,6 +170,13 @@ diff.wordRegex::
 diff.<driver>.command::
 	The custom diff driver command.  See linkgit:gitattributes[5]
 	for details.
+
+diff.<driver>.trustExitCode::
+	If this boolean value is set to true then the
+	`diff.<driver>.command` command is expected to return exit code
+	1 if it finds significant changes and 0 if it doesn't, like
+	diff(1).  If it's false then the `diff.external` command is
+	expected to always return exit code 0.  Defaults to false.
 
 diff.<driver>.xfuncname::
 	The regular expression that the diff driver should use to
