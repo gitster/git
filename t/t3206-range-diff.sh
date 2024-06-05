@@ -545,6 +545,12 @@ do
 	'
 done
 
+test_expect_success "format-patch --range-diff, implicit --cover-letter" '
+	git format-patch -v2 --range-diff=topic main..unmodified &&
+	test_when_finished "rm v2-000?-*" &&
+	test_grep "^Range-diff against v1:$" v2-0000-*
+'
+
 test_expect_success 'format-patch --range-diff as commentary' '
 	git format-patch --range-diff=HEAD~1 HEAD~1 >actual &&
 	test_when_finished "rm 0001-*" &&
