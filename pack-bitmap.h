@@ -2,7 +2,7 @@
 #define PACK_BITMAP_H
 
 #include "ewah/ewok.h"
-#include "khash.h"
+#include "khashl.h"
 #include "pack.h"
 #include "pack-objects.h"
 #include "string-list.h"

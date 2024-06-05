@@ -24,7 +24,7 @@
 #include "object-store-ll.h"
 #include "mem-pool.h"
 #include "commit-reach.h"
-#include "khash.h"
+#include "khashl.h"
 #include "date.h"
 
 #define PACK_ID_BITS 16
