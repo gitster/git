@@ -82,3 +82,12 @@ uploadpack.allowRefInWant::
 	is intended for the benefit of load-balanced servers which may
 	not have the same view of what OIDs their refs point to due to
 	replication delay.
+
+uploadpack.missingAction::
+	If this option is set, `upload-pack` will call
+	linkgit:git-pack-objects[1] passing it the corresponding
+	`--missing=<missing-action>` command line option. See the
+	documentation for that option, to see the valid values and
+	their meaning. This could be useful if some objects are
+	missing on a server, but a client already has them or could
+	still get them from somewhere else.

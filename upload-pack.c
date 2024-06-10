@@ -29,6 +29,8 @@
 #include "write-or-die.h"
 #include "json-writer.h"
 #include "strmap.h"
+#include "missing.h"
+#include "object-file.h"
 
 /* Remember to update object flag allocation in object.h */
 #define THEY_HAVE	(1u << 11)
@@ -95,6 +97,8 @@ struct upload_pack_data {
 	struct packet_writer writer;
 
 	char *pack_objects_hook;
+
+	enum missing_action missing_action;
 
 	unsigned stateless_rpc : 1;				/* v0 only */
 	unsigned no_done : 1;					/* v0 only */
@@ -315,6 +319,9 @@ static void create_pack_file(struct upload_pack_data *pack_data,
 		strvec_push(&pack_objects.args, "--delta-base-offset");
 	if (pack_data->use_include_tag)
 		strvec_push(&pack_objects.args, "--include-tag");
+	if (pack_data->missing_action)
+		strvec_pushf(&pack_objects.args, "--missing=%s",
+			     missing_action_to_string(pack_data->missing_action));
 	if (pack_data->filter_options.choice) {
 		const char *spec =
 			expand_list_objects_filter_spec(&pack_data->filter_options);
@@ -1374,6 +1381,16 @@ static int upload_pack_config(const char *var, const char *value,
 		precomposed_unicode = git_config_bool(var, value);
 	} else if (!strcmp("transfer.advertisesid", var)) {
 		data->advertise_sid = git_config_bool(var, value);
+	} else if (!strcmp("uploadpack.missingaction", var)) {
+		int res = parse_missing_action_value_for_packing(value);
+		if (res < 0)
+			die(_("invalid value for '%s': '%s'"), var, value);
+		/* Allow fetching only from promisor remotes */
+		if (res == MA_ALLOW_PROMISOR)
+			fetch_if_missing = 1;
+		if (res == MA_ALLOW_ANY)
+			fetch_if_missing = 0;
+		data->missing_action = res;
 	}
 
 	if (parse_object_filter_config(var, value, ctx->kvi, data) < 0)
