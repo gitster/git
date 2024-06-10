@@ -61,7 +61,8 @@ static enum cb_next check_each_cb(const struct object_id *oid, void *data)
 	return CB_CONTINUE;
 }
 
-static void check_each(struct oidtree *ot, char *query, ...)
+LAST_ARG_MUST_BE_NULL
+static void check_each(struct oidtree *ot, const char *query, ...)
 {
 	struct object_id oid;
 	struct expected_hex_iter hex_iter = { .expected_hexes = STRVEC_INIT,
