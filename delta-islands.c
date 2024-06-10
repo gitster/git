@@ -10,14 +10,14 @@
 #include "diff.h"
 #include "progress.h"
 #include "refs.h"
-#include "khash.h"
+#include "khashl.h"
 #include "pack-bitmap.h"
 #include "pack-objects.h"
 #include "delta-islands.h"
 #include "oid-array.h"
 #include "config.h"
 
-KHASH_INIT(str, const char *, void *, 1, kh_str_hash_func, kh_str_hash_equal)
+KHASHL_MAP_INIT(KH_LOCAL, kh_str, str, const char *, void *, kh_hash_str, kh_eq_str)
 
 static kh_oid_map_t *island_marks;
 static unsigned island_counter;
