@@ -379,7 +379,6 @@ test_expect_success 'background auto gc respects lock for all operations' '
 
 	# now fake a concurrent gc that holds the lock; we can use our
 	# shell pid so that it looks valid.
-	hostname=$(hostname || echo unknown) &&
 	shell_pid=$$ &&
 	if test_have_prereq MINGW && test -f /proc/$shell_pid/winpid
 	then
@@ -388,7 +387,7 @@ test_expect_success 'background auto gc respects lock for all operations' '
 		# the Windows PID in this case.
 		shell_pid=$(cat /proc/$shell_pid/winpid)
 	fi &&
-	printf "%d %s" "$shell_pid" "$hostname" >.git/gc.pid &&
+	printf "%d %s" "$shell_pid" "$(test-tool xgethostname)" >.git/gc.pid &&
 
 	# our gc should exit zero without doing anything
 	run_and_wait_for_auto_gc &&
