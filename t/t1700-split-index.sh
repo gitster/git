@@ -478,12 +478,12 @@ test_expect_success 'writing split index with null sha1 does not write cache tre
 	git config splitIndex.maxPercentChange 0 &&
 	git commit -m "commit" &&
 	{
-		git ls-tree HEAD &&
-		printf "160000 commit $ZERO_OID\\tbroken\\n"
+		printf "160000 commit $ZERO_OID\\tbroken\\n" &&
+		git ls-tree HEAD
 	} >broken-tree &&
 	echo "add broken entry" >msg &&
 
-	tree=$(git mktree <broken-tree) &&
+	tree=$(git mktree --literally <broken-tree) &&
 	test_tick &&
 	commit=$(git commit-tree $tree -p HEAD <msg) &&
 	git update-ref HEAD "$commit" &&

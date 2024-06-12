@@ -42,7 +42,7 @@ test_expect_success MINGW 'submodule paths disallows trailing spaces' '
 	tree=$(git -C super write-tree) &&
 	git -C super ls-tree $tree >tree &&
 	sed "s/sub/sub /" <tree >tree.new &&
-	tree=$(git -C super mktree <tree.new) &&
+	tree=$(git -C super mktree --literally <tree.new) &&
 	commit=$(echo with space | git -C super commit-tree $tree) &&
 	git -C super update-ref refs/heads/main $commit &&
 

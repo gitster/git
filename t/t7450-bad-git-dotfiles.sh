@@ -203,11 +203,11 @@ check_dotx_symlink () {
 			content=$(git hash-object -w ../.gitmodules) &&
 			target=$(printf "$tricky" | git hash-object -w --stdin) &&
 			{
-				printf "100644 blob $content\t$tricky\n" &&
-				printf "120000 blob $target\t$path\n"
+				printf "120000 blob $target\t$path\n" &&
+				printf "100644 blob $content\t$tricky\n"
 			} >bad-tree
 		) &&
-		tree=$(git -C $dir mktree <$dir/bad-tree)
+		tree=$(git -C $dir mktree --literally <$dir/bad-tree)
 	'
 
 	test_expect_success "fsck detects symlinked $name ($type)" '
@@ -261,7 +261,7 @@ test_expect_success 'fsck detects non-blob .gitmodules' '
 		cp ../.gitmodules subdir/file &&
 		git add subdir/file &&
 		git commit -m ok &&
-		git ls-tree HEAD | sed s/subdir/.gitmodules/ | git mktree &&
+		git ls-tree HEAD | sed s/subdir/.gitmodules/ | git mktree --literally &&
 
 		test_must_fail git fsck 2>output &&
 		test_grep gitmodulesBlob output

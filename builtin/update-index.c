@@ -11,6 +11,7 @@
 #include "gettext.h"
 #include "hash.h"
 #include "hex.h"
+#include "index-info.h"
 #include "lockfile.h"
 #include "quote.h"
 #include "cache-tree.h"
@@ -509,100 +510,30 @@ static void update_one(const char *path)
 	report("add '%s'", path);
 }
 
-static void read_index_info(int nul_term_line)
+static int apply_index_info(unsigned int mode, struct object_id *oid,
+			    enum object_type obj_type UNUSED, int stage,
+			    const char *path_name, void *cbdata UNUSED)
 {
-	const int hexsz = the_hash_algo->hexsz;
-	struct strbuf buf = STRBUF_INIT;
-	struct strbuf uq = STRBUF_INIT;
-	strbuf_getline_fn getline_fn;
-
-	getline_fn = nul_term_line ? strbuf_getline_nul : strbuf_getline_lf;
-	while (getline_fn(&buf, stdin) != EOF) {
-		char *ptr, *tab;
-		char *path_name;
-		struct object_id oid;
-		unsigned int mode;
-		unsigned long ul;
-		int stage;
-
-		/* This reads lines formatted in one of three formats:
-		 *
-		 * (1) mode         SP sha1          TAB path
-		 * The first format is what "git apply --index-info"
-		 * reports, and used to reconstruct a partial tree
-		 * that is used for phony merge base tree when falling
-		 * back on 3-way merge.
-		 *
-		 * (2) mode SP type SP sha1          TAB path
-		 * The second format is to stuff "git ls-tree" output
-		 * into the index file.
-		 *
-		 * (3) mode         SP sha1 SP stage TAB path
-		 * This format is to put higher order stages into the
-		 * index file and matches "git ls-files --stage" output.
-		 */
-		errno = 0;
-		ul = strtoul(buf.buf, &ptr, 8);
-		if (ptr == buf.buf || *ptr != ' '
-		    || errno || (unsigned int) ul != ul)
-			goto bad_line;
-		mode = ul;
-
-		tab = strchr(ptr, '\t');
-		if (!tab || tab - ptr < hexsz + 1)
-			goto bad_line;
-
-		if (tab[-2] == ' ' && '0' <= tab[-1] && tab[-1] <= '3') {
-			stage = tab[-1] - '0';
-			ptr = tab + 1; /* point at the head of path */
-			tab = tab - 2; /* point at tail of sha1 */
-		}
-		else {
-			stage = 0;
-			ptr = tab + 1; /* point at the head of path */
-		}
-
-		if (get_oid_hex(tab - hexsz, &oid) ||
-			tab[-(hexsz + 1)] != ' ')
-			goto bad_line;
-
-		path_name = ptr;
-		if (!nul_term_line && path_name[0] == '"') {
-			strbuf_reset(&uq);
-			if (unquote_c_style(&uq, path_name, NULL)) {
-				die("git update-index: bad quoting of path name");
-			}
-			path_name = uq.buf;
-		}
-
-		if (!verify_path(path_name, mode)) {
-			fprintf(stderr, "Ignoring path %s\n", path_name);
-			continue;
-		}
-
-		if (!mode) {
-			/* mode == 0 means there is no such path -- remove */
-			if (remove_file_from_index(the_repository->index, path_name))
-				die("git update-index: unable to remove %s",
-				    ptr);
-		}
-		else {
-			/* mode ' ' sha1 '\t' name
-			 * ptr[-1] points at tab,
-			 * ptr[-41] is at the beginning of sha1
-			 */
-			ptr[-(hexsz + 2)] = ptr[-1] = 0;
-			if (add_cacheinfo(mode, &oid, path_name, stage))
-				die("git update-index: unable to update %s",
-				    path_name);
-		}
-		continue;
-
-	bad_line:
-		die("malformed index info %s", buf.buf);
+	if (!verify_path(path_name, mode)) {
+		fprintf(stderr, "Ignoring path %s\n", path_name);
+		return 0;
 	}
-	strbuf_release(&buf);
-	strbuf_release(&uq);
+
+	if (!mode) {
+		/* mode == 0 means there is no such path -- remove */
+		if (remove_file_from_index(the_repository->index, path_name))
+			die("git update-index: unable to remove %s", path_name);
+	}
+	else {
+		/* mode ' ' sha1 '\t' name
+		 * ptr[-1] points at tab,
+		 * ptr[-41] is at the beginning of sha1
+		 */
+		if (add_cacheinfo(mode, oid, path_name, stage))
+			die("git update-index: unable to update %s", path_name);
+	}
+
+	return 0;
 }
 
 static const char * const update_index_usage[] = {
@@ -849,6 +780,7 @@ static enum parse_opt_result stdin_cacheinfo_callback(
 	const char *arg, int unset)
 {
 	int *nul_term_line = opt->value;
+	int ret;
 
 	BUG_ON_OPT_NEG(unset);
 	BUG_ON_OPT_ARG(arg);
@@ -856,7 +788,12 @@ static enum parse_opt_result stdin_cacheinfo_callback(
 	if (ctx->argc != 1)
 		return error("option '%s' must be the last argument", opt->long_name);
 	allow_add = allow_replace = allow_remove = 1;
-	read_index_info(*nul_term_line);
+	ret = read_index_info(*nul_term_line, apply_index_info, NULL);
+	if (ret == INDEX_INFO_EMPTY_LINE)
+		return error("malformed input line ''");
+	else if (ret < 0)
+		return -1;
+
 	return 0;
 }
 

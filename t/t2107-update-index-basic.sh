@@ -142,4 +142,36 @@ test_expect_success '--index-version' '
 	test_must_be_empty actual
 '
 
+test_expect_success '--index-info fails on malformed input' '
+	# empty line
+	echo "" |
+	test_must_fail git update-index --index-info 2>err &&
+	grep "malformed input line" err &&
+
+	# bad whitespace
+	printf "100644 $EMPTY_BLOB A" |
+	test_must_fail git update-index --index-info 2>err &&
+	grep "malformed input line" err &&
+
+	# invalid type
+	printf "100644 bad $EMPTY_BLOB\tA" |
+	test_must_fail git update-index --index-info 2>err &&
+	grep "invalid object type" err &&
+
+	# invalid stage value
+	printf "100644 $EMPTY_BLOB 5\tA" |
+	test_must_fail git update-index --index-info 2>err &&
+	grep "malformed input line" err &&
+
+	# invalid OID length
+	printf "100755 abc123\tA" |
+	test_must_fail git update-index --index-info 2>err &&
+	grep "malformed input line" err &&
+
+	# bad quoting
+	printf "100644 $EMPTY_BLOB\t\"A" |
+	test_must_fail git update-index --index-info 2>err &&
+	grep "bad quoting of path name" err
+'
+
 test_done

@@ -30,13 +30,13 @@ while read path pretty; do
 	esac
 	test_expect_success "reject $pretty at end of path" '
 		printf "100644 blob %s\t%s" "$blob" "$path" >tree &&
-		bogus=$(git mktree <tree) &&
+		bogus=$(git mktree --literally <tree) &&
 		test_must_fail git read-tree $bogus
 	'
 
 	test_expect_success "reject $pretty as subtree" '
 		printf "040000 tree %s\t%s" "$tree" "$path" >tree &&
-		bogus=$(git mktree <tree) &&
+		bogus=$(git mktree --literally <tree) &&
 		test_must_fail git read-tree $bogus
 	'
 done <<-EOF
@@ -58,7 +58,7 @@ test_expect_success 'utf-8 paths allowed with core.protectHFS off' '
 	test_when_finished "git read-tree HEAD" &&
 	test_config core.protectHFS false &&
 	printf "100644 blob %s\t%s" "$blob" ".gi${u200c}t" >tree &&
-	ok=$(git mktree <tree) &&
+	ok=$(git mktree --literally <tree) &&
 	git read-tree $ok
 '
 

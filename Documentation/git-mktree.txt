@@ -3,25 +3,23 @@ git-mktree(1)
 
 NAME
 ----
-git-mktree - Build a tree-object from ls-tree formatted text
+git-mktree - Build a tree-object from formatted tree entries
 
 
 SYNOPSIS
 --------
 [verse]
-'git mktree' [-z] [--missing] [--batch]
+'git mktree' [-z] [--missing] [--literally] [--batch] [--] [<tree-ish>]
 
 DESCRIPTION
 -----------
-Reads standard input in non-recursive `ls-tree` output format, and creates
-a tree object.  The order of the tree entries is normalized by mktree so
-pre-sorting the input is not required.  The object name of the tree object
-built is written to the standard output.
+Reads entry information from stdin and creates a tree object from those entries.
+The object name of the tree object built is written to the standard output.
 
 OPTIONS
 -------
 -z::
-	Read the NUL-terminated `ls-tree -z` output instead.
+	Input lines are separated with NUL rather than LF.
 
 --missing::
 	Allow missing objects.  The default behaviour (without this option)
@@ -29,11 +27,41 @@ OPTIONS
 	object.  This option has no effect on the treatment of gitlink entries
 	(aka "submodules") which are always allowed to be missing.
 
+--literally::
+	Create the tree from the tree entries provided to stdin in the order
+	they are provided without performing additional sorting, deduplication,
+	or path validation on them. This option is primarily useful for creating
+	invalid tree objects to use in tests of how Git deals with various forms
+	of tree corruption.
+
 --batch::
 	Allow building of more than one tree object before exiting.  Each
 	tree is separated by a single blank line. The final newline is
 	optional.  Note - if the `-z` option is used, lines are terminated
 	with NUL.
+
+<tree-ish>::
+	If provided, the tree entries provided in stdin are added to this tree
+	rather than a new empty one, replacing existing entries with identical
+	names. Not compatible with `--literally`.
+
+INPUT FORMAT
+------------
+Tree entries may be specified in any of the formats compatible with the
+`--index-info` option to linkgit:git-update-index[1].
+
+Entries may use full pathnames containing directory separators to specify
+entries nested within one or more directories. These entries are inserted into
+the appropriate tree in the base tree-ish if one exists. Otherwise, empty parent
+trees are created to contain the entries.
+
+An entry with a mode of "0" will remove an entry of the same name from the base
+tree-ish. If no tree-ish argument is given, or the entry does not exist in that
+tree, the entry is ignored.
+
+The order of the tree entries is normalized by `mktree` so pre-sorting the input
+by path is not required. Multiple entries provided with the same path are
+deduplicated, with only the last one specified added to the tree.
 
 GIT
 ---

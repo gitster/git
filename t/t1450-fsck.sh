@@ -316,7 +316,7 @@ check_duplicate_names () {
 			*)  printf "100644 blob %s\t%s\n" $blob "$name" ;;
 			esac
 		done >badtree &&
-		badtree=$(git mktree <badtree) &&
+		badtree=$(git mktree --literally <badtree) &&
 		test_must_fail git fsck 2>out &&
 		test_grep "$badtree" out &&
 		test_grep "error in tree .*contains duplicate file entries" out
@@ -614,7 +614,7 @@ while read name path pretty; do
 			tree=$(git rev-parse HEAD^{tree}) &&
 			value=$(eval "echo \$$type") &&
 			printf "$mode $type %s\t%s" "$value" "$path" >bad &&
-			bad_tree=$(git mktree <bad) &&
+			bad_tree=$(git mktree --literally <bad) &&
 			git fsck 2>out &&
 			test_grep "warning.*tree $bad_tree" out
 		)'
