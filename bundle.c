@@ -17,6 +17,7 @@
 #include "list-objects-filter-options.h"
 #include "connected.h"
 #include "write-or-die.h"
+#include "fetch-pack.h"
 
 static const char v2_bundle_signature[] = "# v2 git bundle\n";
 static const char v3_bundle_signature[] = "# v3 git bundle\n";
@@ -633,6 +634,10 @@ int unbundle(struct repository *r, struct bundle_header *header,
 	/* If there is a filter, then we need to create the promisor pack. */
 	if (header->filter.choice)
 		strvec_push(&ip.args, "--promisor=from-bundle");
+
+	if (flags & VERIFY_BUNDLE_FSCK_FOLLOW_FETCH)
+		if (fetch_pack_fsck_objects())
+			strvec_push(&ip.args, "--fsck-objects");
 
 	if (extra_index_pack_args) {
 		strvec_pushv(&ip.args, extra_index_pack_args->v);
