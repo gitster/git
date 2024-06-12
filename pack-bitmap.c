@@ -238,6 +238,9 @@ static int load_bitmap_header(struct bitmap_index *index)
 				index->pseudo_merges.commits_nr = get_be32(index_end - 20);
 				index->pseudo_merges.nr = get_be32(index_end - 24);
 
+				if (st_mult(index->pseudo_merges.nr, sizeof(uint64_t)) > table_size - 24)
+					return error(_("corrupted bitmap index file, pseudo-merge table too short"));
+
 				CALLOC_ARRAY(index->pseudo_merges.v,
 					     index->pseudo_merges.nr);
 
