@@ -1,3 +1,5 @@
+#define USE_THE_REPOSITORY_VARIABLE
+
 #include "git-compat-util.h"
 #include "config.h"
 #include "dir.h"
@@ -535,7 +537,8 @@ struct object_id *nth_midxed_object_oid(struct object_id *oid,
 
 	n = midx_for_object(&m, n);
 
-	oidread(oid, m->chunk_oid_lookup + st_mult(m->hash_len, n));
+	oidread(oid, m->chunk_oid_lookup + st_mult(m->hash_len, n),
+		the_repository->hash_algo);
 	return oid;
 }
 

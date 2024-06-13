@@ -9,6 +9,7 @@
 #include "tree.h"
 #include "tree-walk.h"
 #include "config.h"
+#include "repository.h"
 
 define_commit_slab(bloom_filter_slab, struct bloom_filter);
 
