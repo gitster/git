@@ -254,6 +254,7 @@ static inline int _have_unix_sockets(void)
 #include <time.h>
 #include <signal.h>
 #include <assert.h>
+#define _REGEX_NELTS(n)
 #include <regex.h>
 #include <utime.h>
 #include <syslog.h>
