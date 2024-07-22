@@ -9,9 +9,6 @@ test_terminal () {
 		echo >&4 "test_terminal: need to declare TTY prerequisite"
 		return 127
 	fi
-
-	echo >&4 "In test_terminal: GIT_PAGER=$(env | grep GIT_PAGER=)"
-
 	perl "$TEST_DIRECTORY"/test-terminal.perl "$@" 2>&7
 } 7>&2 2>&4
 

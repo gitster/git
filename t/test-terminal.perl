@@ -67,8 +67,6 @@ sub copy_stdio {
 if ($#ARGV < 1) {
 	die "usage: test-terminal program args";
 }
-print STDERR "test-terminal: GIT_PAGER=$ENV{GIT_PAGER}\n";
-
 $ENV{TERM} = 'vt100';
 my $parent_out = new IO::Pty;
 my $parent_err = new IO::Pty;
