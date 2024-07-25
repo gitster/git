@@ -75,9 +75,11 @@ diff.external::
 	performed using the internal diff machinery, but using the
 	given command.  Can be overridden with the `GIT_EXTERNAL_DIFF'
 	environment variable.  The command is called with parameters
-	as described under "git Diffs" in linkgit:git[1].  Note: if
-	you want to use an external diff program only on a subset of
-	your files, you might want to use linkgit:gitattributes[5] instead.
+	as described under "git Diffs" in linkgit:git[1].
++
+[NOTE]
+if you want to use an external diff program only on a subset of
+your files, you might want to use linkgit:gitattributes[5] instead.
 
 diff.trustExitCode::
 	If this boolean value is set to true then the

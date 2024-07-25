@@ -1,4 +1,5 @@
-NOTE: The configuration options in `bitmapPseudoMerge.*` are considered
+[NOTE]
+The configuration options in `bitmapPseudoMerge.*` are considered
 EXPERIMENTAL and may be subject to change or be removed entirely in the
 future. For more information about the pseudo-merge bitmap feature, see
 the "Pseudo-merge bitmaps" section of linkgit:gitpacking[7].
