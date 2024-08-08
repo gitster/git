@@ -1,52 +1,46 @@
-#include "test-lib.h"
+#include "unit-test.h"
 #include "strbuf.h"
 #include "strvec.h"
 
 #define check_strvec(vec, ...) \
 	do { \
 		const char *expect[] = { __VA_ARGS__ }; \
-		if (check_uint(ARRAY_SIZE(expect), >, 0) && \
-		    check_pointer_eq(expect[ARRAY_SIZE(expect) - 1], NULL) && \
-		    check_uint((vec)->nr, ==, ARRAY_SIZE(expect) - 1) && \
-		    check_uint((vec)->nr, <=, (vec)->alloc)) { \
-			for (size_t i = 0; i < ARRAY_SIZE(expect); i++) { \
-				if (!check_str((vec)->v[i], expect[i])) { \
-					test_msg("      i: %"PRIuMAX, \
-						 (uintmax_t)i); \
-					break; \
-				} \
-			} \
-		} \
+		cl_assert(ARRAY_SIZE(expect) > 0); \
+		cl_assert_equal_p(expect[ARRAY_SIZE(expect) - 1], NULL); \
+		cl_assert_equal_i((vec)->nr, ARRAY_SIZE(expect) - 1); \
+		cl_assert((vec)->nr <= (vec)->alloc); \
+		for (size_t i = 0; i < ARRAY_SIZE(expect); i++) \
+			cl_assert_equal_s((vec)->v[i], expect[i]); \
 	} while (0)
 
-static void t_static_init(void)
+void test_strvec__init(void)
 {
 	struct strvec vec = STRVEC_INIT;
-	check_pointer_eq(vec.v, empty_strvec);
-	check_uint(vec.nr, ==, 0);
-	check_uint(vec.alloc, ==, 0);
+	cl_assert_equal_p(vec.v, empty_strvec);
+	cl_assert_equal_i(vec.nr, 0);
+	cl_assert_equal_i(vec.alloc, 0);
 }
 
-static void t_dynamic_init(void)
+void test_strvec__dynamic_init(void)
 {
 	struct strvec vec;
 	strvec_init(&vec);
-	check_pointer_eq(vec.v, empty_strvec);
-	check_uint(vec.nr, ==, 0);
-	check_uint(vec.alloc, ==, 0);
+	cl_assert_equal_p(vec.v, empty_strvec);
+	cl_assert_equal_i(vec.nr, 0);
+	cl_assert_equal_i(vec.alloc, 0);
 }
 
-static void t_clear(void)
+void test_strvec__clear(void)
 {
 	struct strvec vec = STRVEC_INIT;
 	strvec_push(&vec, "foo");
 	strvec_clear(&vec);
-	check_pointer_eq(vec.v, empty_strvec);
-	check_uint(vec.nr, ==, 0);
-	check_uint(vec.alloc, ==, 0);
+	cl_assert_equal_p(vec.v, empty_strvec);
+	cl_assert_equal_i(vec.nr, 0);
+	cl_assert_equal_i(vec.alloc, 0);
 }
 
-static void t_push(void)
+void test_strvec__push(void)
 {
 	struct strvec vec = STRVEC_INIT;
 
@@ -59,7 +53,7 @@ static void t_push(void)
 	strvec_clear(&vec);
 }
 
-static void t_pushf(void)
+void test_strvec__pushf(void)
 {
 	struct strvec vec = STRVEC_INIT;
 	strvec_pushf(&vec, "foo: %d", 1);
@@ -67,7 +61,7 @@ static void t_pushf(void)
 	strvec_clear(&vec);
 }
 
-static void t_pushl(void)
+void test_strvec__pushl(void)
 {
 	struct strvec vec = STRVEC_INIT;
 	strvec_pushl(&vec, "foo", "bar", "baz", NULL);
@@ -75,7 +69,7 @@ static void t_pushl(void)
 	strvec_clear(&vec);
 }
 
-static void t_pushv(void)
+void test_strvec__pushv(void)
 {
 	const char *strings[] = {
 		"foo", "bar", "baz", NULL,
@@ -88,7 +82,7 @@ static void t_pushv(void)
 	strvec_clear(&vec);
 }
 
-static void t_replace_at_head(void)
+void test_strvec__replace_at_head(void)
 {
 	struct strvec vec = STRVEC_INIT;
 	strvec_pushl(&vec, "foo", "bar", "baz", NULL);
@@ -97,7 +91,7 @@ static void t_replace_at_head(void)
 	strvec_clear(&vec);
 }
 
-static void t_replace_at_tail(void)
+void test_strvec__replace_at_tail(void)
 {
 	struct strvec vec = STRVEC_INIT;
 	strvec_pushl(&vec, "foo", "bar", "baz", NULL);
@@ -106,7 +100,7 @@ static void t_replace_at_tail(void)
 	strvec_clear(&vec);
 }
 
-static void t_replace_in_between(void)
+void test_strvec__replace_in_between(void)
 {
 	struct strvec vec = STRVEC_INIT;
 	strvec_pushl(&vec, "foo", "bar", "baz", NULL);
@@ -115,7 +109,7 @@ static void t_replace_in_between(void)
 	strvec_clear(&vec);
 }
 
-static void t_replace_with_substring(void)
+void test_strvec__replace_with_substring(void)
 {
 	struct strvec vec = STRVEC_INIT;
 	strvec_pushl(&vec, "foo", NULL);
@@ -124,7 +118,7 @@ static void t_replace_with_substring(void)
 	strvec_clear(&vec);
 }
 
-static void t_remove_at_head(void)
+void test_strvec__remove_at_head(void)
 {
 	struct strvec vec = STRVEC_INIT;
 	strvec_pushl(&vec, "foo", "bar", "baz", NULL);
@@ -133,7 +127,7 @@ static void t_remove_at_head(void)
 	strvec_clear(&vec);
 }
 
-static void t_remove_at_tail(void)
+void test_strvec__remove_at_tail(void)
 {
 	struct strvec vec = STRVEC_INIT;
 	strvec_pushl(&vec, "foo", "bar", "baz", NULL);
@@ -142,7 +136,7 @@ static void t_remove_at_tail(void)
 	strvec_clear(&vec);
 }
 
-static void t_remove_in_between(void)
+void test_strvec__remove_in_between(void)
 {
 	struct strvec vec = STRVEC_INIT;
 	strvec_pushl(&vec, "foo", "bar", "baz", NULL);
@@ -151,7 +145,7 @@ static void t_remove_in_between(void)
 	strvec_clear(&vec);
 }
 
-static void t_pop_empty_array(void)
+void test_strvec__pop_empty_array(void)
 {
 	struct strvec vec = STRVEC_INIT;
 	strvec_pop(&vec);
@@ -159,7 +153,7 @@ static void t_pop_empty_array(void)
 	strvec_clear(&vec);
 }
 
-static void t_pop_non_empty_array(void)
+void test_strvec__pop_non_empty_array(void)
 {
 	struct strvec vec = STRVEC_INIT;
 	strvec_pushl(&vec, "foo", "bar", "baz", NULL);
@@ -168,7 +162,7 @@ static void t_pop_non_empty_array(void)
 	strvec_clear(&vec);
 }
 
-static void t_split_empty_string(void)
+void test_strvec__split_empty_string(void)
 {
 	struct strvec vec = STRVEC_INIT;
 	strvec_split(&vec, "");
@@ -176,7 +170,7 @@ static void t_split_empty_string(void)
 	strvec_clear(&vec);
 }
 
-static void t_split_single_item(void)
+void test_strvec__split_single_item(void)
 {
 	struct strvec vec = STRVEC_INIT;
 	strvec_split(&vec, "foo");
@@ -184,7 +178,7 @@ static void t_split_single_item(void)
 	strvec_clear(&vec);
 }
 
-static void t_split_multiple_items(void)
+void test_strvec__split_multiple_items(void)
 {
 	struct strvec vec = STRVEC_INIT;
 	strvec_split(&vec, "foo bar baz");
@@ -192,7 +186,7 @@ static void t_split_multiple_items(void)
 	strvec_clear(&vec);
 }
 
-static void t_split_whitespace_only(void)
+void test_strvec__split_whitespace_only(void)
 {
 	struct strvec vec = STRVEC_INIT;
 	strvec_split(&vec, " \t\n");
@@ -200,7 +194,7 @@ static void t_split_whitespace_only(void)
 	strvec_clear(&vec);
 }
 
-static void t_split_multiple_consecutive_whitespaces(void)
+void test_strvec__split_multiple_consecutive_whitespaces(void)
 {
 	struct strvec vec = STRVEC_INIT;
 	strvec_split(&vec, "foo\n\t bar");
@@ -208,7 +202,7 @@ static void t_split_multiple_consecutive_whitespaces(void)
 	strvec_clear(&vec);
 }
 
-static void t_detach(void)
+void test_strvec__detach(void)
 {
 	struct strvec vec = STRVEC_INIT;
 	const char **detached;
@@ -216,40 +210,13 @@ static void t_detach(void)
 	strvec_push(&vec, "foo");
 
 	detached = strvec_detach(&vec);
-	check_str(detached[0], "foo");
-	check_pointer_eq(detached[1], NULL);
+	cl_assert_equal_s(detached[0], "foo");
+	cl_assert_equal_p(detached[1], NULL);
 
-	check_pointer_eq(vec.v, empty_strvec);
-	check_uint(vec.nr, ==, 0);
-	check_uint(vec.alloc, ==, 0);
+	cl_assert_equal_p(vec.v, empty_strvec);
+	cl_assert_equal_i(vec.nr, 0);
+	cl_assert_equal_i(vec.alloc, 0);
 
 	free((char *) detached[0]);
 	free(detached);
-}
-
-int cmd_main(int argc, const char **argv)
-{
-	TEST(t_static_init(), "static initialization");
-	TEST(t_dynamic_init(), "dynamic initialization");
-	TEST(t_clear(), "clear");
-	TEST(t_push(), "push");
-	TEST(t_pushf(), "pushf");
-	TEST(t_pushl(), "pushl");
-	TEST(t_pushv(), "pushv");
-	TEST(t_replace_at_head(), "replace at head");
-	TEST(t_replace_in_between(), "replace in between");
-	TEST(t_replace_at_tail(), "replace at tail");
-	TEST(t_replace_with_substring(), "replace with substring");
-	TEST(t_remove_at_head(), "remove at head");
-	TEST(t_remove_in_between(), "remove in between");
-	TEST(t_remove_at_tail(), "remove at tail");
-	TEST(t_pop_empty_array(), "pop with empty array");
-	TEST(t_pop_non_empty_array(), "pop with non-empty array");
-	TEST(t_split_empty_string(), "split empty string");
-	TEST(t_split_single_item(), "split single item");
-	TEST(t_split_multiple_items(), "split multiple items");
-	TEST(t_split_whitespace_only(), "split whitespace only");
-	TEST(t_split_multiple_consecutive_whitespaces(), "split multiple consecutive whitespaces");
-	TEST(t_detach(), "detach");
-	return test_done();
 }
