@@ -13,6 +13,5 @@ int basics_test_main(int argc, const char **argv);
 int block_test_main(int argc, const char **argv);
 int record_test_main(int argc, const char **argv);
 int stack_test_main(int argc, const char **argv);
-int reftable_dump_main(int argc, char *const *argv);
 
 #endif
