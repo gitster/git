@@ -73,11 +73,40 @@ test_expect_success 'check-mailmap --stdin arguments: mapping' '
 '
 
 test_expect_success 'check-mailmap bogus contact' '
-	test_must_fail git check-mailmap bogus
+	cat >expect <<-EOF &&
+	<bogus>
+	EOF
+	git check-mailmap bogus >actual &&
+	test_cmp expect actual
 '
 
 test_expect_success 'check-mailmap bogus contact --stdin' '
-	test_must_fail git check-mailmap --stdin bogus </dev/null
+	cat >expect <<-EOF &&
+	<bogus>
+	EOF
+	cat >stdin <<-EOF &&
+	bogus
+	EOF
+	git check-mailmap --stdin <stdin >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success 'check-mailmap simple address: mapping' '
+	test_when_finished "rm .mailmap" &&
+	cat >.mailmap <<-EOF &&
+	New Name <$GIT_AUTHOR_EMAIL>
+	EOF
+	cat .mailmap >expect &&
+	git check-mailmap "$GIT_AUTHOR_EMAIL" >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success 'check-mailmap simple address: no mapping' '
+	cat >expect <<-EOF &&
+	<bugs@company.xx>
+	EOF
+	git check-mailmap "bugs@company.xx" >actual &&
+	test_cmp expect actual
 '
 
 test_expect_success 'No mailmap' '
