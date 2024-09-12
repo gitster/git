@@ -7,6 +7,14 @@
 #include "utf8.h"
 #include "date.h"
 
+/*
+ * We do not need the_repository at all, but the comment_line_str
+ * variable is hidden behind USE_THE_REPOSITORY_VARIABLE CPP macro.
+ * We could #define it before including "envirnoment.h".  Or we can
+ * make an external declaration ourselves here.
+ */
+extern const char *comment_line_str;
+
 int starts_with(const char *str, const char *prefix)
 {
 	for (; ; str++, prefix++)
