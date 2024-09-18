@@ -2011,26 +2011,6 @@ static int commit_ref_update(struct files_ref_store *refs,
 	return 0;
 }
 
-#ifdef NO_SYMLINK_HEAD
-#define create_ref_symlink(a, b) (-1)
-#else
-static int create_ref_symlink(struct ref_lock *lock, const char *target)
-{
-	int ret = -1;
-
-	char *ref_path = get_locked_file_path(&lock->lk);
-	unlink(ref_path);
-	ret = symlink(target, ref_path);
-	free(ref_path);
-
-	if (ret)
-		fprintf(stderr, "no symlink - falling back to symbolic ref\n");
-	else
-		warning("core.preferSymlinkRefs will be removed in Git 3.0");
-	return ret;
-}
-#endif
-
 static int create_symref_lock(struct ref_lock *lock, const char *target,
 			      struct strbuf *err)
 {
@@ -3003,13 +2983,10 @@ static int files_transaction_finish(struct ref_store *ref_store,
 			}
 		}
 
-		/*
-		 * We try creating a symlink, if that succeeds we continue to the
-		 * next update. If not, we try and create a regular symref.
-		 */
+		/* Warn against core.preferSymlinkRefs set to true */
 		if (update->new_target && prefer_symlink_refs)
-			if (!create_ref_symlink(lock, update->new_target))
-				continue;
+			/* we used to, but no longer, create a symlink here */
+			warning("core.preferSymlinkRefs was removed in Git 3.0");
 
 		if (update->flags & REF_NEEDS_COMMIT) {
 			clear_loose_ref_cache(refs);

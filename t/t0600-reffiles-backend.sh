@@ -468,26 +468,40 @@ test_expect_success POSIXPERM 'git reflog expire honors core.sharedRepository' '
 	esac
 '
 
-test_expect_success SYMLINKS 'symref transaction supports symlinks' '
+test_expect_success SYMLINKS 'symlinks used as symrefs are still supported' '
 	test_when_finished "git symbolic-ref -d TEST_SYMREF_HEAD || :" &&
 	git update-ref refs/heads/new HEAD &&
-	test_config core.prefersymlinkrefs true &&
-	cat >stdin <<-EOF &&
-	start
-	symref-create TEST_SYMREF_HEAD refs/heads/new
-	prepare
-	commit
-	EOF
-	git update-ref --no-deref --stdin <stdin 2>stderr &&
+	# manually do this, as core.prefersymlinkrefs no longer
+	# affects how a symref is created (as a textual symref).
+	ln -f -s refs/heads/new .git/TEST_SYMREF_HEAD &&
 	test_path_is_symlink .git/TEST_SYMREF_HEAD &&
-	test "$(test_readlink .git/TEST_SYMREF_HEAD)" = refs/heads/new &&
-	test_grep "core\.preferSymlinkRefs will be removed" stderr
+	echo refs/heads/new >expect &&
+	git symbolic-ref TEST_SYMREF_HEAD >actual &&
+	test_cmp actual expect
 '
 
-test_expect_success 'symref transaction supports false symlink config' '
+test_expect_success 'core.prefersymlinkrefs gets a warning' '
 	test_when_finished "git symbolic-ref -d TEST_SYMREF_HEAD || :" &&
 	git update-ref refs/heads/new HEAD &&
-	test_config core.prefersymlinkrefs false &&
+
+	test_config core.prefersymlinkrefs true &&
+	git symbolic-ref TEST_SYMREF_HEAD refs/heads/new 2>stderr &&
+	test_grep "core\.preferSymlinkRefs was removed" stderr &&
+
+	git symbolic-ref -d TEST_SYMREF_HEAD &&
+	git config core.prefersymlinkrefs false &&
+	git symbolic-ref TEST_SYMREF_HEAD refs/heads/new 2>stderr &&
+	test_grep ! "core\.preferSymlinkRefs was removed" stderr &&
+
+	git symbolic-ref -d TEST_SYMREF_HEAD &&
+	git config --unset core.prefersymlinkrefs &&
+	git symbolic-ref TEST_SYMREF_HEAD refs/heads/new 2>stderr &&
+	test_grep ! "core\.preferSymlinkRefs was removed" stderr
+'
+
+test_expect_success 'symref transaction' '
+	test_when_finished "git symbolic-ref -d TEST_SYMREF_HEAD || :" &&
+	git update-ref refs/heads/new HEAD &&
 	cat >stdin <<-EOF &&
 	start
 	symref-create TEST_SYMREF_HEAD refs/heads/new
@@ -499,7 +513,7 @@ test_expect_success 'symref transaction supports false symlink config' '
 	git symbolic-ref TEST_SYMREF_HEAD >actual &&
 	echo refs/heads/new >expect &&
 	test_cmp expect actual &&
-	test_grep ! "core\.preferSymlinkRefs will be removed" stderr
+	test_grep ! "core\.preferSymlinkRefs was removed" stderr
 '
 
 test_done
