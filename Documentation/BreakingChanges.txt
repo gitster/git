@@ -135,6 +135,17 @@ Cf. <xmqq1rjuz6n3.fsf_-_@gitster.c.googlers.com>,
     <CAKvOHKAFXQwt4D8yUCCkf_TQL79mYaJ=KAKhtpDNTvHJFuX1NA@mail.gmail.com>,
     <20230323204047.GA9290@coredump.intra.peff.net>,
 
+* Support for the `core.preferSymlinkRefs` configuration variable
+  will be removed.
++
+  ** The configuration would obviously not work on a filesystem
+     where symbolic links are not supported.
+  ** The contents of such a symbolic link used as a symref does
+     not match end-user intuition unless it is `HEAD`.
++
+The support to treat existing symbolic links under the
+`$GIT_DIR/refs/` directory as symrefs is not going away.
+
 == Superseded features that will not be deprecated
 
 Some features have gained newer replacements that aim to improve the design in

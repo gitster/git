@@ -2025,6 +2025,8 @@ static int create_ref_symlink(struct ref_lock *lock, const char *target)
 
 	if (ret)
 		fprintf(stderr, "no symlink - falling back to symbolic ref\n");
+	else
+		warning("core.preferSymlinkRefs will be removed in Git 3.0");
 	return ret;
 }
 #endif

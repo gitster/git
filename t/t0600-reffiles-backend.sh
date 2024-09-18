@@ -469,8 +469,8 @@ test_expect_success POSIXPERM 'git reflog expire honors core.sharedRepository' '
 '
 
 test_expect_success SYMLINKS 'symref transaction supports symlinks' '
-	test_when_finished "git symbolic-ref -d TEST_SYMREF_HEAD" &&
-	git update-ref refs/heads/new @ &&
+	test_when_finished "git symbolic-ref -d TEST_SYMREF_HEAD || :" &&
+	git update-ref refs/heads/new HEAD &&
 	test_config core.prefersymlinkrefs true &&
 	cat >stdin <<-EOF &&
 	start
@@ -478,14 +478,15 @@ test_expect_success SYMLINKS 'symref transaction supports symlinks' '
 	prepare
 	commit
 	EOF
-	git update-ref --no-deref --stdin <stdin &&
+	git update-ref --no-deref --stdin <stdin 2>stderr &&
 	test_path_is_symlink .git/TEST_SYMREF_HEAD &&
-	test "$(test_readlink .git/TEST_SYMREF_HEAD)" = refs/heads/new
+	test "$(test_readlink .git/TEST_SYMREF_HEAD)" = refs/heads/new &&
+	test_grep "core\.preferSymlinkRefs will be removed" stderr
 '
 
 test_expect_success 'symref transaction supports false symlink config' '
-	test_when_finished "git symbolic-ref -d TEST_SYMREF_HEAD" &&
-	git update-ref refs/heads/new @ &&
+	test_when_finished "git symbolic-ref -d TEST_SYMREF_HEAD || :" &&
+	git update-ref refs/heads/new HEAD &&
 	test_config core.prefersymlinkrefs false &&
 	cat >stdin <<-EOF &&
 	start
@@ -493,11 +494,12 @@ test_expect_success 'symref transaction supports false symlink config' '
 	prepare
 	commit
 	EOF
-	git update-ref --no-deref --stdin <stdin &&
+	git update-ref --no-deref --stdin <stdin 2>stderr &&
 	test_path_is_file .git/TEST_SYMREF_HEAD &&
 	git symbolic-ref TEST_SYMREF_HEAD >actual &&
 	echo refs/heads/new >expect &&
-	test_cmp expect actual
+	test_cmp expect actual &&
+	test_grep ! "core\.preferSymlinkRefs will be removed" stderr
 '
 
 test_done
