@@ -2983,11 +2983,6 @@ static int files_transaction_finish(struct ref_store *ref_store,
 			}
 		}
 
-		/* Warn against core.preferSymlinkRefs set to true */
-		if (update->new_target && prefer_symlink_refs)
-			/* we used to, but no longer, create a symlink here */
-			warning("core.preferSymlinkRefs was removed in Git 3.0");
-
 		if (update->flags & REF_NEEDS_COMMIT) {
 			clear_loose_ref_cache(refs);
 			if (commit_ref(lock)) {

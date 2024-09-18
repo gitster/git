@@ -285,11 +285,6 @@ CIFS/Microsoft Windows.
 +
 False by default.
 
-core.preferSymlinkRefs (removed)::
-	Instead of the default "symref" format for HEAD and other
-	symbolic reference files, use symbolic links.  The support
-	for this variable was dropped in Git 3.0.
-
 core.alternateRefsCommand::
 	When advertising tips of available history from an alternate, use the shell to
 	execute the specified command instead of linkgit:git-for-each-ref[1]. The
