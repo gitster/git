@@ -1195,9 +1195,6 @@ AC_COMPILE_IFELSE([BSD_SYSCTL_SRC],
 GIT_CONF_SUBST([HAVE_BSD_SYSCTL])
 
 ## Other checks.
-# Define NO_SYMLINK_HEAD if you never want .git/HEAD to be a symbolic link.
-# Enable it on Windows.  By default, symrefs are still used.
-#
 # Define NO_PTHREADS if we do not have pthreads.
 #
 # Define PTHREAD_LIBS to the linker flag used for Pthread support.
