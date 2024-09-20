@@ -72,6 +72,7 @@ static struct test_cmd cmds[] = {
 	{ "sha1-is-sha1dc", cmd__sha1_is_sha1dc },
 	{ "sha256", cmd__sha256 },
 	{ "sigchain", cmd__sigchain },
+	{ "signal-name", cmd__signal_name },
 	{ "simple-ipc", cmd__simple_ipc },
 	{ "string-list", cmd__string_list },
 	{ "submodule", cmd__submodule },

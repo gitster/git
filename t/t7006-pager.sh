@@ -679,7 +679,7 @@ test_expect_success TTY 'git returns SIGPIPE on early pager exit' '
 	if test_have_prereq !MINGW
 	then
 		{ test_terminal git log >/dev/null; OUT=$?; } &&
-		test_match_signal 13 "$OUT"
+		test_match_signal SIGPIPE "$OUT"
 	else
 		test_terminal git log
 	fi &&
@@ -700,7 +700,7 @@ test_expect_success TTY 'git returns SIGPIPE on early pager non-zero exit' '
 	if test_have_prereq !MINGW
 	then
 		{ test_terminal git log >/dev/null; OUT=$?; } &&
-		test_match_signal 13 "$OUT"
+		test_match_signal SIGPIPE "$OUT"
 	else
 		test_terminal git log
 	fi &&
@@ -743,7 +743,7 @@ test_expect_success TTY 'git returns SIGPIPE on propagated signals from pager' '
 	if test_have_prereq !MINGW
 	then
 		{ test_terminal git log >/dev/null; OUT=$?; } &&
-		test_match_signal 13 "$OUT"
+		test_match_signal SIGPIPE "$OUT"
 	else
 		test_terminal git log
 	fi &&

@@ -1192,7 +1192,7 @@ test_must_fail () {
 	then
 		echo >&4 "test_must_fail: command succeeded: $*"
 		return 1
-	elif test_match_signal 13 $exit_code && list_contains "$_test_ok" sigpipe
+	elif test_match_signal SIGPIPE $exit_code && list_contains "$_test_ok" sigpipe
 	then
 		return 0
 	elif test $exit_code -gt 129 && test $exit_code -le 192
@@ -1615,11 +1615,13 @@ test_env () {
 # Returns true if the numeric exit code in "$2" represents the expected signal
 # in "$1". Signals should be given numerically.
 test_match_signal () {
-	if test "$2" = "$((128 + $1))"
+	sigval=$(test-tool signal-name $1) ||
+	BUG "expected signal name, got $1"
+	if test "$2" = "$((128 + $sigval))"
 	then
 		# POSIX
 		return 0
-	elif test "$2" = "$((256 + $1))"
+	elif test "$2" = "$((256 + $sigval))"
 	then
 		# ksh
 		return 0

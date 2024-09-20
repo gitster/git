@@ -65,6 +65,7 @@ int cmd__sha1(int argc, const char **argv);
 int cmd__sha1_is_sha1dc(int argc, const char **argv);
 int cmd__sha256(int argc, const char **argv);
 int cmd__sigchain(int argc, const char **argv);
+int cmd__signal_name(int argc, const char **argv);
 int cmd__simple_ipc(int argc, const char **argv);
 int cmd__string_list(int argc, const char **argv);
 int cmd__submodule(int argc, const char **argv);

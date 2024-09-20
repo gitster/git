@@ -17,7 +17,7 @@ test_expect_success 'sigchain works' '
 		# Signal death by raise() on Windows acts like exit(3),
 		# regardless of the signal number. So we must allow that
 		# as well as the normal signal check.
-		test_match_signal 15 "$ret" ||
+		test_match_signal SIGTERM "$ret" ||
 		test "$ret" = 3
 	} &&
 	test_cmp expect actual
@@ -44,12 +44,12 @@ test_expect_success 'create blob' '
 
 test_expect_success !MINGW 'a constipated git dies with SIGPIPE' '
 	OUT=$( ((large_git; echo $? 1>&3) | :) 3>&1 ) &&
-	test_match_signal 13 "$OUT"
+	test_match_signal SIGPIPE "$OUT"
 '
 
 test_expect_success !MINGW 'a constipated git dies with SIGPIPE even if parent ignores it' '
 	OUT=$( ((trap "" PIPE && large_git; echo $? 1>&3) | :) 3>&1 ) &&
-	test_match_signal 13 "$OUT"
+	test_match_signal SIGPIPE "$OUT"
 '
 
 test_done
