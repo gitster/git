@@ -488,11 +488,11 @@ void setup_work_tree(void)
 		return;
 
 	if (work_tree_config_is_bogus)
-		die(_("unable to set up work tree using invalid config"));
+		die(_("unable to set up the working tree using invalid config"));
 
 	work_tree = get_git_work_tree();
 	if (!work_tree || chdir_notify(work_tree))
-		die(_("this operation must be run in a work tree"));
+		die(_("this operation must be run in the working tree"));
 
 	/*
 	 * Make sure subsequent git processes find correct worktree

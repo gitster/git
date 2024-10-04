@@ -125,6 +125,11 @@ static struct patch_mode patch_mode_reset_nothead = {
 			"the file\n"),
 };
 
+/*
+ * NEEDSWORK: throughout this file, the term "worktree" is misused (by
+ * a historical accident) to refer to "working tree", which we may
+ * want to correct when the tree is quiescent.
+ */
 static struct patch_mode patch_mode_checkout_index = {
 	.diff_cmd = { "diff-files", NULL },
 	.apply_args = { "-R", NULL },

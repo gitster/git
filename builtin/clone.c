@@ -1085,7 +1085,7 @@ int cmd_clone(int argc, const char **argv, const char *prefix)
 		if (dest_exists)
 			junk_work_tree_flags |= REMOVE_DIR_KEEP_TOPLEVEL;
 		else if (mkdir(work_tree, 0777))
-			die_errno(_("could not create work tree dir '%s'"),
+			die_errno(_("could not create working tree directory '%s'"),
 				  work_tree);
 		junk_work_tree = work_tree;
 		set_git_work_tree(work_tree);

@@ -1213,7 +1213,7 @@ int cmd_grep(int argc, const char **argv, const char *prefix)
 	}
 
 	if (show_in_pager && (cached || list.nr))
-		die(_("--open-files-in-pager only works on the worktree"));
+		die(_("--open-files-in-pager only works in the working tree"));
 
 	if (show_in_pager && opt.pattern_list && !opt.pattern_list->next) {
 		const char *pager = path_list.items[0].string;

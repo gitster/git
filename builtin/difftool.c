@@ -100,7 +100,7 @@ static void add_path(struct strbuf *buf, size_t base_len, const char *path)
 }
 
 /*
- * Determine whether we can simply reuse the file in the worktree.
+ * Determine whether we can simply reuse the file in the working tree.
  */
 static int use_wt_file(const char *workdir, const char *name,
 		       struct object_id *oid)
@@ -733,7 +733,7 @@ int cmd_difftool(int argc, const char **argv, const char *prefix)
 		return print_tool_help();
 
 	if (!no_index && !startup_info->have_repository)
-		die(_("difftool requires worktree or --no-index"));
+		die(_("difftool requires working tree or --no-index"));
 
 	if (!no_index){
 		setup_work_tree();

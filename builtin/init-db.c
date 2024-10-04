@@ -232,8 +232,8 @@ int cmd_init_db(int argc, const char **argv, const char *prefix)
 		else
 			set_git_work_tree(git_work_tree_cfg);
 		if (access(get_git_work_tree(), X_OK))
-			die_errno (_("Cannot access work tree '%s'"),
-				   get_git_work_tree());
+			die_errno(_("Cannot access working tree '%s'"),
+				  get_git_work_tree());
 	}
 	else {
 		if (real_git_dir)
