@@ -2270,12 +2270,17 @@ int for_each_packed_object(each_packed_object_fn cb, void *data,
 	return r ? r : pack_errors;
 }
 
+struct promisor_objects {
+	struct oidset promisor_pack_objects;
+	struct oidset promisor_pack_referenced_objects;
+};
+
 static int add_promisor_object(const struct object_id *oid,
 			       struct packed_git *pack UNUSED,
 			       uint32_t pos UNUSED,
 			       void *set_)
 {
-	struct oidset *set = set_;
+	struct promisor_objects *set = set_;
 	struct object *obj;
 	int we_parsed_object;
 
@@ -2290,7 +2295,7 @@ static int add_promisor_object(const struct object_id *oid,
 	if (!obj)
 		return 1;
 
-	oidset_insert(set, oid);
+	oidset_insert(&set->promisor_pack_objects, oid);
 
 	/*
 	 * If this is a tree, commit, or tag, the objects it refers
@@ -2308,26 +2313,26 @@ static int add_promisor_object(const struct object_id *oid,
 			 */
 			return 0;
 		while (tree_entry_gently(&desc, &entry))
-			oidset_insert(set, &entry.oid);
+			oidset_insert(&set->promisor_pack_referenced_objects, &entry.oid);
 		if (we_parsed_object)
 			free_tree_buffer(tree);
 	} else if (obj->type == OBJ_COMMIT) {
 		struct commit *commit = (struct commit *) obj;
 		struct commit_list *parents = commit->parents;
 
-		oidset_insert(set, get_commit_tree_oid(commit));
+		oidset_insert(&set->promisor_pack_referenced_objects, get_commit_tree_oid(commit));
 		for (; parents; parents = parents->next)
-			oidset_insert(set, &parents->item->object.oid);
+			oidset_insert(&set->promisor_pack_referenced_objects, &parents->item->object.oid);
 	} else if (obj->type == OBJ_TAG) {
 		struct tag *tag = (struct tag *) obj;
-		oidset_insert(set, get_tagged_oid(tag));
+		oidset_insert(&set->promisor_pack_referenced_objects, get_tagged_oid(tag));
 	}
 	return 0;
 }
 
-int is_promisor_object(const struct object_id *oid)
+int is_in_promisor_pack(const struct object_id *oid, int referenced)
 {
-	static struct oidset promisor_objects;
+	static struct promisor_objects promisor_objects;
 	static int promisor_objects_prepared;
 
 	if (!promisor_objects_prepared) {
@@ -2339,5 +2344,6 @@ int is_promisor_object(const struct object_id *oid)
 		}
 		promisor_objects_prepared = 1;
 	}
-	return oidset_contains(&promisor_objects, oid);
+	return oidset_contains(&promisor_objects.promisor_pack_objects, oid) ||
+		(referenced && oidset_contains(&promisor_objects.promisor_pack_referenced_objects, oid));
 }

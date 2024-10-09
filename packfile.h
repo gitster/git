@@ -195,11 +195,16 @@ int has_object_kept_pack(const struct object_id *oid, unsigned flags);
 
 int has_pack_index(const unsigned char *sha1);
 
+int is_in_promisor_pack(const struct object_id *oid, int referenced);
+
 /*
  * Return 1 if an object in a promisor packfile is or refers to the given
  * object, 0 otherwise.
  */
-int is_promisor_object(const struct object_id *oid);
+static inline int is_promisor_object(const struct object_id *oid)
+{
+	return is_in_promisor_pack(oid, 1);
+}
 
 /*
  * Expose a function for fuzz testing.

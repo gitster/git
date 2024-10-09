@@ -1297,12 +1297,23 @@ static void add_common(struct strbuf *req_buf, struct oidset *common)
 
 static int add_haves(struct fetch_negotiator *negotiator,
 		     struct strbuf *req_buf,
-		     int *haves_to_send)
+		     int *haves_to_send,
+		     int from_promisor)
 {
 	int haves_added = 0;
 	const struct object_id *oid;
 
 	while ((oid = negotiator->next(negotiator))) {
+		/*
+		 * In partial repos, do not declare local objects as "have"
+		 * so that they can be fetched into a promisor pack. Certain
+		 * operations mark parent commits of promisor objects as
+		 * UNINTERESTING and are subsequently garbage collected so
+		 * this ensures local commits are still available in promisor
+		 * packs after a fetch + gc.
+		 */
+		if (from_promisor && !is_in_promisor_pack(oid, 0))
+			continue;
 		packet_buf_write(req_buf, "have %s\n", oid_to_hex(oid));
 		if (++haves_added >= *haves_to_send)
 			break;
@@ -1405,7 +1416,7 @@ static int send_fetch_request(struct fetch_negotiator *negotiator, int fd_out,
 	/* Add all of the common commits we've found in previous rounds */
 	add_common(&req_buf, common);
 
-	haves_added = add_haves(negotiator, &req_buf, haves_to_send);
+	haves_added = add_haves(negotiator, &req_buf, haves_to_send, args->from_promisor);
 	*in_vain += haves_added;
 	trace2_data_intmax("negotiation_v2", the_repository, "haves_added", haves_added);
 	trace2_data_intmax("negotiation_v2", the_repository, "in_vain", *in_vain);
@@ -2178,7 +2189,7 @@ void negotiate_using_fetch(const struct oid_array *negotiation_tips,
 
 		packet_buf_write(&req_buf, "wait-for-done");
 
-		haves_added = add_haves(&negotiator, &req_buf, &haves_to_send);
+		haves_added = add_haves(&negotiator, &req_buf, &haves_to_send, 0);
 		in_vain += haves_added;
 		if (!haves_added || (seen_ack && in_vain >= MAX_IN_VAIN))
 			last_iteration = 1;
