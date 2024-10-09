@@ -1244,6 +1244,7 @@ static int reftable_be_transaction_prepare(struct ref_store *ref_store,
 			if (ret)
 				goto done;
 		}
+		u->before_target = xstrdup_or_null(referent.buf);
 	}
 
 	transaction->backend_data = tx_data;

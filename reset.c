@@ -76,7 +76,7 @@ static int update_refs(const struct reset_head_opts *opts,
 		if (!ret)
 			ret = refs_update_symref(get_main_ref_store(the_repository),
 						 "HEAD", switch_to_branch,
-						 reflog_head);
+						 reflog_head, NULL);
 	}
 	if (!ret && run_hook)
 		run_hooks_l(the_repository, "post-checkout",

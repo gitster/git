@@ -2114,7 +2114,8 @@ int peel_iterated_oid(struct repository *r, const struct object_id *base, struct
 }
 
 int refs_update_symref(struct ref_store *refs, const char *ref,
-		       const char *target, const char *logmsg)
+		       const char *target, const char *logmsg,
+		       struct strbuf *before_target)
 {
 	struct ref_transaction *transaction;
 	struct strbuf err = STRBUF_INIT;
@@ -2130,6 +2131,10 @@ int refs_update_symref(struct ref_store *refs, const char *ref,
 	}
 
 	strbuf_release(&err);
+
+	if (transaction && before_target && transaction->updates[0]->before_target)
+		strbuf_addstr(before_target, transaction->updates[0]->before_target);
+
 	if (transaction)
 		ref_transaction_free(transaction);
 
@@ -2948,4 +2953,3 @@ int ref_update_expects_existing_old_ref(struct ref_update *update)
 	return (update->flags & REF_HAVE_OLD) &&
 		(!is_null_oid(&update->old_oid) || update->old_target);
 }
-

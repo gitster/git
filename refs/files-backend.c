@@ -2577,6 +2577,7 @@ static int lock_ref_for_update(struct files_ref_store *refs,
 	}
 
 	update->backend_data = lock;
+	update->before_target = xstrdup_or_null(referent.buf);
 
 	if (update->type & REF_ISSYMREF) {
 		if (update->flags & REF_NO_DEREF) {
