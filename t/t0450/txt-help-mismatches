@@ -38,14 +38,12 @@ merge-one-file
 multi-pack-index
 name-rev
 notes
-pack-objects
 push
 range-diff
 rebase
 remote
 remote-ext
 remote-fd
-repack
 reset
 restore
 rev-parse
