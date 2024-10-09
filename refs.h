@@ -572,7 +572,7 @@ int refs_copy_existing_ref(struct ref_store *refs, const char *oldref,
 
 int refs_update_symref(struct ref_store *refs, const char *refname,
 		       const char *target, const char *logmsg,
-		       struct strbuf *before_target);
+		       struct strbuf *before_target, bool create_only);
 
 enum action_on_err {
 	UPDATE_REFS_MSG_ON_ERR,
