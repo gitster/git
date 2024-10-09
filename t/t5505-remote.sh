@@ -71,7 +71,7 @@ test_expect_success 'add another remote' '
 		cd test &&
 		git remote add -f second ../two &&
 		tokens_match "origin second" "$(git remote)" &&
-		check_tracking_branch second main side another &&
+		check_tracking_branch second main side another HEAD &&
 		git for-each-ref "--format=%(refname)" refs/remotes |
 		sed -e "/^refs\/remotes\/origin\//d" \
 		    -e "/^refs\/remotes\/second\//d" >actual &&
@@ -725,6 +725,7 @@ test_expect_success 'reject --no-no-tags' '
 cat >one/expect <<\EOF
   apis/main
   apis/side
+  drosophila/HEAD -> drosophila/main
   drosophila/another
   drosophila/main
   drosophila/side
@@ -742,6 +743,7 @@ test_expect_success 'update' '
 '
 
 cat >one/expect <<\EOF
+  drosophila/HEAD -> drosophila/main
   drosophila/another
   drosophila/main
   drosophila/side
@@ -754,7 +756,7 @@ EOF
 test_expect_success 'update with arguments' '
 	(
 		cd one &&
-		for b in $(git branch -r)
+		for b in $(git branch -r | grep -v HEAD)
 		do
 		git branch -r -d $b || exit 1
 		done &&
@@ -797,7 +799,7 @@ EOF
 test_expect_success 'update default' '
 	(
 		cd one &&
-		for b in $(git branch -r)
+		for b in $(git branch -r | grep -v HEAD)
 		do
 		git branch -r -d $b || exit 1
 		done &&
@@ -809,6 +811,7 @@ test_expect_success 'update default' '
 '
 
 cat >one/expect <<\EOF
+  drosophila/HEAD -> drosophila/main
   drosophila/another
   drosophila/main
   drosophila/side
@@ -831,7 +834,7 @@ test_expect_success 'update default (overridden, with funny whitespace)' '
 test_expect_success 'update (with remotes.default defined)' '
 	(
 		cd one &&
-		for b in $(git branch -r)
+		for b in $(git branch -r | grep -v HEAD)
 		do
 		git branch -r -d $b || exit 1
 		done &&
