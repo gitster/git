@@ -1038,7 +1038,7 @@ static void wt_longstatus_print_submodule_summary(struct wt_status *s, int uncom
 	if (s->display_comment_prefix) {
 		size_t len;
 		summary_content = strbuf_detach(&summary, &len);
-		strbuf_add_commented_lines(&summary, summary_content, len, comment_line_str);
+		strbuf_add_comment_lines(&summary, summary_content, len);
 		free(summary_content);
 	}
 
@@ -1116,8 +1116,8 @@ void wt_status_append_cut_line(struct strbuf *buf)
 {
 	const char *explanation = _("Do not modify or remove the line above.\nEverything below it will be ignored.");
 
-	strbuf_commented_addf(buf, comment_line_str, "%s", cut_line);
-	strbuf_add_commented_lines(buf, explanation, strlen(explanation), comment_line_str);
+	strbuf_comment_addf(buf,  "%s", cut_line);
+	strbuf_add_comment_lines(buf, explanation, strlen(explanation));
 }
 
 void wt_status_add_cut_line(struct wt_status *s)

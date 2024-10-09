@@ -14,7 +14,7 @@ static void comment_lines(struct strbuf *buf)
 	size_t len;
 
 	msg = strbuf_detach(buf, &len);
-	strbuf_add_commented_lines(buf, msg, len, comment_line_str);
+	strbuf_add_comment_lines(buf, msg, len);
 	free(msg);
 }
 

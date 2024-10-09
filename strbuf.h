@@ -287,12 +287,9 @@ void strbuf_splice(struct strbuf *sb, size_t pos, size_t len,
 
 /**
  * Add a NUL-terminated string to the buffer. Each line will be prepended
- * by a comment character and a blank.
+ * by the comment character and a blank.
  */
-void strbuf_add_commented_lines(struct strbuf *out,
-				const char *buf, size_t size,
-				const char *comment_prefix);
-
+void strbuf_add_comment_lines(struct strbuf *out, const char *buf, size_t size);
 
 /**
  * Add data of given length to the buffer.
@@ -388,11 +385,11 @@ __attribute__((format (printf,2,3)))
 void strbuf_addf(struct strbuf *sb, const char *fmt, ...);
 
 /**
- * Add a formatted string prepended by a comment character and a
+ * Add a formatted string prepended by the comment character and a
  * blank to the buffer.
  */
-__attribute__((format (printf, 3, 4)))
-void strbuf_commented_addf(struct strbuf *sb, const char *comment_prefix, const char *fmt, ...);
+__attribute__((format (printf,2,3)))
+void strbuf_comment_addf(struct strbuf *sb, const char *fmt, ...);
 
 __attribute__((format (printf,2,0)))
 void strbuf_vaddf(struct strbuf *sb, const char *fmt, va_list ap);
