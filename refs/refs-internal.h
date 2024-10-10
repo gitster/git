@@ -105,6 +105,14 @@ struct ref_update {
 	const char *old_target;
 
 	/*
+	 * The previous target before applying new_target will be
+	 * written here, to be used by callers when they do not want to
+	 * check old_target during the transaction, but do want to know
+	 * what it was.
+	 */
+	const char *before_target;
+
+	/*
 	 * One or more of REF_NO_DEREF, REF_FORCE_CREATE_REFLOG,
 	 * REF_HAVE_NEW, REF_HAVE_OLD, or backend-specific flags.
 	 */

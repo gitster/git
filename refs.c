@@ -2114,22 +2114,40 @@ int peel_iterated_oid(struct repository *r, const struct object_id *base, struct
 }
 
 int refs_update_symref(struct ref_store *refs, const char *ref,
-		       const char *target, const char *logmsg)
+		       const char *target, const char *logmsg,
+		       struct strbuf *before_target, bool create_only)
 {
 	struct ref_transaction *transaction;
 	struct strbuf err = STRBUF_INIT;
-	int ret = 0;
+	int ret = 0, create_ret = 0;
 
 	transaction = ref_store_transaction_begin(refs, &err);
-	if (!transaction ||
-	    ref_transaction_update(transaction, ref, NULL, NULL,
-				   target, NULL, REF_NO_DEREF,
-				   logmsg, &err) ||
-	    ref_transaction_commit(transaction, &err)) {
-		ret = error("%s", err.buf);
+	if (create_only) {
+		if (!transaction ||
+		    ref_transaction_create(transaction, ref, NULL, target,
+					   REF_NO_DEREF, logmsg, &err)) {
+			ret = error("%s", err.buf);
+		}
+		else {
+		    create_ret = ref_transaction_commit(transaction, &err);
+		    if (create_ret && create_ret != TRANSACTION_CREATE_EXISTS)
+			ret = error("%s", err.buf);
+		}
+	}
+	else
+		if (!transaction ||
+		    ref_transaction_update(transaction, ref, NULL, NULL,
+					   target, NULL, REF_NO_DEREF,
+					   logmsg, &err) ||
+		    ref_transaction_commit(transaction, &err)) {
+			ret = error("%s", err.buf);
 	}
 
 	strbuf_release(&err);
+
+	if (transaction && before_target && transaction->updates[0]->before_target)
+		strbuf_addstr(before_target, transaction->updates[0]->before_target);
+
 	if (transaction)
 		ref_transaction_free(transaction);
 
@@ -2948,4 +2966,3 @@ int ref_update_expects_existing_old_ref(struct ref_update *update)
 	return (update->flags & REF_HAVE_OLD) &&
 		(!is_null_oid(&update->old_oid) || update->old_target);
 }
-
