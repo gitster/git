@@ -1,0 +1,32 @@
+configure_file(
+  input: 'gitweb.perl',
+  output: 'gitweb.cgi',
+  configuration: {
+    'GIT_VERSION': meson.project_version(),
+    'GIT_BINDIR': get_option('prefix') / get_option('bindir'),
+    'GITWEB_CONFIG': get_option('gitweb_config'),
+    'GITWEB_CONFIG_SYSTEM': get_option('gitweb_config_system'),
+    'GITWEB_CONFIG_COMMON': get_option('gitweb_config_common'),
+    'GITWEB_HOME_LINK_STR': get_option('gitweb_home_link_str'),
+    'GITWEB_SITENAME': get_option('gitweb_sitename'),
+    'GITWEB_PROJECTROOT': get_option('gitweb_projectroot'),
+    'GITWEB_PROJECT_MAXDEPTH': get_option('gitweb_project_maxdepth'),
+    'GITWEB_EXPORT_OK': get_option('gitweb_export_ok'),
+    'GITWEB_STRICT_EXPORT': get_option('gitweb_strict_export'),
+    'GITWEB_BASE_URL': get_option('gitweb_base_url'),
+    'GITWEB_LIST': get_option('gitweb_list'),
+    'GITWEB_HOMETEXT': get_option('gitweb_hometext'),
+    'GITWEB_CSS': get_option('gitweb_css'),
+    'GITWEB_LOGO': get_option('gitweb_logo'),
+    'GITWEB_FAVICON': get_option('gitweb_favicon'),
+    'GITWEB_JS': get_option('gitweb_js'),
+    'GITWEB_SITE_HTML_HEAD_STRING': get_option('gitweb_site_html_head_string'),
+    'GITWEB_SITE_HEADER': get_option('gitweb_site_header'),
+    'GITWEB_SITE_FOOTER': get_option('gitweb_site_footer'),
+    'HIGHLIGHT_BIN': get_option('highlight_bin'),
+  },
+  install: true,
+  install_dir: get_option('datadir') / 'gitweb',
+)
+
+subdir('static')
