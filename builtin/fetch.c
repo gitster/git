@@ -1580,7 +1580,7 @@ static int backfill_tags(struct display_state *display_state,
 static void report_set_head(const char *remote, const char *head_name,
 			struct strbuf *buf_prev) {
 	struct strbuf buf_prefix = STRBUF_INIT;
-	const char *prev_head;
+	const char *prev_head = NULL;
 
 	strbuf_addf(&buf_prefix, "refs/remotes/%s/", remote);
 	skip_prefix(buf_prev->buf, buf_prefix.buf, &prev_head);
