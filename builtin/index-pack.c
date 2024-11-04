@@ -1821,6 +1821,7 @@ static void repack_local_links(void)
 	if (finish_command(&cmd))
 		die(_("could not finish pack-objects to repack local links"));
 	strbuf_release(&line);
+	free(base_name);
 }
 
 int cmd_index_pack(int argc,
