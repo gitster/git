@@ -26,6 +26,7 @@ void prepare_repo_settings(struct repository *r)
 	const char *strval;
 	int manyfiles;
 	int read_changed_paths;
+	unsigned long longval;
 
 	if (!r->gitdir)
 		BUG("Cannot add settings for uninitialized repository");
@@ -123,6 +124,19 @@ void prepare_repo_settings(struct repository *r)
 	 * removed.
 	 */
 	r->settings.command_requires_full_index = 1;
+
+	if (!repo_config_get_ulong(r, "core.packedgitwindowsize", &longval)) {
+		int pgsz_x2 = getpagesize() * 2;
+
+		/* This value must be multiple of (pagesize * 2) */
+		longval /= pgsz_x2;
+		if (longval < 1)
+			longval = 1;
+		r->settings.packed_git_window_size = longval * pgsz_x2;
+	}
+
+	if (!repo_config_get_ulong(r, "core.packedgitlimit", &longval))
+		r->settings.packed_git_limit = longval;
 }
 
 enum log_refs_config repo_settings_get_log_all_ref_updates(struct repository *repo)
