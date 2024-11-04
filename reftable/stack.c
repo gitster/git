@@ -1790,3 +1790,8 @@ done:
 	reftable_addition_destroy(add);
 	return err;
 }
+
+uint32_t reftable_stack_hash_id(struct reftable_stack *st)
+{
+	return reftable_merged_table_hash_id(st->merged);
+}
