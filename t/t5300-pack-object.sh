@@ -527,6 +527,28 @@ test_expect_success SHA1 'show-index works OK outside a repository' '
 	nongit git show-index <foo.idx
 '
 
+for hash in sha1 sha256
+do
+	test_expect_success 'setup: show-index works OK outside a repository with hash algo passed in via --object-format' '
+		git init explicit-hash-$hash --object-format=$hash &&
+		test_commit -C explicit-hash-$hash one &&
+
+		cat >in <<-EOF &&
+		$(git -C explicit-hash-$hash rev-parse one)
+		EOF
+
+		git -C explicit-hash-$hash pack-objects explicit-hash-$hash <in
+	'
+
+	test_expect_success 'show-index works OK outside a repository with hash algo passed in via --object-format' '
+		idx=$(echo explicit-hash-$hash/explicit-hash-$hash*.idx) &&
+		nongit git show-index --object-format=$hash <"$idx" >actual &&
+		test_line_count = 1 actual &&
+
+		rm -rf explicit-hash-$hash
+	'
+done
+
 test_expect_success !PTHREADS,!FAIL_PREREQS \
 	'index-pack --threads=N or pack.threads=N warns when no pthreads' '
 	test_must_fail git index-pack --threads=2 2>err &&
