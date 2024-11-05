@@ -149,4 +149,7 @@ struct reftable_compaction_stats {
 struct reftable_compaction_stats *
 reftable_stack_compaction_stats(struct reftable_stack *st);
 
+/* return the hash ID of the merged table. */
+uint32_t reftable_stack_hash_id(struct reftable_stack *st);
+
 #endif
