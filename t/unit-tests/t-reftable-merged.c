@@ -326,14 +326,14 @@ static void t_merged_seek_multiple_times_without_draining(void)
 	check(!err);
 	err = reftable_iterator_next_ref(&it, &rec);
 	check(!err);
-	err = reftable_ref_record_equal(&rec, &r2[0], GIT_SHA1_RAWSZ);
+	err = reftable_ref_record_equal(&rec, &r2[0], REFTABLE_HASH_SIZE_SHA1);
 	check(err == 1);
 
 	err = reftable_iterator_seek_ref(&it, "a");
 	check(!err);
 	err = reftable_iterator_next_ref(&it, &rec);
 	check(!err);
-	err = reftable_ref_record_equal(&rec, &r1[0], GIT_SHA1_RAWSZ);
+	err = reftable_ref_record_equal(&rec, &r1[0], REFTABLE_HASH_SIZE_SHA1);
 	check(err == 1);
 
 	for (size_t i = 0; i < ARRAY_SIZE(bufs); i++)
