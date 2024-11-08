@@ -668,6 +668,8 @@ struct repository *repo UNUSED)
 	pid_t pid;
 	int daemonized = 0;
 	int keep_largest_pack = -1;
+	int run_async_safe = 0;
+	int run_async_unsafe = 0;
 	timestamp_t dummy;
 	struct child_process rerere_cmd = CHILD_PROCESS_INIT;
 	struct maintenance_run_opts opts = MAINTENANCE_RUN_OPTS_INIT;
@@ -694,6 +696,10 @@ struct repository *repo UNUSED)
 			   PARSE_OPT_NOCOMPLETE),
 		OPT_BOOL(0, "keep-largest-pack", &keep_largest_pack,
 			 N_("repack all other packs except the largest pack")),
+		OPT_BOOL(0, "run-async-safe", &run_async_safe,
+			 N_("run only background safe gc tasks, should only be invoked thru maintenance")),
+		OPT_BOOL(0, "run-async-unsafe", &run_async_unsafe,
+			 N_("run only background unsafe gc tasks, should only be invoked thru maintenance")),
 		OPT_END()
 	};
 
@@ -718,6 +724,9 @@ struct repository *repo UNUSED)
 			     builtin_gc_usage, 0);
 	if (argc > 0)
 		usage_with_options(builtin_gc_usage, builtin_gc_options);
+
+	if (run_async_safe && run_async_unsafe)
+		die(_("--run-async-safe cannot be used with --run-async-unsafe"));
 
 	if (prune_expire_arg != prune_expire_sentinel) {
 		free(cfg.prune_expire);
@@ -815,7 +824,12 @@ struct repository *repo UNUSED)
 		atexit(process_log_file_at_exit);
 	}
 
-	gc_before_repack(&opts, &cfg);
+	if (run_async_unsafe) {
+		gc_before_repack(&opts, &cfg);
+		goto out;
+	} else if (!run_async_safe)
+		gc_before_repack(&opts, &cfg);
+
 
 	if (!repository_format_precious_objects) {
 		struct child_process repack_cmd = CHILD_PROCESS_INIT;
@@ -1050,6 +1064,46 @@ static int maintenance_task_prefetch(struct maintenance_run_opts *opts,
 	}
 
 	return 0;
+}
+
+static int maintenance_task_unsafe_gc(struct maintenance_run_opts *opts,
+				      struct gc_config *cfg UNUSED)
+{
+	struct child_process child = CHILD_PROCESS_INIT;
+
+	child.git_cmd = child.close_object_store = 1;
+	strvec_push(&child.args, "gc");
+
+	if (opts->auto_flag)
+		strvec_push(&child.args, "--auto");
+	if (opts->quiet)
+		strvec_push(&child.args, "--quiet");
+	else
+		strvec_push(&child.args, "--no-quiet");
+	strvec_push(&child.args, "--no-detach");
+	strvec_push(&child.args, "--run-async-unsafe");
+
+	return run_command(&child);
+}
+
+static int maintenance_task_safe_gc(struct maintenance_run_opts *opts,
+				    struct gc_config *cfg UNUSED)
+{
+	struct child_process child = CHILD_PROCESS_INIT;
+
+	child.git_cmd = child.close_object_store = 1;
+	strvec_push(&child.args, "gc");
+
+	if (opts->auto_flag)
+		strvec_push(&child.args, "--auto");
+	if (opts->quiet)
+		strvec_push(&child.args, "--quiet");
+	else
+		strvec_push(&child.args, "--no-quiet");
+	strvec_push(&child.args, "--no-detach");
+	strvec_push(&child.args, "--run-async-safe");
+
+	return run_command(&child);
 }
 
 static int maintenance_task_gc(struct maintenance_run_opts *opts,
@@ -1350,6 +1404,7 @@ struct maintenance_task {
 	const char *name;
 	maintenance_task_fn *fn;
 	maintenance_auto_fn *auto_condition;
+	unsigned daemonize_safe;
 	unsigned enabled:1;
 
 	enum schedule_priority schedule;
@@ -1362,6 +1417,8 @@ enum maintenance_task_label {
 	TASK_PREFETCH,
 	TASK_LOOSE_OBJECTS,
 	TASK_INCREMENTAL_REPACK,
+	TASK_UNSAFE_GC,
+	TASK_SAFE_GC,
 	TASK_GC,
 	TASK_COMMIT_GRAPH,
 	TASK_PACK_REFS,
@@ -1370,36 +1427,62 @@ enum maintenance_task_label {
 	TASK__COUNT
 };
 
+enum maintenance_task_daemonize_safe {
+	UNSAFE,
+	SAFE,
+};
+
 static struct maintenance_task tasks[] = {
 	[TASK_PREFETCH] = {
 		"prefetch",
 		maintenance_task_prefetch,
+		NULL,
+		SAFE,
 	},
 	[TASK_LOOSE_OBJECTS] = {
 		"loose-objects",
 		maintenance_task_loose_objects,
 		loose_object_auto_condition,
+		SAFE,
 	},
 	[TASK_INCREMENTAL_REPACK] = {
 		"incremental-repack",
 		maintenance_task_incremental_repack,
 		incremental_repack_auto_condition,
+		SAFE,
+	},
+	[TASK_UNSAFE_GC] = {
+		"unsafe-gc",
+		maintenance_task_unsafe_gc,
+		need_to_gc,
+		UNSAFE,
+		0,
+	},
+	[TASK_SAFE_GC] = {
+		"safe-gc",
+		maintenance_task_safe_gc,
+		need_to_gc,
+		SAFE,
+		0,
 	},
 	[TASK_GC] = {
 		"gc",
 		maintenance_task_gc,
 		need_to_gc,
+		UNSAFE,
 		1,
 	},
 	[TASK_COMMIT_GRAPH] = {
 		"commit-graph",
 		maintenance_task_commit_graph,
 		should_write_commit_graph,
+		SAFE,
 	},
 	[TASK_PACK_REFS] = {
 		"pack-refs",
 		maintenance_task_pack_refs,
 		pack_refs_condition,
+		UNSAFE,
 	},
 };
 
@@ -1411,10 +1494,18 @@ static int compare_tasks_by_selection(const void *a_, const void *b_)
 	return b->selected_order - a->selected_order;
 }
 
+static int compare_tasks_by_safeness(const void *a_, const void *b_)
+{
+	const struct maintenance_task *a = a_;
+	const struct maintenance_task *b = b_;
+
+	return a->daemonize_safe - b->daemonize_safe;
+}
+
 static int maintenance_run_tasks(struct maintenance_run_opts *opts,
 				 struct gc_config *cfg)
 {
-	int i, found_selected = 0;
+	int i, j, found_selected = 0;
 	int result = 0;
 	struct lock_file lk;
 	struct repository *r = the_repository;
@@ -1436,6 +1527,57 @@ static int maintenance_run_tasks(struct maintenance_run_opts *opts,
 	}
 	free(lock_path);
 
+	for (i = 0; !found_selected && i < TASK__COUNT; i++)
+		found_selected = tasks[i].selected_order >= 0;
+
+	if (found_selected)
+		QSORT(tasks, TASK__COUNT, compare_tasks_by_selection);
+	else if (opts->detach > 0) {
+		/*
+		 * Part of gc is unsafe to run in the background, so
+		 * separate out gc into unsafe and safe tasks.
+		 *
+		 * Run unsafe tasks, including unsafe maintenance tasks,
+		 * before daemonizing and running safe tasks.
+		 */
+
+		if (tasks[TASK_GC].enabled) {
+			tasks[TASK_GC].enabled = 0;
+			tasks[TASK_UNSAFE_GC].enabled = 1;
+			tasks[TASK_UNSAFE_GC].schedule = tasks[TASK_GC].schedule;
+			tasks[TASK_SAFE_GC].enabled = 1;
+			tasks[TASK_SAFE_GC].schedule = tasks[TASK_GC].schedule;
+		}
+
+		QSORT(tasks, TASK__COUNT, compare_tasks_by_safeness);
+
+		for (j = 0; j < TASK__COUNT; j++) {
+			if (tasks[j].daemonize_safe == SAFE)
+				break;
+
+			if (found_selected && tasks[j].selected_order < 0)
+				continue;
+
+			if (!found_selected && !tasks[j].enabled)
+				continue;
+
+			if (opts->auto_flag &&
+			(!tasks[j].auto_condition ||
+			!tasks[j].auto_condition(cfg)))
+				continue;
+
+			if (opts->schedule && tasks[j].schedule < opts->schedule)
+				continue;
+
+			trace2_region_enter("maintenance", tasks[j].name, r);
+			if (tasks[j].fn(opts, cfg)) {
+				error(_("task '%s' failed"), tasks[j].name);
+				result = 1;
+			}
+			trace2_region_leave("maintenance", tasks[j].name, r);
+		}
+	}
+
 	/* Failure to daemonize is ok, we'll continue in foreground. */
 	if (opts->detach > 0) {
 		trace2_region_enter("maintenance", "detach", the_repository);
@@ -1443,33 +1585,28 @@ static int maintenance_run_tasks(struct maintenance_run_opts *opts,
 		trace2_region_leave("maintenance", "detach", the_repository);
 	}
 
-	for (i = 0; !found_selected && i < TASK__COUNT; i++)
-		found_selected = tasks[i].selected_order >= 0;
-
-	if (found_selected)
-		QSORT(tasks, TASK__COUNT, compare_tasks_by_selection);
-
-	for (i = 0; i < TASK__COUNT; i++) {
-		if (found_selected && tasks[i].selected_order < 0)
+	for (j = j; j < TASK__COUNT; j++) {
+		if (found_selected && tasks[j].selected_order < 0)
 			continue;
 
-		if (!found_selected && !tasks[i].enabled)
+		if (!found_selected && !tasks[j].enabled)
 			continue;
 
 		if (opts->auto_flag &&
-		    (!tasks[i].auto_condition ||
-		     !tasks[i].auto_condition(cfg)))
+		    (!tasks[j].auto_condition ||
+		     !tasks[j].auto_condition(cfg)))
 			continue;
 
-		if (opts->schedule && tasks[i].schedule < opts->schedule)
+		if (opts->schedule && tasks[j].schedule < opts->schedule)
 			continue;
 
-		trace2_region_enter("maintenance", tasks[i].name, r);
-		if (tasks[i].fn(opts, cfg)) {
-			error(_("task '%s' failed"), tasks[i].name);
+		// fprintf(stderr, "running %i: %s\n",j , tasks[j].name);
+		trace2_region_enter("maintenance", tasks[j].name, r);
+		if (tasks[j].fn(opts, cfg)) {
+			error(_("task '%s' failed"), tasks[j].name);
 			result = 1;
 		}
-		trace2_region_leave("maintenance", tasks[i].name, r);
+		trace2_region_leave("maintenance", tasks[j].name, r);
 	}
 
 	rollback_lock_file(&lk);
