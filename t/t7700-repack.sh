@@ -308,6 +308,9 @@ test_expect_success 'no bitmaps created if .keep files present' '
 	keep=${pack%.pack}.keep &&
 	test_when_finished "rm -f \"\$keep\"" &&
 	>"$keep" &&
+
+	# Disable --full-name-hash test due to stderr comparison.
+	GIT_TEST_FULL_NAME_HASH=0 \
 	git -C bare.git repack -ad 2>stderr &&
 	test_must_be_empty stderr &&
 	find bare.git/objects/pack/ -type f -name "*.bitmap" >actual &&
@@ -319,6 +322,9 @@ test_expect_success 'auto-bitmaps do not complain if unavailable' '
 	blob=$(test-tool genrandom big $((1024*1024)) |
 	       git -C bare.git hash-object -w --stdin) &&
 	git -C bare.git update-ref refs/tags/big $blob &&
+
+	# Disable --full-name-hash test due to stderr comparison.
+	GIT_TEST_FULL_NAME_HASH=0 \
 	git -C bare.git repack -ad 2>stderr &&
 	test_must_be_empty stderr &&
 	find bare.git/objects/pack -type f -name "*.bitmap" >actual &&
@@ -775,6 +781,13 @@ test_expect_success 'repack -ad cleans up old .tmp-* packs' '
 	find $objdir/pack -name '.tmp-*' >tmpfiles &&
 	test_must_be_empty tmpfiles
 '
+
+test_expect_success '--full-name-hash option passes through to pack-objects' '
+	GIT_TRACE2_EVENT="$(pwd)/full-trace.txt" \
+		git repack -a --full-name-hash &&
+	test_subcommand_flex git pack-objects --full-name-hash <full-trace.txt
+'
+
 
 test_expect_success 'setup for update-server-info' '
 	git init update-server-info &&
