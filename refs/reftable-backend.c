@@ -1302,6 +1302,7 @@ static int write_transaction_table(struct reftable_writer *writer, void *cb_data
 	struct reftable_log_record *logs = NULL;
 	struct ident_split committer_ident = {0};
 	size_t logs_nr = 0, logs_alloc = 0, i;
+	uint64_t max_update_index = ts;
 	const char *committer_info;
 	struct strintmap logs_ts;
 	int ret = 0;
@@ -1415,6 +1416,13 @@ static int write_transaction_table(struct reftable_writer *writer, void *cb_data
 				log->update_index = update_index;
 				strintmap_set(&logs_ts, u->refname, update_index+1);
 
+				/*
+				 * Note the max_update_index, so we can reset the limit
+				 * before actually writing the logs.
+				 */
+				if (update_index > max_update_index)
+					max_update_index = update_index;
+
 				log->refname = xstrdup(u->refname);
 				memcpy(log->value.update.new_hash,
 				       u->new_oid.hash, GIT_MAX_RAWSZ);
@@ -1478,6 +1486,8 @@ static int write_transaction_table(struct reftable_writer *writer, void *cb_data
 	 * and log blocks.
 	 */
 	if (logs) {
+		reftable_writer_set_limits(writer, ts, max_update_index);
+
 		ret = reftable_writer_add_logs(writer, logs, logs_nr);
 		if (ret < 0)
 			goto done;
