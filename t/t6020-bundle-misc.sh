@@ -531,7 +531,7 @@ test_expect_success 'clone from full bundle upto annotated tag' '
 	cat >expect <<-\EOF &&
 	<TAG-2> refs/tags/v2
 	EOF
-	false &&
+	: false &&
 	test_cmp expect actual
 '
 
