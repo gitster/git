@@ -167,8 +167,14 @@ do
 done
 
 test_expect_success !MINGW 'git submodule status --recursive propagates SIGPIPE' '
-	{ git submodule status --recursive 2>err; echo $?>status; } |
-		grep -q X/S &&
+	{
+		# Stuff pipe buffer full of input so that `git submodule
+		# status` will block on write; this script will write over
+		# 128kb.
+		perl -le "print q{foo} for (1..33000)" &&
+		git submodule status --recursive 2>err
+		echo $?>status
+	} | grep -q X/S &&
 	test_must_be_empty err &&
 	test_match_signal 13 "$(cat status)"
 '
