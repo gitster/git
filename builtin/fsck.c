@@ -911,7 +911,8 @@ static void fsck_refs(void)
 	struct progress *progress = NULL;
 
 	if (show_progress)
-		progress = start_progress(_("Checking ref database"), 1);
+		progress = start_progress(the_repository,
+					  _("Checking ref database"), 1);
 
 	if (verbose)
 		fprintf_ln(stderr, _("Checking ref database"));
