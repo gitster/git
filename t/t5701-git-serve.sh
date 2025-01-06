@@ -8,13 +8,23 @@ export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
 . ./test-lib.sh
 
 test_expect_success 'test capability advertisement' '
+	printf "agent=git/$(git version | cut -d" " -f3)" >agent_and_os_name &&
+	if test_have_prereq WINDOWS
+	then
+		# We do not use test_config here so that tests below will be able to reuse
+		# the expect.base and expect.trailer files
+		git config transfer.advertiseOSVersion false
+	else
+		printf "\nos-version=%s\n" $(uname -s | test_redact_non_printables) >>agent_and_os_name
+	fi &&
+
 	test_oid_cache <<-EOF &&
 	wrong_algo sha1:sha256
 	wrong_algo sha256:sha1
 	EOF
 	cat >expect.base <<-EOF &&
 	version 2
-	agent=git/$(git version | cut -d" " -f3)
+	$(cat agent_and_os_name)
 	ls-refs=unborn
 	fetch=shallow wait-for-done
 	server-option
@@ -24,6 +34,39 @@ test_expect_success 'test capability advertisement' '
 	0000
 	EOF
 	cat expect.base expect.trailer >expect &&
+
+	GIT_TEST_SIDEBAND_ALL=0 test-tool serve-v2 \
+		--advertise-capabilities >out &&
+	test-tool pkt-line unpack <out >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success 'test capability advertisement with osVersion.command config set' '
+	# test_config is used here as we are not reusing any file output from here
+	test_config osVersion.command "uname -srvm" &&
+	printf "agent=git/$(git version | cut -d" " -f3)" >agent_and_long_os_name &&
+
+	if test_have_prereq !WINDOWS
+	then
+		printf "\nos-version=%s\n" $(uname -srvm | test_redact_non_printables) >>agent_and_long_os_name
+	fi &&
+
+	test_oid_cache <<-EOF &&
+	wrong_algo sha1:sha256
+	wrong_algo sha256:sha1
+	EOF
+	cat >expect.base_long <<-EOF &&
+	version 2
+	$(cat agent_and_long_os_name)
+	ls-refs=unborn
+	fetch=shallow wait-for-done
+	server-option
+	object-format=$(test_oid algo)
+	EOF
+	cat >expect.trailer_long <<-EOF &&
+	0000
+	EOF
+	cat expect.base_long expect.trailer_long >expect &&
 
 	GIT_TEST_SIDEBAND_ALL=0 test-tool serve-v2 \
 		--advertise-capabilities >out &&
