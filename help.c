@@ -568,7 +568,7 @@ static int git_unknown_cmd_config(const char *var, const char *value,
 			return config_error_nonbool(var);
 		if (!strcmp(value, "never")) {
 			cfg->autocorrect = AUTOCORRECT_NEVER;
-		} else if (!strcmp(value, "immediate")) {
+		} else if (!strcmp(value, "immediate") || !strcmp(value, "1")) {
 			cfg->autocorrect = AUTOCORRECT_IMMEDIATELY;
 		} else if (!strcmp(value, "prompt")) {
 			cfg->autocorrect = AUTOCORRECT_PROMPT;
