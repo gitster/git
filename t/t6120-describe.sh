@@ -725,4 +725,26 @@ test_expect_success '--exact-match does not show --always fallback' '
 	test_must_fail git describe --exact-match --always
 '
 
+test_expect_success 'avoid being fooled by describe-like filename' '
+	test_when_finished rm out &&
+
+	git rev-parse --short HEAD >out &&
+	FILENAME=filename-g$(cat out) &&
+	touch $FILENAME &&
+	git add $FILENAME &&
+	git commit -m "Add $FILENAME" &&
+
+	git cat-file -t HEAD:$FILENAME >actual &&
+
+	echo blob >expect &&
+	test_cmp expect actual
+'
+
+test_expect_success 'do not be fooled by invalid describe format ' '
+	test_when_finished rm out &&
+
+	git rev-parse --short HEAD >out &&
+	test_must_fail git cat-file -t "refs/tags/super-invalid/./../...../ ~^:/?*[////\\\\\\&}/busted.lock-42-g"$(cat out)
+'
+
 test_done
