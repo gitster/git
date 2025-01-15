@@ -76,8 +76,45 @@ static inline unsigned long oe_delta_size(struct packing_data *pack,
 	return pack->delta_size[e - pack->objects];
 }
 
-unsigned long oe_get_size_slow(struct packing_data *pack,
-			       const struct object_entry *e);
+/*
+ * Return the size of the object without doing any delta
+ * reconstruction (so non-deltas are true object sizes, but deltas
+ * return the size of the delta data).
+ */
+static unsigned long oe_get_size_slow(struct packing_data *pack,
+				      const struct object_entry *e)
+{
+	struct packed_git *p;
+	struct pack_window *w_curs;
+	unsigned char *buf;
+	enum object_type type;
+	unsigned long used, avail, size;
+
+	if (e->type_ != OBJ_OFS_DELTA && e->type_ != OBJ_REF_DELTA) {
+		packing_data_lock(&to_pack);
+		if (oid_object_info(the_repository, &e->idx.oid, &size) < 0)
+			die(_("unable to get size of %s"),
+			    oid_to_hex(&e->idx.oid));
+		packing_data_unlock(&to_pack);
+		return size;
+	}
+
+	p = oe_in_pack(pack, e);
+	if (!p)
+		BUG("when e->type is a delta, it must belong to a pack");
+
+	packing_data_lock(&to_pack);
+	w_curs = NULL;
+	buf = use_pack(p, &w_curs, e->in_pack_offset, &avail);
+	used = unpack_object_header_buffer(buf, avail, &type, &size);
+	if (used == 0)
+		die(_("unable to parse object header of %s"),
+		    oid_to_hex(&e->idx.oid));
+
+	unuse_pack(&w_curs);
+	packing_data_unlock(&to_pack);
+	return size;
+}
 
 static inline unsigned long oe_size(struct packing_data *pack,
 				    const struct object_entry *e)
@@ -2515,46 +2552,6 @@ static inline void oe_set_tree_depth(struct packing_data *pack,
 	if (!pack->tree_depth)
 		CALLOC_ARRAY(pack->tree_depth, pack->nr_alloc);
 	pack->tree_depth[e - pack->objects] = tree_depth;
-}
-
-/*
- * Return the size of the object without doing any delta
- * reconstruction (so non-deltas are true object sizes, but deltas
- * return the size of the delta data).
- */
-unsigned long oe_get_size_slow(struct packing_data *pack,
-			       const struct object_entry *e)
-{
-	struct packed_git *p;
-	struct pack_window *w_curs;
-	unsigned char *buf;
-	enum object_type type;
-	unsigned long used, avail, size;
-
-	if (e->type_ != OBJ_OFS_DELTA && e->type_ != OBJ_REF_DELTA) {
-		packing_data_lock(&to_pack);
-		if (oid_object_info(the_repository, &e->idx.oid, &size) < 0)
-			die(_("unable to get size of %s"),
-			    oid_to_hex(&e->idx.oid));
-		packing_data_unlock(&to_pack);
-		return size;
-	}
-
-	p = oe_in_pack(pack, e);
-	if (!p)
-		BUG("when e->type is a delta, it must belong to a pack");
-
-	packing_data_lock(&to_pack);
-	w_curs = NULL;
-	buf = use_pack(p, &w_curs, e->in_pack_offset, &avail);
-	used = unpack_object_header_buffer(buf, avail, &type, &size);
-	if (used == 0)
-		die(_("unable to parse object header of %s"),
-		    oid_to_hex(&e->idx.oid));
-
-	unuse_pack(&w_curs);
-	packing_data_unlock(&to_pack);
-	return size;
 }
 
 static int try_delta(struct unpacked *trg, struct unpacked *src,
