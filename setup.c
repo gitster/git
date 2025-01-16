@@ -1927,7 +1927,7 @@ static int template_dir_cb(const char *key, const char *value,
 	return 0;
 }
 
-const char *get_template_dir(const char *option_template)
+static const char *get_template_dir(const char *option_template)
 {
 	const char *template_dir = option_template;
 

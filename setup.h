@@ -185,8 +185,6 @@ int verify_repository_format(const struct repository_format *format,
  */
 void check_repository_format(struct repository_format *fmt);
 
-const char *get_template_dir(const char *option_template);
-
 #define INIT_DB_QUIET      (1 << 0)
 #define INIT_DB_EXIST_OK   (1 << 1)
 #define INIT_DB_SKIP_REFDB (1 << 2)
