@@ -365,7 +365,7 @@ static int load_bitmap_entries_v1(struct bitmap_index *index)
 	return 0;
 }
 
-char *midx_bitmap_filename(struct multi_pack_index *midx)
+static char *midx_bitmap_filename(struct multi_pack_index *midx)
 {
 	struct strbuf buf = STRBUF_INIT;
 	get_midx_filename_ext(&buf, midx->object_dir, get_midx_checksum(midx),
@@ -374,7 +374,7 @@ char *midx_bitmap_filename(struct multi_pack_index *midx)
 	return strbuf_detach(&buf, NULL);
 }
 
-char *pack_bitmap_filename(struct packed_git *p)
+static char *pack_bitmap_filename(struct packed_git *p)
 {
 	size_t len;
 
