@@ -328,34 +328,10 @@ void jw_array_false(struct json_writer *jw)
 	strbuf_addstr(&jw->json, "false");
 }
 
-void jw_array_bool(struct json_writer *jw, int value)
-{
-	if (value)
-		jw_array_true(jw);
-	else
-		jw_array_false(jw);
-}
-
 void jw_array_null(struct json_writer *jw)
 {
 	array_common(jw);
 	strbuf_addstr(&jw->json, "null");
-}
-
-void jw_array_sub_jw(struct json_writer *jw, const struct json_writer *value)
-{
-	assert_is_terminated(value);
-
-	array_common(jw);
-	append_sub_jw(jw, value);
-}
-
-void jw_array_argc_argv(struct json_writer *jw, int argc, const char **argv)
-{
-	int k;
-
-	for (k = 0; k < argc; k++)
-		jw_array_string(jw, argv[k]);
 }
 
 void jw_array_argv(struct json_writer *jw, const char **argv)

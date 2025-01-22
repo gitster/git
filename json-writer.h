@@ -95,10 +95,7 @@ void jw_array_intmax(struct json_writer *jw, intmax_t value);
 void jw_array_double(struct json_writer *jw, int precision, double value);
 void jw_array_true(struct json_writer *jw);
 void jw_array_false(struct json_writer *jw);
-void jw_array_bool(struct json_writer *jw, int value);
 void jw_array_null(struct json_writer *jw);
-void jw_array_sub_jw(struct json_writer *jw, const struct json_writer *value);
-void jw_array_argc_argv(struct json_writer *jw, int argc, const char **argv);
 void jw_array_argv(struct json_writer *jw, const char **argv);
 
 void jw_array_inline_begin_object(struct json_writer *jw);
