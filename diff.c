@@ -3444,7 +3444,7 @@ void diff_set_noprefix(struct diff_options *options)
 	options->a_prefix = options->b_prefix = "";
 }
 
-void diff_set_default_prefix(struct diff_options *options)
+static void diff_set_default_prefix(struct diff_options *options)
 {
 	options->a_prefix = diff_src_prefix ? diff_src_prefix : "a/";
 	options->b_prefix = diff_dst_prefix ? diff_dst_prefix : "b/";
