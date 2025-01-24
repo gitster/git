@@ -382,11 +382,11 @@ void reflog_expiry_cleanup(void *cb_data)
 	free_commit_list(cb->mark_list);
 }
 
-int count_reflog_ent(struct object_id *ooid UNUSED,
-		     struct object_id *noid UNUSED,
-		     const char *email UNUSED,
-		     timestamp_t timestamp, int tz UNUSED,
-		     const char *message UNUSED, void *cb_data)
+static int count_reflog_ent(struct object_id *ooid UNUSED,
+			    struct object_id *noid UNUSED,
+			    const char *email UNUSED,
+			    timestamp_t timestamp, int tz UNUSED,
+			    const char *message UNUSED, void *cb_data)
 {
 	struct cmd_reflog_expire_cb *cb = cb_data;
 	if (!cb->expire_total || timestamp < cb->expire_total)
