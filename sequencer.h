@@ -195,7 +195,6 @@ int complete_action(struct repository *r, struct replay_opts *opts, unsigned fla
 		    struct string_list *commands, unsigned autosquash,
 		    unsigned update_refs,
 		    struct todo_list *todo_list);
-int todo_list_rearrange_squash(struct todo_list *todo_list);
 
 /*
  * Append a signoff to the commit message in "msgbuf". The ignore_footer

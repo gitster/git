@@ -6426,104 +6426,12 @@ static int todo_list_add_update_ref_commands(struct todo_list *todo_list)
 	return 0;
 }
 
-int complete_action(struct repository *r, struct replay_opts *opts, unsigned flags,
-		    const char *shortrevisions, const char *onto_name,
-		    struct commit *onto, const struct object_id *orig_head,
-		    struct string_list *commands, unsigned autosquash,
-		    unsigned update_refs,
-		    struct todo_list *todo_list)
-{
-	char shortonto[GIT_MAX_HEXSZ + 1];
-	const char *todo_file = rebase_path_todo();
-	struct todo_list new_todo = TODO_LIST_INIT;
-	struct strbuf *buf = &todo_list->buf, buf2 = STRBUF_INIT;
-	struct object_id oid = onto->object.oid;
-	int res;
+define_commit_slab(commit_todo_item, struct todo_item *);
 
-	repo_find_unique_abbrev_r(r, shortonto, &oid,
-				  DEFAULT_ABBREV);
-
-	if (buf->len == 0) {
-		struct todo_item *item = append_new_todo(todo_list);
-		item->command = TODO_NOOP;
-		item->commit = NULL;
-		item->arg_len = item->arg_offset = item->flags = item->offset_in_buf = 0;
-	}
-
-	if (update_refs && todo_list_add_update_ref_commands(todo_list))
-		return -1;
-
-	if (autosquash && todo_list_rearrange_squash(todo_list))
-		return -1;
-
-	if (commands->nr)
-		todo_list_add_exec_commands(todo_list, commands);
-
-	if (count_commands(todo_list) == 0) {
-		apply_autostash(rebase_path_autostash());
-		sequencer_remove_state(opts);
-
-		return error(_("nothing to do"));
-	}
-
-	res = edit_todo_list(r, opts, todo_list, &new_todo, shortrevisions,
-			     shortonto, flags);
-	if (res == -1)
-		return -1;
-	else if (res == -2) {
-		apply_autostash(rebase_path_autostash());
-		sequencer_remove_state(opts);
-
-		return -1;
-	} else if (res == -3) {
-		apply_autostash(rebase_path_autostash());
-		sequencer_remove_state(opts);
-		todo_list_release(&new_todo);
-
-		return error(_("nothing to do"));
-	} else if (res == -4) {
-		checkout_onto(r, opts, onto_name, &onto->object.oid, orig_head);
-		todo_list_release(&new_todo);
-
-		return -1;
-	}
-
-	/* Expand the commit IDs */
-	todo_list_to_strbuf(r, &new_todo, &buf2, -1, 0);
-	strbuf_swap(&new_todo.buf, &buf2);
-	strbuf_release(&buf2);
-	/* Nothing is done yet, and we're reparsing, so let's reset the count */
-	new_todo.total_nr = 0;
-	if (todo_list_parse_insn_buffer(r, opts, new_todo.buf.buf, &new_todo) < 0)
-		BUG("invalid todo list after expanding IDs:\n%s",
-		    new_todo.buf.buf);
-
-	if (opts->allow_ff && skip_unnecessary_picks(r, &new_todo, &oid)) {
-		todo_list_release(&new_todo);
-		return error(_("could not skip unnecessary pick commands"));
-	}
-
-	if (todo_list_write_to_file(r, &new_todo, todo_file, NULL, NULL, -1,
-				    flags & ~(TODO_LIST_SHORTEN_IDS))) {
-		todo_list_release(&new_todo);
-		return error_errno(_("could not write '%s'"), todo_file);
-	}
-
-	res = -1;
-
-	if (checkout_onto(r, opts, onto_name, &oid, orig_head))
-		goto cleanup;
-
-	if (require_clean_work_tree(r, "rebase", NULL, 1, 1))
-		goto cleanup;
-
-	todo_list_write_total_nr(&new_todo);
-	res = pick_commits(r, &new_todo, opts);
-
-cleanup:
-	todo_list_release(&new_todo);
-
-	return res;
+static int skip_fixupish(const char *subject, const char **p) {
+	return skip_prefix(subject, "fixup! ", p) ||
+	       skip_prefix(subject, "amend! ", p) ||
+	       skip_prefix(subject, "squash! ", p);
 }
 
 struct subject2item_entry {
@@ -6545,14 +6453,6 @@ static int subject2item_cmp(const void *fndata UNUSED,
 	return key ? strcmp(a->subject, key) : strcmp(a->subject, b->subject);
 }
 
-define_commit_slab(commit_todo_item, struct todo_item *);
-
-static int skip_fixupish(const char *subject, const char **p) {
-	return skip_prefix(subject, "fixup! ", p) ||
-	       skip_prefix(subject, "amend! ", p) ||
-	       skip_prefix(subject, "squash! ", p);
-}
-
 /*
  * Rearrange the todo list that has both "pick commit-id msg" and "pick
  * commit-id fixup!/squash! msg" in it so that the latter is put immediately
@@ -6562,7 +6462,7 @@ static int skip_fixupish(const char *subject, const char **p) {
  * message will have to be retrieved from the commit (as the oneline in the
  * script cannot be trusted) in order to normalize the autosquash arrangement.
  */
-int todo_list_rearrange_squash(struct todo_list *todo_list)
+static int todo_list_rearrange_squash(struct todo_list *todo_list)
 {
 	struct hashmap subject2item;
 	int rearranged = 0, *next, *tail, i, nr = 0;
@@ -6712,6 +6612,106 @@ int todo_list_rearrange_squash(struct todo_list *todo_list)
 	clear_commit_todo_item(&commit_todo);
 
 	return 0;
+}
+
+int complete_action(struct repository *r, struct replay_opts *opts, unsigned flags,
+		    const char *shortrevisions, const char *onto_name,
+		    struct commit *onto, const struct object_id *orig_head,
+		    struct string_list *commands, unsigned autosquash,
+		    unsigned update_refs,
+		    struct todo_list *todo_list)
+{
+	char shortonto[GIT_MAX_HEXSZ + 1];
+	const char *todo_file = rebase_path_todo();
+	struct todo_list new_todo = TODO_LIST_INIT;
+	struct strbuf *buf = &todo_list->buf, buf2 = STRBUF_INIT;
+	struct object_id oid = onto->object.oid;
+	int res;
+
+	repo_find_unique_abbrev_r(r, shortonto, &oid,
+				  DEFAULT_ABBREV);
+
+	if (buf->len == 0) {
+		struct todo_item *item = append_new_todo(todo_list);
+		item->command = TODO_NOOP;
+		item->commit = NULL;
+		item->arg_len = item->arg_offset = item->flags = item->offset_in_buf = 0;
+	}
+
+	if (update_refs && todo_list_add_update_ref_commands(todo_list))
+		return -1;
+
+	if (autosquash && todo_list_rearrange_squash(todo_list))
+		return -1;
+
+	if (commands->nr)
+		todo_list_add_exec_commands(todo_list, commands);
+
+	if (count_commands(todo_list) == 0) {
+		apply_autostash(rebase_path_autostash());
+		sequencer_remove_state(opts);
+
+		return error(_("nothing to do"));
+	}
+
+	res = edit_todo_list(r, opts, todo_list, &new_todo, shortrevisions,
+			     shortonto, flags);
+	if (res == -1)
+		return -1;
+	else if (res == -2) {
+		apply_autostash(rebase_path_autostash());
+		sequencer_remove_state(opts);
+
+		return -1;
+	} else if (res == -3) {
+		apply_autostash(rebase_path_autostash());
+		sequencer_remove_state(opts);
+		todo_list_release(&new_todo);
+
+		return error(_("nothing to do"));
+	} else if (res == -4) {
+		checkout_onto(r, opts, onto_name, &onto->object.oid, orig_head);
+		todo_list_release(&new_todo);
+
+		return -1;
+	}
+
+	/* Expand the commit IDs */
+	todo_list_to_strbuf(r, &new_todo, &buf2, -1, 0);
+	strbuf_swap(&new_todo.buf, &buf2);
+	strbuf_release(&buf2);
+	/* Nothing is done yet, and we're reparsing, so let's reset the count */
+	new_todo.total_nr = 0;
+	if (todo_list_parse_insn_buffer(r, opts, new_todo.buf.buf, &new_todo) < 0)
+		BUG("invalid todo list after expanding IDs:\n%s",
+		    new_todo.buf.buf);
+
+	if (opts->allow_ff && skip_unnecessary_picks(r, &new_todo, &oid)) {
+		todo_list_release(&new_todo);
+		return error(_("could not skip unnecessary pick commands"));
+	}
+
+	if (todo_list_write_to_file(r, &new_todo, todo_file, NULL, NULL, -1,
+				    flags & ~(TODO_LIST_SHORTEN_IDS))) {
+		todo_list_release(&new_todo);
+		return error_errno(_("could not write '%s'"), todo_file);
+	}
+
+	res = -1;
+
+	if (checkout_onto(r, opts, onto_name, &oid, orig_head))
+		goto cleanup;
+
+	if (require_clean_work_tree(r, "rebase", NULL, 1, 1))
+		goto cleanup;
+
+	todo_list_write_total_nr(&new_todo);
+	res = pick_commits(r, &new_todo, opts);
+
+cleanup:
+	todo_list_release(&new_todo);
+
+	return res;
 }
 
 int sequencer_determine_whence(struct repository *r, enum commit_whence *whence)
