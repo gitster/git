@@ -233,7 +233,7 @@ void refspec_clear(struct refspec *rs)
 	rs->fetch = 0;
 }
 
-int valid_fetch_refspec(const char *fetch_refspec_str)
+static int valid_fetch_refspec(const char *fetch_refspec_str)
 {
 	struct refspec_item refspec;
 	int ret = refspec_item_init(&refspec, fetch_refspec_str, REFSPEC_FETCH);
