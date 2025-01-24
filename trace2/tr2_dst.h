@@ -20,12 +20,6 @@ struct tr2_dst {
 void tr2_dst_trace_disable(struct tr2_dst *dst);
 
 /*
- * Return the file descriptor for the DST.
- * If 0, the dst is closed or disabled.
- */
-int tr2_dst_get_trace_fd(struct tr2_dst *dst);
-
-/*
  * Return true if the DST is opened for writing.
  */
 int tr2_dst_trace_want(struct tr2_dst *dst);

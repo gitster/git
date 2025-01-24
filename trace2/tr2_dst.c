@@ -309,7 +309,11 @@ static void tr2_dst_malformed_warning(struct tr2_dst *dst,
 		tr2_sysenv_display_name(dst->sysenv_var), tgt_value);
 }
 
-int tr2_dst_get_trace_fd(struct tr2_dst *dst)
+/*
+ * Return the file descriptor for the DST.
+ * If 0, the dst is closed or disabled.
+ */
+static int tr2_dst_get_trace_fd(struct tr2_dst *dst)
 {
 	const char *tgt_value;
 
