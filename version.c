@@ -4,6 +4,7 @@
 #include "strbuf.h"
 #include "sane-ctype.h"
 #include "gettext.h"
+#include "config.h"
 
 const char git_version_string[] = GIT_VERSION;
 const char git_built_from_commit_string[] = GIT_BUILT_FROM_COMMIT;
@@ -68,4 +69,32 @@ int get_uname_info(struct strbuf *buf, unsigned int full)
 	else
 	     strbuf_addf(buf, "%s\n", uname_info.sysname);
 	return 0;
+}
+
+const char *os_version_sanitized(void)
+{
+	static const char *os = NULL;
+
+	if (!os) {
+		struct strbuf buf = STRBUF_INIT;
+
+		get_uname_info(&buf, 0);
+		/* Sanitize the os information immediately */
+		redact_non_printables(&buf);
+		os = strbuf_detach(&buf, NULL);
+	}
+
+	return os;
+}
+
+int advertise_os_version(struct repository *r)
+{
+	static int transfer_advertise_os_version = -1;
+
+	if (transfer_advertise_os_version == -1) {
+		repo_config_get_bool(r, "transfer.advertiseosversion", &transfer_advertise_os_version);
+		/* enabled by default */
+		transfer_advertise_os_version = !!transfer_advertise_os_version;
+	}
+	return transfer_advertise_os_version;
 }
