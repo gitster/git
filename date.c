@@ -874,7 +874,7 @@ static const timestamp_t timestamp_max = (((timestamp_t)2100 - 1970) * 365 + 32)
 
 /* Gr. strptime is crap for this; it doesn't have a way to require RFC2822
    (i.e. English) day/month names, and it doesn't work correctly with %z. */
-int parse_date_basic(const char *date, timestamp_t *timestamp, int *offset)
+static int parse_date_basic(const char *date, timestamp_t *timestamp, int *offset)
 {
 	struct tm tm;
 	int tm_gmt;
