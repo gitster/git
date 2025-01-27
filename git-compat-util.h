@@ -304,10 +304,10 @@ static inline int is_xplatform_dir_sep(int c)
 #if defined(__MINGW32__)
 /* pull in Windows compatibility stuff */
 #include "compat/win32/path-utils.h"
-#include "compat/mingw.h"
+#include "compat/mingw/compat-util.h"
 #elif defined(_MSC_VER)
 #include "compat/win32/path-utils.h"
-#include "compat/msvc.h"
+#include "compat/msvc/compat-util.h"
 #else
 #include <sys/utsname.h>
 #include <sys/wait.h>
