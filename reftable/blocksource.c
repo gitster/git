@@ -13,15 +13,17 @@ https://developers.google.com/open-source/licenses/bsd
 #include "reftable-blocksource.h"
 #include "reftable-error.h"
 
-static void reftable_buf_return_block(void *b UNUSED, struct reftable_block *dest)
+static void reftable_buf_return_block(void *b, struct reftable_block *dest)
 {
+	REFTABLE_UNUSED(b);
 	if (dest->len)
 		memset(dest->data, 0xff, dest->len);
 	reftable_free(dest->data);
 }
 
-static void reftable_buf_close(void *b UNUSED)
+static void reftable_buf_close(void *b)
 {
+	REFTABLE_UNUSED(b);
 }
 
 static ssize_t reftable_buf_read_block(void *v, struct reftable_block *dest,
@@ -67,8 +69,10 @@ static uint64_t file_size(void *b)
 	return ((struct file_block_source *)b)->size;
 }
 
-static void file_return_block(void *b UNUSED, struct reftable_block *dest UNUSED)
+static void file_return_block(void *b, struct reftable_block *dest)
 {
+	REFTABLE_UNUSED(b);
+	REFTABLE_UNUSED(dest);
 }
 
 static void file_close(void *v)

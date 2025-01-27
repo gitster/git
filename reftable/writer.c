@@ -636,9 +636,11 @@ static void write_object_record(void *void_arg, void *key)
 done:;
 }
 
-static void object_record_free(void *void_arg UNUSED, void *key)
+static void object_record_free(void *void_arg, void *key)
 {
 	struct obj_index_tree_node *entry = key;
+
+	REFTABLE_UNUSED(void_arg);
 
 	REFTABLE_FREE_AND_NULL(entry->offsets);
 	reftable_buf_release(&entry->hash);

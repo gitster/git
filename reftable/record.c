@@ -490,10 +490,12 @@ static void reftable_obj_record_release(void *rec)
 }
 
 static int reftable_obj_record_copy_from(void *rec, const void *src_rec,
-					 uint32_t hash_size UNUSED)
+					 uint32_t hash_size)
 {
 	struct reftable_obj_record *obj = rec;
 	const struct reftable_obj_record *src = src_rec;
+
+	REFTABLE_UNUSED(hash_size);
 
 	reftable_obj_record_release(obj);
 
@@ -523,13 +525,16 @@ static uint8_t reftable_obj_record_val_type(const void *rec)
 }
 
 static int reftable_obj_record_encode(const void *rec, struct string_view s,
-				      uint32_t hash_size UNUSED)
+				      uint32_t hash_size)
 {
 	const struct reftable_obj_record *r = rec;
 	struct string_view start = s;
 	int i = 0;
 	int n = 0;
 	uint64_t last = 0;
+
+	REFTABLE_UNUSED(hash_size);
+
 	if (r->offset_len == 0 || r->offset_len >= 8) {
 		n = put_var_int(&s, r->offset_len);
 		if (n < 0) {
@@ -558,14 +563,17 @@ static int reftable_obj_record_encode(const void *rec, struct string_view s,
 
 static int reftable_obj_record_decode(void *rec, struct reftable_buf key,
 				      uint8_t val_type, struct string_view in,
-				      uint32_t hash_size UNUSED,
-				      struct reftable_buf *scratch UNUSED)
+				      uint32_t hash_size,
+				      struct reftable_buf *scratch)
 {
 	struct string_view start = in;
 	struct reftable_obj_record *r = rec;
 	uint64_t count = val_type;
 	int n = 0;
 	uint64_t last;
+
+	REFTABLE_UNUSED(hash_size);
+	REFTABLE_UNUSED(scratch);
 
 	reftable_obj_record_release(r);
 
@@ -613,16 +621,19 @@ static int reftable_obj_record_decode(void *rec, struct reftable_buf key,
 	return start.len - in.len;
 }
 
-static int not_a_deletion(const void *p UNUSED)
+static int not_a_deletion(const void *p)
 {
+	REFTABLE_UNUSED(p);
 	return 0;
 }
 
 static int reftable_obj_record_equal_void(const void *a, const void *b,
-					  uint32_t hash_size UNUSED)
+					  uint32_t hash_size)
 {
 	struct reftable_obj_record *ra = (struct reftable_obj_record *) a;
 	struct reftable_obj_record *rb = (struct reftable_obj_record *) b;
+
+	REFTABLE_UNUSED(hash_size);
 
 	if (ra->hash_prefix_len != rb->hash_prefix_len
 	    || ra->offset_len != rb->offset_len)
@@ -1049,11 +1060,13 @@ static int reftable_index_record_key(const void *r, struct reftable_buf *dest)
 }
 
 static int reftable_index_record_copy_from(void *rec, const void *src_rec,
-					   uint32_t hash_size UNUSED)
+					   uint32_t hash_size)
 {
 	struct reftable_index_record *dst = rec;
 	const struct reftable_index_record *src = src_rec;
 	int err;
+
+	REFTABLE_UNUSED(hash_size);
 
 	reftable_buf_reset(&dst->last_key);
 	err = reftable_buf_add(&dst->last_key, src->last_key.buf, src->last_key.len);
@@ -1070,19 +1083,23 @@ static void reftable_index_record_release(void *rec)
 	reftable_buf_release(&idx->last_key);
 }
 
-static uint8_t reftable_index_record_val_type(const void *rec UNUSED)
+static uint8_t reftable_index_record_val_type(const void *rec)
 {
+	REFTABLE_UNUSED(rec);
 	return 0;
 }
 
 static int reftable_index_record_encode(const void *rec, struct string_view out,
-					uint32_t hash_size UNUSED)
+					uint32_t hash_size)
 {
 	const struct reftable_index_record *r =
 		(const struct reftable_index_record *)rec;
 	struct string_view start = out;
+	int n;
 
-	int n = put_var_int(&out, r->offset);
+	REFTABLE_UNUSED(hash_size);
+
+	n = put_var_int(&out, r->offset);
 	if (n < 0)
 		return n;
 
@@ -1092,14 +1109,18 @@ static int reftable_index_record_encode(const void *rec, struct string_view out,
 }
 
 static int reftable_index_record_decode(void *rec, struct reftable_buf key,
-					uint8_t val_type UNUSED,
+					uint8_t val_type,
 					struct string_view in,
-					uint32_t hash_size UNUSED,
-					struct reftable_buf *scratch UNUSED)
+					uint32_t hash_size,
+					struct reftable_buf *scratch)
 {
 	struct string_view start = in;
 	struct reftable_index_record *r = rec;
 	int err, n = 0;
+
+	REFTABLE_UNUSED(val_type);
+	REFTABLE_UNUSED(hash_size);
+	REFTABLE_UNUSED(scratch);
 
 	reftable_buf_reset(&r->last_key);
 	err = reftable_buf_add(&r->last_key, key.buf, key.len);
@@ -1115,10 +1136,12 @@ static int reftable_index_record_decode(void *rec, struct reftable_buf key,
 }
 
 static int reftable_index_record_equal(const void *a, const void *b,
-				       uint32_t hash_size UNUSED)
+				       uint32_t hash_size)
 {
 	struct reftable_index_record *ia = (struct reftable_index_record *) a;
 	struct reftable_index_record *ib = (struct reftable_index_record *) b;
+
+	REFTABLE_UNUSED(hash_size);
 
 	return ia->offset == ib->offset && !reftable_buf_cmp(&ia->last_key, &ib->last_key);
 }
