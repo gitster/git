@@ -508,7 +508,8 @@ static int reftable_obj_record_copy_from(void *rec, const void *src_rec,
 	if (!obj->offsets)
 		return REFTABLE_OUT_OF_MEMORY_ERROR;
 	obj->offset_len = src->offset_len;
-	COPY_ARRAY(obj->offsets, src->offsets, src->offset_len);
+	if (src->offset_len)
+		memcpy(obj->offsets, src->offsets, sizeof(*src->offsets) * src->offset_len);
 
 	return 0;
 }
