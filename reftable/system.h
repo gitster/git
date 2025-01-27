@@ -11,7 +11,8 @@ https://developers.google.com/open-source/licenses/bsd
 
 /* This header glues the reftable library to the rest of Git */
 
-#include "git-compat-util.h"
+#include "compat/posix.h"
+#include <zlib.h>
 
 /*
  * Return a random 32 bit integer. This function is expected to return
