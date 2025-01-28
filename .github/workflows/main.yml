@@ -319,17 +319,13 @@ jobs:
         - jobname: linux-reftable
           image: ubuntu:rolling
           cc: clang
-        - jobname: linux-gcc
-          image: ubuntu:20.04
+        - jobname: linux-breaking-changes
+          image: ubuntu:rolling
           cc: gcc
-          cc_package: gcc-8
         - jobname: linux-TEST-vars
           image: ubuntu:20.04
           cc: gcc
           cc_package: gcc-8
-        - jobname: linux-gcc-default
-          image: ubuntu:rolling
-          cc: gcc
         - jobname: linux-leaks
           image: ubuntu:rolling
           cc: gcc
