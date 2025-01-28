@@ -3,4 +3,4 @@
 #include <conio.h>
 #include "../strbuf.h"
 
-#include "mingw.c"
+#include "mingw/compat-util.c"
