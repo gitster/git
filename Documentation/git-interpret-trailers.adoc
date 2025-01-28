@@ -186,9 +186,9 @@ OPTIONS
 CONFIGURATION VARIABLES
 -----------------------
 
-include::includes/cmd-config-section-all.txt[]
+include::includes/cmd-config-section-all.adoc[]
 
-include::config/trailer.txt[]
+include::config/trailer.adoc[]
 
 EXAMPLES
 --------
