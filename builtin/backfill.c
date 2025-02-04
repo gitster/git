@@ -130,7 +130,8 @@ int cmd_backfill(int argc, const char **argv, const char *prefix, struct reposit
 		OPT_END(),
 	};
 
-	show_usage_if_asked(argc, argv, builtin_backfill_usage[0]);
+	show_usage_with_options_if_asked(argc, argv,
+					 builtin_backfill_usage, options);
 
 	argc = parse_options(argc, argv, prefix, options, builtin_backfill_usage,
 			     0);
