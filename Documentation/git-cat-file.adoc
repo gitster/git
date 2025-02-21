@@ -81,6 +81,12 @@ OPTIONS
 	end-of-line conversion, etc). In this case, `<object>` has to be of
 	the form `<tree-ish>:<path>`, or `:<path>`.
 
+--objects-filter=<filter-spec>::
+--no-objects-filter::
+	Omit objects from the list of printed objects. This can only be used in
+	combination with one of the batched modes. The '<filter-spec>' may be
+	one of the following:
+
 --path=<path>::
 	For use with `--textconv` or `--filters`, to allow specifying an object
 	name and a path separately, e.g. when it is difficult to figure out
