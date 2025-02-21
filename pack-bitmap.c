@@ -1509,7 +1509,24 @@ static void show_extended_objects(struct bitmap_index *bitmap_git,
 		    (obj->type == OBJ_TAG && !revs->tag_objects))
 			continue;
 
-		show_reach(&obj->oid, obj->type, 0, eindex->hashes[i], NULL, 0);
+		show_reach(&obj->oid, obj->type, 0, eindex->hashes[i], NULL, 0, NULL);
+	}
+}
+
+static struct ewah_bitmap *ewah_for_type(struct bitmap_index *bitmap_git,
+					 enum object_type type)
+{
+	switch (type) {
+	case OBJ_COMMIT:
+		return bitmap_git->commits;
+	case OBJ_TREE:
+		return bitmap_git->trees;
+	case OBJ_BLOB:
+		return bitmap_git->blobs;
+	case OBJ_TAG:
+		return bitmap_git->tags;
+	default:
+		BUG("object type %d not stored by bitmap type index", type);
 	}
 }
 
@@ -1517,41 +1534,19 @@ static void init_type_iterator(struct ewah_iterator *it,
 			       struct bitmap_index *bitmap_git,
 			       enum object_type type)
 {
-	switch (type) {
-	case OBJ_COMMIT:
-		ewah_iterator_init(it, bitmap_git->commits);
-		break;
-
-	case OBJ_TREE:
-		ewah_iterator_init(it, bitmap_git->trees);
-		break;
-
-	case OBJ_BLOB:
-		ewah_iterator_init(it, bitmap_git->blobs);
-		break;
-
-	case OBJ_TAG:
-		ewah_iterator_init(it, bitmap_git->tags);
-		break;
-
-	default:
-		BUG("object type %d not stored by bitmap type index", type);
-		break;
-	}
+	ewah_iterator_init(it, ewah_for_type(bitmap_git, type));
 }
 
-static void show_objects_for_type(
-	struct bitmap_index *bitmap_git,
-	enum object_type object_type,
-	show_reachable_fn show_reach)
+static void for_each_bitmapped_object_internal(struct bitmap_index *bitmap_git,
+					       struct bitmap *objects,
+					       enum object_type object_type,
+					       show_reachable_fn show_reach,
+					       void *payload)
 {
 	size_t i = 0;
 	uint32_t offset;
-
 	struct ewah_iterator it;
 	eword_t filter;
-
-	struct bitmap *objects = bitmap_git->result;
 
 	init_type_iterator(&it, bitmap_git, object_type);
 
@@ -1595,9 +1590,29 @@ static void show_objects_for_type(
 			if (bitmap_git->hashes)
 				hash = get_be32(bitmap_git->hashes + index_pos);
 
-			show_reach(&oid, object_type, 0, hash, pack, ofs);
+			show_reach(&oid, object_type, 0, hash, pack, ofs, payload);
 		}
 	}
+}
+
+static void show_objects_for_type(
+	struct bitmap_index *bitmap_git,
+	enum object_type object_type,
+	show_reachable_fn show_reach)
+{
+	for_each_bitmapped_object_internal(bitmap_git, bitmap_git->result,
+					   object_type, show_reach, NULL);
+}
+
+void for_each_bitmapped_object(struct bitmap_index *bitmap_git,
+			       enum object_type object_type,
+			       show_reachable_fn show_reach,
+			       void *payload)
+{
+	struct bitmap *bitmap = ewah_to_bitmap(ewah_for_type(bitmap_git, object_type));
+	for_each_bitmapped_object_internal(bitmap_git, bitmap,
+					   object_type, show_reach, payload);
+	bitmap_free(bitmap);
 }
 
 static int in_bitmapped_pack(struct bitmap_index *bitmap_git,

@@ -50,7 +50,8 @@ typedef int (*show_reachable_fn)(
 	int flags,
 	uint32_t hash,
 	struct packed_git *found_pack,
-	off_t found_offset);
+	off_t found_offset,
+	void *payload);
 
 struct bitmap_index;
 
@@ -77,6 +78,15 @@ int test_bitmap_hashes(struct repository *r);
 int test_bitmap_pseudo_merges(struct repository *r);
 int test_bitmap_pseudo_merge_commits(struct repository *r, uint32_t n);
 int test_bitmap_pseudo_merge_objects(struct repository *r, uint32_t n);
+
+/*
+ * Iterate through all bitmapped objects of the given type and execute the
+ * `show_reach` for each of them.
+ */
+ void for_each_bitmapped_object(struct bitmap_index *bitmap_git,
+			       enum object_type object_type,
+			       show_reachable_fn show_reach,
+			       void *payload);
 
 #define GIT_TEST_PACK_USE_BITMAP_BOUNDARY_TRAVERSAL \
 	"GIT_TEST_PACK_USE_BITMAP_BOUNDARY_TRAVERSAL"
