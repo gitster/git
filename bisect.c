@@ -23,6 +23,7 @@
 #include "object-store-ll.h"
 #include "path.h"
 #include "dir.h"
+#include "trace2.h"
 
 static struct oid_array good_revs;
 static struct oid_array skipped_revs;
@@ -132,8 +133,10 @@ static inline int approx_halfway(struct commit_list *p, int nr)
 		 * good enough if it's within ~0.1% of the halfway point,
 		 * e.g. 5000 is exactly halfway of 10000, but we consider
 		 * the values [4996, 5004] as halfway as well.
+		 * While we have really large number of commits, we'll
+		 * loosen our target to hit within 3% of the harfway.
 		 */
-		if (abs(diff) < nr / 1024)
+		if ((0 && 10000 < nr && abs(diff) < nr / 64) || abs(diff) < nr / 1024)
 			return 1;
 		return 0;
 	}
@@ -282,11 +285,15 @@ static struct commit_list *do_find_bisection(struct commit_list *list,
 					     int nr, int *weights,
 					     unsigned bisect_flags)
 {
-	int n, counted;
+	int n, counted, num_merges;
 	struct commit_list *p;
+	struct commit_list **merge; /* ugh */
 
+	num_merges = 0;
 	counted = 0;
+	num_merges = 0;
 
+	trace2_region_enter("bisect", "do_find_bisection_0", the_repository);
 	for (n = 0, p = list; p; p = p->next) {
 		struct commit *commit = p->item;
 		unsigned commit_flags = commit->object.flags;
@@ -309,16 +316,30 @@ static struct commit_list *do_find_bisection(struct commit_list *list,
 			weight_set(p, -1);
 			break;
 		default:
+			num_merges++;
 			weight_set(p, -2);
 			break;
 		}
 	}
+	trace2_region_leave("bisect", "do_find_bisection_0", the_repository);
 
 	show_list("bisection 2 initialize", counted, nr, list);
 
 	/*
+	 * Collect merges into an array.
+	 */
+	CALLOC_ARRAY(merge, num_merges);
+	for (n = 0, p = list; p; p = p->next) {
+		if (weight(p) != -2)
+			continue;
+		merge[n++] = p;
+	}
+	if (num_merges != n)
+		BUG("Whoa!");
+
+	/*
 	 * If you have only one parent in the resulting set
-	 * then you can reach one commit more than that parent
+	 * then you can reach one commit more than your parent
 	 * can reach.  So we do not have to run the expensive
 	 * count_distance() for single strand of pearls.
 	 *
@@ -330,25 +351,73 @@ static struct commit_list *do_find_bisection(struct commit_list *list,
 	 * So we will first count distance of merges the usual
 	 * way, and then fill the blanks using cheaper algorithm.
 	 */
-	for (p = list; p; p = p->next) {
-		if (p->item->object.flags & UNINTERESTING)
-			continue;
+	trace2_region_enter("bisect", "do_find_bisection_1", the_repository);
+
+	/*
+	 * Use the element of a list from its midpoint.
+	 * (num_merges == 1) mid = 0; ix = 0
+	 * (num_merges == 2) mid = 0; ix = 0, 1
+	 * (num_merges == 3) mid = 1; ix = 1, 2, 0
+	 * (num_merges == 4) mid = 1; ix = 1, 2, 0, 3
+	 * (num_merges == 5) mid = 2; ix = 2, 3, 1, 4, 0
+	 * (num_merges == 6) mid = 2; ix = 2, 3, 1, 4, 0, 5
+	 */
+	for (n = 0; n < num_merges; n++) {
+		struct commit_list *p;
+		int ix = (num_merges - 1) / 2;
+
+		if (n % 2)
+			ix += (n + 1) / 2;
+		else
+			ix -= n / 2;
+
+		p = merge[ix];
 		if (weight(p) != -2)
 			continue;
 		if (bisect_flags & FIND_BISECTION_FIRST_PARENT_ONLY)
 			BUG("shouldn't be calling count-distance in fp mode");
 		weight_set(p, count_distance(p));
+
+#if 0
+		/*
+		 * If the current merge can reach way fewer than half
+		 * the commits in the graph, any of its ancestors can
+		 * reach even fewer commits, which means they will not
+		 * make better half-way candidate than this one.
+		 *
+		 * Just as a slack, let's cut at 3/8 not exactly 1/2.
+		 */
+		if (weight(p) * 8 < nr * 3) {
+			for (struct commit_list *q = list; q; q = q->next) {
+				if (q->item->object.flags & UNINTERESTING)
+					continue;
+				if (!(q->item->object.flags & COUNTED))
+					continue;
+				if (weight(q) != -2)
+					continue;
+				/* mark it as not a viable candidate */
+				weight_set(q, 1);
+			}
+		}
+#endif
 		clear_distance(list);
 
 		/* Does it happen to be at half-way? */
 		if (!(bisect_flags & FIND_BISECTION_ALL) &&
-		      approx_halfway(p, nr))
+		    approx_halfway(p, nr)) {
+			trace2_data_string("bisect", the_repository, "early-exit", "do_find_bisection_1");
+			trace2_region_leave("bisect", "do_find_bisection_1", the_repository);
+			free(merge);
 			return p;
+		}
 		counted++;
 	}
+	trace2_region_leave("bisect", "do_find_bisection_1", the_repository);
+	free(merge);
 
 	show_list("bisection 2 count_distance", counted, nr, list);
 
+	trace2_region_enter("bisect", "do_find_bisection_2", the_repository);
 	while (counted < nr) {
 		for (p = list; p; p = p->next) {
 			struct commit_list *q;
@@ -384,10 +453,14 @@ static struct commit_list *do_find_bisection(struct commit_list *list,
 
 			/* Does it happen to be at half-way? */
 			if (!(bisect_flags & FIND_BISECTION_ALL) &&
-			      approx_halfway(p, nr))
+			    approx_halfway(p, nr)) {
+			trace2_data_string("bisect", the_repository, "early-exit", "do_find_bisection_2");
+				trace2_region_leave("bisect", "do_find_bisection_2", the_repository);
 				return p;
+			}
 		}
 	}
+	trace2_region_leave("bisect", "do_find_bisection_2", the_repository);
 
 	show_list("bisection 2 counted all", counted, nr, list);
 
