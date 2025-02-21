@@ -86,6 +86,8 @@ OPTIONS
 	Omit objects from the list of printed objects. This can only be used in
 	combination with one of the batched modes. The '<filter-spec>' may be
 	one of the following:
++
+The form '--filter=blob:none' omits all blobs.
 
 --path=<path>::
 	For use with `--textconv` or `--filters`, to allow specifying an object

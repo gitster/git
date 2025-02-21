@@ -472,7 +472,8 @@ static void batch_object_write(const char *obj_name,
 	if (!data->skip_object_info) {
 		int ret;
 
-		if (use_mailmap)
+		if (use_mailmap ||
+		    opt->objects_filter.choice == LOFC_BLOB_NONE)
 			data->info.typep = &data->type;
 
 		if (pack)
@@ -491,6 +492,10 @@ static void batch_object_write(const char *obj_name,
 
 		switch (opt->objects_filter.choice) {
 		case LOFC_DISABLED:
+			break;
+		case LOFC_BLOB_NONE:
+			if (data->type == OBJ_BLOB)
+				return;
 			break;
 		default:
 			BUG("unsupported objects filter");
@@ -1031,6 +1036,10 @@ int cmd_cat_file(int argc,
 
 	switch (batch.objects_filter.choice) {
 	case LOFC_DISABLED:
+		break;
+	case LOFC_BLOB_NONE:
+		if (!batch.enabled)
+			usage(_("objects filter only supported in batch mode"));
 		break;
 	default:
 		usagef(_("objects filter not supported: '%s'"),
