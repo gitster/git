@@ -282,10 +282,13 @@ static struct commit_list *do_find_bisection(struct commit_list *list,
 					     int nr, int *weights,
 					     unsigned bisect_flags)
 {
-	int n, counted;
+	int n, counted, num_merges;
 	struct commit_list *p;
+	struct commit_list **merge; /* ugh */
 
+	num_merges = 0;
 	counted = 0;
+	num_merges = 0;
 
 	for (n = 0, p = list; p; p = p->next) {
 		struct commit *commit = p->item;
@@ -309,6 +312,7 @@ static struct commit_list *do_find_bisection(struct commit_list *list,
 			weight_set(p, -1);
 			break;
 		default:
+			num_merges++;
 			weight_set(p, -2);
 			break;
 		}
@@ -317,8 +321,20 @@ static struct commit_list *do_find_bisection(struct commit_list *list,
 	show_list("bisection 2 initialize", counted, nr, list);
 
 	/*
+	 * Collect merges into an array.
+	 */
+	CALLOC_ARRAY(merge, num_merges);
+	for (n = 0, p = list; p; p = p->next) {
+		if (weight(p) != -2)
+			continue;
+		merge[n++] = p;
+	}
+	if (num_merges != n)
+		BUG("num_merges does not match the number we counted earlier!?");
+
+	/*
 	 * If you have only one parent in the resulting set
-	 * then you can reach one commit more than that parent
+	 * then you can reach one commit more than your parent
 	 * can reach.  So we do not have to run the expensive
 	 * count_distance() for single strand of pearls.
 	 *
@@ -330,7 +346,27 @@ static struct commit_list *do_find_bisection(struct commit_list *list,
 	 * So we will first count distance of merges the usual
 	 * way, and then fill the blanks using cheaper algorithm.
 	 */
-	for (p = list; p; p = p->next) {
+
+	/*
+	 * Use the element of a list from its midpoint.
+	 * (num_merges == 1) mid = 0; ix = 0
+	 * (num_merges == 2) mid = 0; ix = 0, 1
+	 * (num_merges == 3) mid = 1; ix = 1, 2, 0
+	 * (num_merges == 4) mid = 1; ix = 1, 2, 0, 3
+	 * (num_merges == 5) mid = 2; ix = 2, 3, 1, 4, 0
+	 * (num_merges == 6) mid = 2; ix = 2, 3, 1, 4, 0, 5
+	 * and so on.
+	 */
+	for (n = 0; n < num_merges; n++) {
+		struct commit_list *p;
+		int ix = (num_merges - 1) / 2;
+
+		if (n % 2)
+			ix += (n + 1) / 2;
+		else
+			ix -= n / 2;
+		p = merge[ix];
+
 		if (p->item->object.flags & UNINTERESTING)
 			continue;
 		if (weight(p) != -2)
@@ -342,10 +378,13 @@ static struct commit_list *do_find_bisection(struct commit_list *list,
 
 		/* Does it happen to be at half-way? */
 		if (!(bisect_flags & FIND_BISECTION_ALL) &&
-		      approx_halfway(p, nr))
+		    approx_halfway(p, nr)) {
+			free(merge);
 			return p;
+		}
 		counted++;
 	}
+	free(merge);
 
 	show_list("bisection 2 count_distance", counted, nr, list);
 
@@ -384,8 +423,9 @@ static struct commit_list *do_find_bisection(struct commit_list *list,
 
 			/* Does it happen to be at half-way? */
 			if (!(bisect_flags & FIND_BISECTION_ALL) &&
-			      approx_halfway(p, nr))
+			    approx_halfway(p, nr)) {
 				return p;
+			}
 		}
 	}
 
