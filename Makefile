@@ -1283,7 +1283,9 @@ BUILTIN_OBJS += builtin/mv.o
 BUILTIN_OBJS += builtin/name-rev.o
 BUILTIN_OBJS += builtin/notes.o
 BUILTIN_OBJS += builtin/pack-objects.o
-ifndef WITH_BREAKING_CHANGES
+ifdef WITH_BREAKING_CHANGES
+EXCLUDED_PROGRAMS += git-pack-redundant
+else
 BUILTIN_OBJS += builtin/pack-redundant.o
 endif
 BUILTIN_OBJS += builtin/pack-refs.o
