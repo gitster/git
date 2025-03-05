@@ -7,8 +7,10 @@ git-update-ref - Update the object name stored in a ref safely
 
 SYNOPSIS
 --------
-[verse]
-'git update-ref' [-m <reason>] [--no-deref] (-d <ref> [<old-oid>] | [--create-reflog] <ref> <new-oid> [<old-oid>] | --stdin [-z])
+[synopsis]
+git update-ref [-m <reason>] [--no-deref] -d <ref> [<old-oid>]
+	       [-m <reason>] [--no-deref] [--create-reflog] <ref> <new-oid> [<old-oid>]
+               [-m <reason>] [--no-deref] --stdin [-z] [--allow-partial]
 
 DESCRIPTION
 -----------
@@ -56,6 +58,17 @@ performs all modifications together.  Specify commands of the form:
 
 With `--create-reflog`, update-ref will create a reflog for each ref
 even if one would not ordinarily be created.
+
+With `--allow-partial`, update-ref continues executing the transaction even if
+some updates fail due to invalid or incorrect user input, applying only the
+successful updates. Errors resulting from user-provided input are treated as
+non-system-related and do not cause the entire transaction to be aborted.
+However, system-related errors—such as I/O failures or memory issues—will still
+result in a full failure. Additionally, errors like F/D conflicts are batched
+for performance optimization and will also cause a full failure. Any failed
+updates will be reported in the following format:
+
+	rejected SP (<old-oid> | <old-target>) SP (<new-oid> | <new-target>) SP <rejection-reason> LF
 
 Quote fields containing whitespace as if they were strings in C source
 code; i.e., surrounded by double-quotes and with backslash escapes.
