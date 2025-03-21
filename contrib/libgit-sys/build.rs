@@ -8,9 +8,11 @@ pub fn main() -> std::io::Result<()> {
     let crate_root = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").unwrap());
     let git_root = crate_root.join("git-src");
     let dst = PathBuf::from(env::var_os("OUT_DIR").unwrap());
+    let makeflags = env::var_os("CARGO_MAKEFLAGS").unwrap();
 
     let make_output = make_cmd::gnu_make()
         .env("DEVELOPER", "1")
+        .env("MAKEFLAGS", &makeflags)
         .env_remove("PROFILE")
         .current_dir(git_root.clone())
         .args([
