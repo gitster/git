@@ -2764,7 +2764,7 @@ OBJECTS += $(CLAR_TEST_OBJS)
 OBJECTS += $(patsubst %,$(UNIT_TEST_DIR)/%.o,$(UNIT_TEST_PROGRAMS))
 
 ifdef INCLUDE_LIBGIT_RS
-	OBJECTS += contrib/libgit-sys/public_symbol_export.o
+	OBJECTS += contrib/libgitpub/public_symbol_export.o
 endif
 
 ifndef NO_CURL
@@ -3762,9 +3762,9 @@ clean: profile-clean coverage-clean cocciclean
 	$(MAKE) -C Documentation/ clean
 	$(RM) Documentation/GIT-EXCLUDED-PROGRAMS
 	$(RM) -r contrib/libgit-sys/target contrib/libgit-rs/target
-	$(RM) contrib/libgit-sys/partial_symbol_export.o
-	$(RM) contrib/libgit-sys/hidden_symbol_export.o
-	$(RM) contrib/libgit-sys/libgitpub.a
+	$(RM) contrib/libgitpub/partial_symbol_export.o
+	$(RM) contrib/libgitpub/hidden_symbol_export.o
+	$(RM) contrib/libgitpub/libgitpub.a
 ifndef NO_PERL
 	$(RM) -r perl/build/
 endif
@@ -3937,14 +3937,14 @@ ifdef INCLUDE_LIBGIT_RS
 all:: libgit-sys libgit-rs
 endif
 
-LIBGIT_PUB_OBJS += contrib/libgit-sys/public_symbol_export.o
+LIBGIT_PUB_OBJS += contrib/libgitpub/public_symbol_export.o
 LIBGIT_PUB_OBJS += libgit.a
 LIBGIT_PUB_OBJS += reftable/libreftable.a
 LIBGIT_PUB_OBJS += xdiff/lib.a
 
-LIBGIT_PARTIAL_EXPORT = contrib/libgit-sys/partial_symbol_export.o
+LIBGIT_PARTIAL_EXPORT = contrib/libgitpub/partial_symbol_export.o
 
-LIBGIT_HIDDEN_EXPORT = contrib/libgit-sys/hidden_symbol_export.o
+LIBGIT_HIDDEN_EXPORT = contrib/libgitpub/hidden_symbol_export.o
 
 $(LIBGIT_PARTIAL_EXPORT): $(LIBGIT_PUB_OBJS)
 	$(LD) -r $^ -o $@
@@ -3952,5 +3952,5 @@ $(LIBGIT_PARTIAL_EXPORT): $(LIBGIT_PUB_OBJS)
 $(LIBGIT_HIDDEN_EXPORT): $(LIBGIT_PARTIAL_EXPORT)
 	$(OBJCOPY) --localize-hidden $^ $@
 
-contrib/libgit-sys/libgitpub.a: $(LIBGIT_HIDDEN_EXPORT)
+contrib/libgitpub/libgitpub.a: $(LIBGIT_HIDDEN_EXPORT)
 	$(AR) $(ARFLAGS) $@ $^

@@ -6,7 +6,7 @@
 
 #include "git-compat-util.h"
 #include "config.h"
-#include "contrib/libgit-sys/public_symbol_export.h"
+#include "contrib/libgitpub/public_symbol_export.h"
 #include "version.h"
 
 #pragma GCC visibility push(default)

@@ -15,7 +15,7 @@ pub fn main() -> std::io::Result<()> {
         .current_dir(git_root.clone())
         .args([
             "INCLUDE_LIBGIT_RS=YesPlease",
-            "contrib/libgit-sys/libgitpub.a",
+            "contrib/libgitpub/libgitpub.a",
         ])
         .output()
         .expect("Make failed to run");
@@ -26,7 +26,7 @@ pub fn main() -> std::io::Result<()> {
             String::from_utf8(make_output.stderr).unwrap()
         );
     }
-    std::fs::copy(crate_root.join("libgitpub.a"), dst.join("libgitpub.a"))?;
+    std::fs::copy(git_root.join("contrib/libgitpub/libgitpub.a"), dst.join("libgitpub.a"))?;
     println!("cargo:rustc-link-search=native={}", dst.display());
     println!("cargo:rustc-link-lib=gitpub");
     println!("cargo:rerun-if-changed={}", git_root.display());
