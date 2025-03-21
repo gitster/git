@@ -7,6 +7,18 @@ links = "gitpub"
 rust-version = "1.63" # TODO: Once we hit 1.84 or newer, we may want to remove Cargo.lock from
                       # version control. See https://lore.kernel.org/git/Z47jgK-oMjFRSslr@tapette.crustytoothpaste.net/
 description = "Native bindings to a portion of libgit"
+exclude = [
+  "git-src/.github",
+  "git-src/Documentation",
+  "git-src/ci",
+  "git-src/git-gui",
+  "git-src/gitk-git",
+  "git-src/gitweb",
+  "git-src/oss-fuzz",
+  "git-src/perl",
+  "git-src/po",
+  "git-src/t"
+]
 
 [lib]
 path = "src/lib.rs"

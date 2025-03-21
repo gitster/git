@@ -3500,13 +3500,13 @@ coccicheck-pending: $(COCCICHECK_PATCHES_PENDING_INTREE)
 
 # "Sub"-Makefiles, not really because they can't be run stand-alone,
 # only there to contain directory-specific rules and variables
+ifndef NO_GITWEB
 ## gitweb/Makefile inclusion:
 MAK_DIR_GITWEB = gitweb/
 include gitweb/Makefile
 
 .PHONY: gitweb
 gitweb: $(MAK_DIR_GITWEB_ALL)
-ifndef NO_GITWEB
 all:: gitweb
 endif
 

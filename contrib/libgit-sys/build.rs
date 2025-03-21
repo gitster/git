@@ -17,6 +17,9 @@ pub fn main() -> std::io::Result<()> {
         .current_dir(git_root.clone())
         .args([
             &format!("CARGO_OUT_DIR={}", dst.display()),
+            "NO_GITWEB=YesPlease",
+            "NO_PERL=YesPlease",
+            "NO_TCLTK=YesPlease",
             "INCLUDE_LIBGIT_RS=YesPlease",
             &format!("{}/contrib/libgitpub/libgitpub.a", dst.display()),
         ])
