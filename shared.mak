@@ -127,3 +127,8 @@ GIT_USER_AGENT="$(GIT_USER_AGENT)" \
 GIT_VERSION="$(GIT_VERSION_OVERRIDE)" \
 $(SHELL_PATH) "$(1)/GIT-VERSION-GEN" "$(1)" "$(2)" "$(3)"
 endef
+
+# Apply a path prefix if the prefix is non-empty
+define maybe_join_path
+$(if $(1),$(1)/$(2),$(2))
+endef

@@ -420,6 +420,9 @@ include shared.mak
 # Define INCLUDE_LIBGIT_RS if you want `make all` and `make test` to build and
 # test the Rust crates in contrib/libgit-sys and contrib/libgit-rs.
 #
+# Define CARGO_OUT_DIR to specify a directory where object files and other files
+# generated during the build of libgitpub.a should be created.
+#
 # === Optional library: libintl ===
 #
 # Define NO_GETTEXT if you don't want Git output to be translated.
@@ -699,6 +702,7 @@ THIRD_PARTY_SOURCES =
 UNIT_TEST_PROGRAMS =
 UNIT_TEST_DIR = t/unit-tests
 UNIT_TEST_BIN = $(UNIT_TEST_DIR)/bin
+CARGO_OUT_DIR =
 
 # Having this variable in your environment would break pipelines because
 # you cause "cd" to echo its destination to stdout.  It can also take
@@ -917,11 +921,21 @@ export PYTHON_PATH
 
 TEST_SHELL_PATH = $(SHELL_PATH)
 
-LIB_FILE = libgit.a
-XDIFF_LIB = xdiff/lib.a
-REFTABLE_LIB = reftable/libreftable.a
+### Generated files which may need to live in Cargo output directory
 
-GENERATED_H += command-list.h
+GIT_CFLAGS = $(call maybe_join_path,$(CARGO_OUT_DIR),GIT-CFLAGS)
+GIT_PREFIX = $(call maybe_join_path,$(CARGO_OUT_DIR),GIT-PREFIX)
+GIT_USER_AGENT_FILE = $(call maybe_join_path,$(CARGO_OUT_DIR),GIT-USER-AGENT)
+GIT_VERSION_FILE = $(call maybe_join_path,$(CARGO_OUT_DIR),GIT-VERSION-FILE)
+GIT_VERSION_PATH = $(dir $(GIT_VERSION_FILE))$(notdir $(GIT_VERSION_FILE))
+COMMAND_LIST_H = $(call maybe_join_path,$(CARGO_OUT_DIR),command-list.h)
+VERSION_DEF_H = $(call maybe_join_path,$(CARGO_OUT_DIR),version-def.h)
+
+LIB_FILE = $(call maybe_join_path,$(CARGO_OUT_DIR),libgit.a)
+XDIFF_LIB = $(call maybe_join_path,$(CARGO_OUT_DIR),xdiff/lib.a)
+REFTABLE_LIB = $(call maybe_join_path,$(CARGO_OUT_DIR),reftable/libreftable.a)
+
+GENERATED_H += $(COMMAND_LIST_H)
 GENERATED_H += config-list.h
 GENERATED_H += hook-list.h
 GENERATED_H += $(UNIT_TEST_DIR)/clar-decls.h
@@ -1472,7 +1486,7 @@ ifdef DEVELOPER
 include config.mak.dev
 endif
 
-GIT-VERSION-FILE: FORCE
+$(GIT_VERSION_FILE): FORCE
 	@OLD=$$(cat $@ 2>/dev/null || :) && \
 	$(call version_gen,"$(shell pwd)",GIT-VERSION-FILE.in,$@) && \
 	NEW=$$(cat $@ 2>/dev/null || :) && \
@@ -1482,7 +1496,7 @@ GIT-VERSION-FILE: FORCE
 # otherwise any user-provided value for GIT_VERSION would have been overridden
 # already.
 GIT_VERSION_OVERRIDE := $(GIT_VERSION)
--include GIT-VERSION-FILE
+-include $(GIT_VERSION_FILE)
 
 # what 'all' will build and 'install' will install in gitexecdir,
 # excluding programs for built-in commands
@@ -2403,9 +2417,9 @@ endif
 GIT_USER_AGENT_SQ = $(subst ','\'',$(GIT_USER_AGENT))
 GIT_USER_AGENT_CQ = "$(subst ",\",$(subst \,\\,$(GIT_USER_AGENT)))"
 GIT_USER_AGENT_CQ_SQ = $(subst ','\'',$(GIT_USER_AGENT_CQ))
-GIT-USER-AGENT: FORCE
-	@if test x'$(GIT_USER_AGENT_SQ)' != x"`cat GIT-USER-AGENT 2>/dev/null`"; then \
-		echo '$(GIT_USER_AGENT_SQ)' >GIT-USER-AGENT; \
+$(GIT_USER_AGENT_FILE): FORCE
+	@if test x'$(GIT_USER_AGENT_SQ)' != x"`cat $(GIT_USER_AGENT_FILE) 2>/dev/null`"; then \
+		echo '$(GIT_USER_AGENT_SQ)' >$(GIT_USER_AGENT_FILE); \
 	fi
 
 ifdef DEFAULT_HELP_FORMAT
@@ -2523,7 +2537,7 @@ strip: $(PROGRAMS) git$X
 #   dependencies here will not need to change if the force-build
 #   details change some day.
 
-git.sp git.s git.o: GIT-PREFIX
+git.sp git.s git.o: $(GIT_PREFIX)
 git.sp git.s git.o: EXTRA_CPPFLAGS = \
 	'-DGIT_HTML_PATH="$(htmldir_relative_SQ)"' \
 	'-DGIT_MAN_PATH="$(mandir_relative_SQ)"' \
@@ -2533,10 +2547,10 @@ git$X: git.o GIT-LDFLAGS $(BUILTIN_OBJS) $(GITLIBS)
 	$(QUIET_LINK)$(CC) $(ALL_CFLAGS) -o $@ $(ALL_LDFLAGS) \
 		$(filter %.o,$^) $(LIBS)
 
-help.sp help.s help.o: command-list.h
+help.sp help.s $(call maybe_join_path,$(CARGO_OUT_DIR),help.o): $(COMMAND_LIST_H)
 builtin/bugreport.sp builtin/bugreport.s builtin/bugreport.o: hook-list.h
 
-builtin/help.sp builtin/help.s builtin/help.o: config-list.h GIT-PREFIX
+builtin/help.sp builtin/help.s builtin/help.o: config-list.h $(GIT_PREFIX)
 builtin/help.sp builtin/help.s builtin/help.o: EXTRA_CPPFLAGS = \
 	'-DGIT_HTML_PATH="$(htmldir_relative_SQ)"' \
 	'-DGIT_MAN_PATH="$(mandir_relative_SQ)"' \
@@ -2545,13 +2559,13 @@ builtin/help.sp builtin/help.s builtin/help.o: EXTRA_CPPFLAGS = \
 PAGER_ENV_SQ = $(subst ','\'',$(PAGER_ENV))
 PAGER_ENV_CQ = "$(subst ",\",$(subst \,\\,$(PAGER_ENV)))"
 PAGER_ENV_CQ_SQ = $(subst ','\'',$(PAGER_ENV_CQ))
-pager.sp pager.s pager.o: EXTRA_CPPFLAGS = \
+pager.sp pager.s $(call maybe_join_path,$(CARGO_OUT_DIR),pager.o): EXTRA_CPPFLAGS = \
 	-DPAGER_ENV='$(PAGER_ENV_CQ_SQ)'
 
-version-def.h: version-def.h.in GIT-VERSION-GEN GIT-VERSION-FILE GIT-USER-AGENT
+$(VERSION_DEF_H): version-def.h.in GIT-VERSION-GEN $(GIT_VERSION_FILE) $(GIT_USER_AGENT_FILE)
 	$(QUIET_GEN)$(call version_gen,"$(shell pwd)",$<,$@)
 
-version.sp version.s version.o: version-def.h
+version.sp version.s $(call maybe_join_path,$(CARGO_OUT_DIR),version.o): $(VERSION_DEF_H)
 
 $(BUILT_INS): git$X
 	$(QUIET_BUILT_IN)$(RM) $@ && \
@@ -2564,9 +2578,9 @@ config-list.h: generate-configlist.sh
 config-list.h: Documentation/*config.adoc Documentation/config/*.adoc
 	$(QUIET_GEN)$(SHELL_PATH) ./generate-configlist.sh . $@
 
-command-list.h: generate-cmdlist.sh command-list.txt
+$(COMMAND_LIST_H): generate-cmdlist.sh command-list.txt
 
-command-list.h: $(wildcard Documentation/git*.adoc)
+$(COMMAND_LIST_H): $(wildcard Documentation/git*.adoc)
 	$(QUIET_GEN)$(SHELL_PATH) ./generate-cmdlist.sh \
 		$(patsubst %,--exclude-program %,$(EXCLUDED_PROGRAMS)) \
 		. $@
@@ -2589,10 +2603,10 @@ $(SCRIPT_SH_GEN) $(SCRIPT_LIB) : % : %.sh generate-script.sh GIT-BUILD-OPTIONS G
 	$(QUIET_GEN)./generate-script.sh "$<" "$@+" ./GIT-BUILD-OPTIONS && \
 	mv $@+ $@
 
-git.rc: git.rc.in GIT-VERSION-GEN GIT-VERSION-FILE
+git.rc: git.rc.in GIT-VERSION-GEN $(GIT_VERSION_FILE)
 	$(QUIET_GEN)$(call version_gen,"$(shell pwd)",$<,$@)
 
-git.res: git.rc GIT-PREFIX
+git.res: git.rc $(GIT_PREFIX)
 	$(QUIET_RC)$(RC) -i $< -o $@
 
 # This makes sure we depend on the NO_PERL setting itself.
@@ -2626,8 +2640,8 @@ endif
 
 PERL_DEFINES += $(gitexecdir) $(perllibdir) $(localedir)
 
-$(SCRIPT_PERL_GEN): % : %.perl generate-perl.sh GIT-PERL-DEFINES GIT-PERL-HEADER GIT-VERSION-FILE
-	$(QUIET_GEN)$(SHELL_PATH) generate-perl.sh ./GIT-BUILD-OPTIONS ./GIT-VERSION-FILE GIT-PERL-HEADER "$<" "$@+" && \
+$(SCRIPT_PERL_GEN): % : %.perl generate-perl.sh GIT-PERL-DEFINES GIT-PERL-HEADER $(GIT_VERSION_FILE)
+	$(QUIET_GEN)$(SHELL_PATH) generate-perl.sh ./GIT-BUILD-OPTIONS $(GIT_VERSION_PATH) GIT-PERL-HEADER "$<" "$@+" && \
 	mv $@+ $@
 
 PERL_DEFINES := $(subst $(space),:,$(PERL_DEFINES))
@@ -2691,7 +2705,7 @@ CONFIGURE_RECIPE = sed -e 's/@GIT_VERSION@/$(GIT_VERSION)/g' \
 		   autoconf -o configure configure.ac+ && \
 		   $(RM) configure.ac+
 
-configure: configure.ac GIT-VERSION-FILE
+configure: configure.ac $(GIT_VERSION_FILE)
 	$(QUIET_GEN)$(CONFIGURE_RECIPE)
 
 ifdef AUTOCONFIGURED
@@ -2774,6 +2788,14 @@ endif
 .PHONY: objects
 objects: $(OBJECTS)
 
+ifdef CARGO_OUT_DIR
+OBJECTS := $(addprefix $(CARGO_OUT_DIR)/,$(OBJECTS))
+LIB_OBJS := $(addprefix $(CARGO_OUT_DIR)/,$(LIB_OBJS))
+REFTABLE_OBJS := $(addprefix $(CARGO_OUT_DIR)/,$(REFTABLE_OBJS))
+XDIFF_OBJS := $(addprefix $(CARGO_OUT_DIR)/,$(XDIFF_OBJS))
+BASIC_CFLAGS += -I$(CARGO_OUT_DIR)
+endif
+
 dep_files := $(foreach f,$(OBJECTS),$(dir $f).depend/$(notdir $f).d)
 dep_dirs := $(addsuffix .depend,$(sort $(dir $(OBJECTS))))
 
@@ -2805,10 +2827,15 @@ missing_compdb_dir =
 compdb_args =
 endif
 
-$(OBJECTS): %.o: %.c GIT-CFLAGS $(missing_dep_dirs) $(missing_compdb_dir)
+ifdef CARGO_OUT_DIR
+$(OBJECTS): $(CARGO_OUT_DIR)/%.o: %.c $(GIT_CFLAGS) $(missing_dep_dirs) $(missing_compdb_dir)
+	$(QUIET_CC)$(CC) -o $(CARGO_OUT_DIR)/$*.o -c $(dep_args) $(compdb_args) $(ALL_CFLAGS) $(EXTRA_CPPFLAGS) $<
+else
+$(OBJECTS): %.o: %.c $(GIT_CFLAGS) $(missing_dep_dirs) $(missing_compdb_dir)
 	$(QUIET_CC)$(CC) -o $*.o -c $(dep_args) $(compdb_args) $(ALL_CFLAGS) $(EXTRA_CPPFLAGS) $<
+endif
 
-%.s: %.c GIT-CFLAGS FORCE
+%.s: %.c $(GIT_CFLAGS) FORCE
 	$(QUIET_CC)$(CC) -o $@ -S $(ALL_CFLAGS) $(EXTRA_CPPFLAGS) $<
 
 ifdef USE_COMPUTED_HEADER_DEPENDENCIES
@@ -2829,27 +2856,27 @@ compile_commands.json:
 	@if test -s $@+; then mv $@+ $@; else $(RM) $@+; fi
 endif
 
-exec-cmd.sp exec-cmd.s exec-cmd.o: GIT-PREFIX
-exec-cmd.sp exec-cmd.s exec-cmd.o: EXTRA_CPPFLAGS = \
+exec-cmd.sp exec-cmd.s $(call maybe_join_path,$(CARGO_OUT_DIR),exec-cmd.o): $(GIT_PREFIX)
+exec-cmd.sp exec-cmd.s $(call maybe_join_path,$(CARGO_OUT_DIR),exec-cmd.o): EXTRA_CPPFLAGS = \
 	'-DGIT_EXEC_PATH="$(gitexecdir_SQ)"' \
 	'-DGIT_LOCALE_PATH="$(localedir_relative_SQ)"' \
 	'-DBINDIR="$(bindir_relative_SQ)"' \
 	'-DFALLBACK_RUNTIME_PREFIX="$(prefix_SQ)"'
 
-setup.sp setup.s setup.o: GIT-PREFIX
-setup.sp setup.s setup.o: EXTRA_CPPFLAGS = \
+setup.sp setup.s $(call maybe_join_path,$(CARGO_OUT_DIR),setup.o): $(GIT_PREFIX)
+setup.sp setup.s $(call maybe_join_path,$(CARGO_OUT_DIR),setup.o): EXTRA_CPPFLAGS = \
 	-DDEFAULT_GIT_TEMPLATE_DIR='"$(template_dir_SQ)"'
 
-config.sp config.s config.o: GIT-PREFIX
-config.sp config.s config.o: EXTRA_CPPFLAGS = \
+config.sp config.s $(call maybe_join_path,$(CARGO_OUT_DIR),config.o): $(GIT_PREFIX)
+config.sp config.s $(call maybe_join_path,$(CARGO_OUT_DIR),config.o): EXTRA_CPPFLAGS = \
 	-DETC_GITCONFIG='"$(ETC_GITCONFIG_SQ)"'
 
-attr.sp attr.s attr.o: GIT-PREFIX
-attr.sp attr.s attr.o: EXTRA_CPPFLAGS = \
+attr.sp attr.s $(call maybe_join_path,$(CARGO_OUT_DIR),attr.o): $(GIT_PREFIX)
+attr.sp attr.s $(call maybe_join_path,$(CARGO_OUT_DIR),attr.o): EXTRA_CPPFLAGS = \
 	-DETC_GITATTRIBUTES='"$(ETC_GITATTRIBUTES_SQ)"'
 
-gettext.sp gettext.s gettext.o: GIT-PREFIX
-gettext.sp gettext.s gettext.o: EXTRA_CPPFLAGS = \
+gettext.sp gettext.s $(call maybe_join_path,$(CARGO_OUT_DIR),gettext.o): $(GIT_PREFIX)
+gettext.sp gettext.s $(call maybe_join_path,$(CARGO_OUT_DIR),gettext.o): EXTRA_CPPFLAGS = \
 	-DGIT_LOCALE_PATH='"$(localedir_relative_SQ)"'
 
 http-push.sp http.sp http-walker.sp remote-curl.sp imap-send.sp: SP_EXTRA_FLAGS += \
@@ -2872,7 +2899,7 @@ compat/nedmalloc/nedmalloc.sp compat/nedmalloc/nedmalloc.o: EXTRA_CPPFLAGS = \
 compat/nedmalloc/nedmalloc.sp: SP_EXTRA_FLAGS += -Wno-non-pointer-null
 endif
 
-headless-git.o: compat/win32/headless.c GIT-CFLAGS
+headless-git.o: compat/win32/headless.c $(GIT_CFLAGS)
 	$(QUIET_CC)$(CC) $(ALL_CFLAGS) $(COMPAT_CFLAGS) \
 		-fno-stack-protector -o $@ -c -Wall -Wwrite-strings $<
 
@@ -3116,9 +3143,9 @@ endif
 NO_PERL_CPAN_FALLBACKS_SQ = $(subst ','\'',$(NO_PERL_CPAN_FALLBACKS))
 endif
 
-perl/build/lib/%.pm: perl/%.pm generate-perl.sh GIT-BUILD-OPTIONS GIT-VERSION-FILE GIT-PERL-DEFINES
+perl/build/lib/%.pm: perl/%.pm generate-perl.sh GIT-BUILD-OPTIONS $(GIT_VERSION_FILE) GIT-PERL-DEFINES
 	$(call mkdir_p_parent_template)
-	$(QUIET_GEN)$(SHELL_PATH) generate-perl.sh ./GIT-BUILD-OPTIONS ./GIT-VERSION-FILE GIT-PERL-HEADER "$<" "$@"
+	$(QUIET_GEN)$(SHELL_PATH) generate-perl.sh ./GIT-BUILD-OPTIONS $(GIT_VERSION_PATH) GIT-PERL-HEADER "$<" "$@"
 
 perl/build/man/man3/Git.3pm: perl/Git.pm
 	$(call mkdir_p_parent_template)
@@ -3146,20 +3173,20 @@ cscope: cscope.out
 TRACK_PREFIX = $(bindir_SQ):$(gitexecdir_SQ):$(template_dir_SQ):$(prefix_SQ):\
 		$(localedir_SQ)
 
-GIT-PREFIX: FORCE
+$(GIT_PREFIX): FORCE
 	@FLAGS='$(TRACK_PREFIX)'; \
-	if test x"$$FLAGS" != x"`cat GIT-PREFIX 2>/dev/null`" ; then \
+	if test x"$$FLAGS" != x"`cat $(GIT_PREFIX) 2>/dev/null`" ; then \
 		echo >&2 "    * new prefix flags"; \
-		echo "$$FLAGS" >GIT-PREFIX; \
+		echo "$$FLAGS" >$(GIT_PREFIX); \
 	fi
 
 TRACK_CFLAGS = $(CC):$(subst ','\'',$(ALL_CFLAGS)):$(USE_GETTEXT_SCHEME)
 
-GIT-CFLAGS: FORCE
+$(GIT_CFLAGS): FORCE
 	@FLAGS='$(TRACK_CFLAGS)'; \
-	    if test x"$$FLAGS" != x"`cat GIT-CFLAGS 2>/dev/null`" ; then \
+	    if test x"$$FLAGS" != x"`cat $(GIT_CFLAGS) 2>/dev/null`" ; then \
 		echo >&2 "    * new build flags"; \
-		echo "$$FLAGS" >GIT-CFLAGS; \
+		echo "$$FLAGS" >$(GIT_CFLAGS); \
             fi
 
 TRACK_LDFLAGS = $(subst ','\'',$(ALL_LDFLAGS))
@@ -3751,7 +3778,7 @@ clean: profile-clean coverage-clean cocciclean
 	$(RM) $(FUZZ_PROGRAMS)
 	$(RM) $(SP_OBJ)
 	$(RM) $(HCC)
-	$(RM) version-def.h
+	$(RM) $(VERSION_DEF_H)
 	$(RM) -r $(dep_dirs) $(compdb_dir) compile_commands.json
 	$(RM) $(test_bindir_programs)
 	$(RM) -r po/build/
@@ -3774,8 +3801,8 @@ ifndef NO_TCLTK
 	$(MAKE) -C gitk-git clean
 	$(MAKE) -C git-gui clean
 endif
-	$(RM) GIT-VERSION-FILE GIT-CFLAGS GIT-LDFLAGS GIT-BUILD-OPTIONS
-	$(RM) GIT-USER-AGENT GIT-PREFIX
+	$(RM) $(GIT_VERSION_FILE) $(GIT_CFLAGS) GIT-LDFLAGS GIT-BUILD-OPTIONS
+	$(RM) $(GIT_USER_AGENT_FILE) $(GIT_PREFIX)
 	$(RM) GIT-SCRIPT-DEFINES GIT-PERL-DEFINES GIT-PERL-HEADER GIT-PYTHON-VARS
 ifdef MSVC
 	$(RM) $(patsubst %.o,%.o.pdb,$(OBJECTS))
@@ -3937,14 +3964,14 @@ ifdef INCLUDE_LIBGIT_RS
 all:: libgit-sys libgit-rs
 endif
 
-LIBGIT_PUB_OBJS += contrib/libgitpub/public_symbol_export.o
-LIBGIT_PUB_OBJS += libgit.a
-LIBGIT_PUB_OBJS += reftable/libreftable.a
-LIBGIT_PUB_OBJS += xdiff/lib.a
+LIBGIT_PUB_OBJS += $(CARGO_OUT_DIR)/contrib/libgitpub/public_symbol_export.o
+LIBGIT_PUB_OBJS += $(LIB_FILE)
+LIBGIT_PUB_OBJS += $(REFTABLE_LIB)
+LIBGIT_PUB_OBJS += $(XDIFF_LIB)
 
-LIBGIT_PARTIAL_EXPORT = contrib/libgitpub/partial_symbol_export.o
-
-LIBGIT_HIDDEN_EXPORT = contrib/libgitpub/hidden_symbol_export.o
+LIBGIT_PARTIAL_EXPORT = $(CARGO_OUT_DIR)/contrib/libgitpub/partial_symbol_export.o
+LIBGIT_HIDDEN_EXPORT = $(CARGO_OUT_DIR)/contrib/libgitpub/hidden_symbol_export.o
+GITPUB_LIB = $(call maybe_join_path,$(CARGO_OUT_DIR),contrib/libgitpub/libgitpub.a)
 
 $(LIBGIT_PARTIAL_EXPORT): $(LIBGIT_PUB_OBJS)
 	$(LD) -r $^ -o $@
@@ -3952,5 +3979,5 @@ $(LIBGIT_PARTIAL_EXPORT): $(LIBGIT_PUB_OBJS)
 $(LIBGIT_HIDDEN_EXPORT): $(LIBGIT_PARTIAL_EXPORT)
 	$(OBJCOPY) --localize-hidden $^ $@
 
-contrib/libgitpub/libgitpub.a: $(LIBGIT_HIDDEN_EXPORT)
+$(GITPUB_LIB): $(LIBGIT_HIDDEN_EXPORT)
 	$(AR) $(ARFLAGS) $@ $^
