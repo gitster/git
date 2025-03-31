@@ -204,6 +204,7 @@ git = find_program('git', dirs: program_path, required: false)
 sed = find_program('sed', dirs: program_path)
 shell = find_program('sh', dirs: program_path)
 tar = find_program('tar', dirs: program_path)
+time = find_program('time', dirs: program_path, required: false)
 
 # Sanity-check that programs required for the build exist.
 foreach tool : ['cat', 'cut', 'grep', 'sort', 'tr', 'uname']
