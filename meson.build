@@ -646,6 +646,7 @@ third_party_sources = [
   ':!t/unit-tests/clar',
   ':!t/unit-tests/clar',
   ':!t/t[0-9][0-9][0-9][0-9]*',
+  ':!xdiff',
 ]
 
 if git.found()
@@ -654,6 +655,10 @@ if git.found()
     headers += header
   endforeach
 endif
+
+generated_headers = [
+  'command-list.h',
+]
 
 if not get_option('breaking_changes')
   builtin_sources += 'builtin/pack-redundant.c'
@@ -669,6 +674,7 @@ builtin_sources += custom_target(
   ],
   env: script_environment,
 )
+generated_headers += 'config-list.h'
 
 builtin_sources += custom_target(
   input: 'Documentation/githooks.adoc',
@@ -681,6 +687,7 @@ builtin_sources += custom_target(
   ],
   env: script_environment,
 )
+generated_headers += 'hook-list.h'
 
 # This contains the variables for GIT-BUILD-OPTIONS, which we use to propagate
 # build options to our tests.
@@ -1994,6 +2001,69 @@ if get_option('docs') != []
 endif
 
 subdir('contrib')
+
+exclude_from_check_headers = generated_headers
+exclude_from_check_headers += [
+  'compat/',
+  'unicode-width.h',
+]
+
+if sha1_backend != 'openssl'
+  exclude_from_check_headers += 'sha1/openssl.h'
+endif
+if sha256_backend != 'openssl'
+  exclude_from_check_headers += 'sha256/openssl.h'
+endif
+if sha256_backend != 'nettle'
+  exclude_from_check_headers += 'sha256/nettle.h'
+endif
+if sha256_backend != 'gcrpyt'
+  exclude_from_check_headers += 'sha256/gcrypt.h'
+endif
+
+if git.found() and compiler.get_argument_syntax() == 'gcc'
+  hco_targets = []
+  foreach h : headers
+    skip_header = false
+    foreach exclude : exclude_from_check_headers
+      if h.startswith(exclude)
+        skip_header = true
+        break
+      endif
+    endforeach
+
+    if skip_header
+      continue
+    endif
+
+    hcc = custom_target(
+      input: h,
+      output: h.underscorify() + 'cc',
+      command: [
+        shell,
+        '-c',
+        'echo \'#include "git-compat-util.h"\' > @OUTPUT@ && echo \'#include "' + h + '"\' >> @OUTPUT@'
+      ]
+    )
+
+    hco = custom_target(
+      input: hcc,
+      output: fs.replace_suffix(h.underscorify(), '.hco'),
+      command: [
+        compiler.cmd_array(),
+        libgit_c_args,
+        '-I', meson.project_source_root(),
+        '-I', meson.project_source_root() / 't/unit-tests',
+        '-o', '/dev/null',
+        '-c', '-xc',
+        '@INPUT@'
+      ]
+    )
+    hco_targets += hco
+  endforeach
+
+  alias_target('hdr-check', hco_targets)
+endif
 
 foreach key, value : {
   'DIFF': diff.full_path(),
