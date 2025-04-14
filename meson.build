@@ -2062,7 +2062,9 @@ if git.found() and compiler.get_argument_syntax() == 'gcc'
     hco_targets += hco
   endforeach
 
+  # TODO: deprecate 'hdr-check' in lieu of 'check-headers' in Git 2.51+
   alias_target('hdr-check', hco_targets)
+  alias_target('check-headers', hco_targets)
 endif
 
 foreach key, value : {
