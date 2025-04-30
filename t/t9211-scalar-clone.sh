@@ -180,6 +180,12 @@ test_expect_success 'scalar clone warns when background maintenance fails' '
 	grep "could not turn on maintenance" err
 '
 
+test_expect_success 'scalar clone --no-maintenance' '
+	GIT_TEST_MAINT_SCHEDULER="crontab:false,launchctl:false,schtasks:false" \
+		scalar clone --no-maintenance "file://$(pwd)/to-clone" no-maint 2>err &&
+	! grep "could not turn on maintenance" err
+'
+
 test_expect_success '`scalar clone --no-src`' '
 	scalar clone --src "file://$(pwd)/to-clone" with-src &&
 	scalar clone --no-src "file://$(pwd)/to-clone" without-src &&
