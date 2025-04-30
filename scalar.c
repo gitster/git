@@ -259,7 +259,7 @@ static int stop_fsmonitor_daemon(void)
 	return 0;
 }
 
-static int register_dir(void)
+static int register_dir(int maintenance)
 {
 	if (add_or_remove_enlistment(1))
 		return error(_("could not add enlistment"));
@@ -267,7 +267,7 @@ static int register_dir(void)
 	if (set_recommended_config(0))
 		return error(_("could not set recommended config"));
 
-	if (toggle_maintenance(1))
+	if (toggle_maintenance(maintenance))
 		warning(_("could not turn on maintenance"));
 
 	if (have_fsmonitor_support() && start_fsmonitor_daemon()) {
@@ -550,7 +550,7 @@ static int cmd_clone(int argc, const char **argv)
 	if (res)
 		goto cleanup;
 
-	res = register_dir();
+	res = register_dir(1);
 
 cleanup:
 	free(branch_to_free);
@@ -597,11 +597,14 @@ static int cmd_list(int argc, const char **argv UNUSED)
 
 static int cmd_register(int argc, const char **argv)
 {
+	int maintenance = 1;
 	struct option options[] = {
+		OPT_BOOL(0, "maintenance", &maintenance,
+			 N_("specify if background maintenance should be enabled")),
 		OPT_END(),
 	};
 	const char * const usage[] = {
-		N_("scalar register [<enlistment>]"),
+		N_("scalar register [--[no-]maintenance] [<enlistment>]"),
 		NULL
 	};
 
@@ -610,7 +613,7 @@ static int cmd_register(int argc, const char **argv)
 
 	setup_enlistment_directory(argc, argv, usage, options, NULL);
 
-	return register_dir();
+	return register_dir(maintenance);
 }
 
 static int get_scalar_repos(const char *key, const char *value,
@@ -803,13 +806,13 @@ static int cmd_run(int argc, const char **argv)
 	strbuf_release(&buf);
 
 	if (i == 0)
-		return register_dir();
+		return register_dir(1);
 
 	if (i > 0)
 		return run_git("maintenance", "run",
 			       "--task", tasks[i].task, NULL);
 
-	if (register_dir())
+	if (register_dir(1))
 		return -1;
 	for (i = 1; tasks[i].arg; i++)
 		if (run_git("maintenance", "run",
