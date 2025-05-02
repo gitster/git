@@ -129,6 +129,13 @@ test_expect_success 'scalar unregister' '
 	scalar unregister vanish
 '
 
+test_expect_success 'scalar register --no-maintenance' '
+	git init register-no-maint &&
+	GIT_TEST_MAINT_SCHEDULER="crontab:false,launchctl:false,schtasks:false" \
+		scalar register --no-maintenance register-no-maint 2>err &&
+	test_must_be_empty err
+'
+
 test_expect_success 'set up repository to clone' '
 	test_commit first &&
 	test_commit second &&
