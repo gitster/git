@@ -39,6 +39,14 @@ struct worktree **get_worktrees(void);
 struct worktree **get_worktrees_without_reading_head(void);
 
 /*
+ * Retrieve all worktree names. Not all names may correspond to a fully
+ * functional worktree. Returns 0 on success, a negative error code on failure.
+ * Calling the function on a repository that doesn't have any worktrees is not
+ * considered an error.
+ */
+int get_worktree_names(struct repository *repo, struct strvec *out);
+
+/*
  * Returns 1 if linked worktrees exist, 0 otherwise.
  */
 int submodule_uses_worktrees(const char *path);
