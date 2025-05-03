@@ -737,7 +737,19 @@ int is_empty_or_missing_file(const char *filename)
 int open_nofollow(const char *path, int flags)
 {
 #ifdef O_NOFOLLOW
-	return open(path, flags | O_NOFOLLOW);
+	int ret = open(path, flags | O_NOFOLLOW);
+#ifdef __NetBSD__
+	/*
+	 * NetBSD sets errno to EFTYPE when path is a symlink. The only other
+	 * time this errno occurs when O_REGULAR is used. Since we don't use
+	 * it anywhere we can avoid an lstat here.
+	 */
+	if (ret < 0 && errno == EFTYPE) {
+		errno = ELOOP;
+		return -1;
+	}
+#endif
+	return ret;
 #else
 	struct stat st;
 	if (lstat(path, &st) < 0)
