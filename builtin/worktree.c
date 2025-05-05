@@ -211,27 +211,24 @@ static void prune_dups(struct string_list *l)
 
 static void prune_worktrees(void)
 {
-	struct strbuf reason = STRBUF_INIT;
 	struct strbuf main_path = STRBUF_INIT;
 	struct string_list kept = STRING_LIST_INIT_DUP;
-	char *path;
-	DIR *dir;
-	struct dirent *d;
+	struct strvec worktrees = STRVEC_INIT;
+	struct strbuf reason = STRBUF_INIT;
 
-	path = repo_git_path(the_repository, "worktrees");
-	dir = opendir(path);
-	free(path);
-	if (!dir)
+	if (get_worktree_names(the_repository, &worktrees) < 0 ||
+	    !worktrees.nr)
 		return;
-	while ((d = readdir_skip_dot_and_dotdot(dir)) != NULL) {
+
+	for (size_t i = 0; i < worktrees.nr; i++) {
 		char *path;
+
 		strbuf_reset(&reason);
-		if (should_prune_worktree(d->d_name, &reason, &path, expire))
-			prune_worktree(d->d_name, reason.buf);
+		if (should_prune_worktree(worktrees.v[i], &reason, &path, expire))
+			prune_worktree(worktrees.v[i], reason.buf);
 		else if (path)
-			string_list_append_nodup(&kept, path)->util = xstrdup(d->d_name);
+			string_list_append_nodup(&kept, path)->util = xstrdup(worktrees.v[i]);
 	}
-	closedir(dir);
 
 	strbuf_add_absolute_path(&main_path, repo_get_common_dir(the_repository));
 	/* massage main worktree absolute path to match 'gitdir' content */
@@ -242,6 +239,8 @@ static void prune_worktrees(void)
 
 	if (!show_only)
 		delete_worktrees_dir_if_empty();
+
+	strvec_clear(&worktrees);
 	strbuf_release(&reason);
 }
 
