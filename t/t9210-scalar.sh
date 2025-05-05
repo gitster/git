@@ -210,7 +210,12 @@ test_expect_success 'scalar reconfigure' '
 	GIT_TRACE2_EVENT="$(pwd)/reconfigure" scalar reconfigure -a &&
 	test_path_is_file one/src/cron.txt &&
 	test true = "$(git -C one/src config core.preloadIndex)" &&
-	test_subcommand git maintenance start <reconfigure
+	test_subcommand git maintenance start <reconfigure &&
+	test_subcommand ! git maintenance unregister --force <reconfigure &&
+
+	GIT_TRACE2_EVENT="$(pwd)/reconfigure-maint" scalar reconfigure --no-maintenance -a &&
+	test_subcommand ! git maintenance start <reconfigure-maint &&
+	test_subcommand ! git maintenance unregister --force <reconfigure-maint
 '
 
 test_expect_success 'scalar reconfigure --all with includeIf.onbranch' '

@@ -667,14 +667,16 @@ static int remove_deleted_enlistment(struct strbuf *path)
 
 static int cmd_reconfigure(int argc, const char **argv)
 {
-	int all = 0;
+	int all = 0, maintenance = 1;
 	struct option options[] = {
 		OPT_BOOL('a', "all", &all,
 			 N_("reconfigure all registered enlistments")),
+		OPT_BOOL(0, "maintenance", &maintenance,
+			 N_("specify if background maintenance should be enabled")),
 		OPT_END(),
 	};
 	const char * const usage[] = {
-		N_("scalar reconfigure [--all | <enlistment>]"),
+		N_("scalar reconfigure [--[no-]maintenance] [--all | <enlistment>]"),
 		NULL
 	};
 	struct string_list scalar_repos = STRING_LIST_INIT_DUP;
@@ -758,7 +760,8 @@ static int cmd_reconfigure(int argc, const char **argv)
 		the_repository = old_repo;
 		repo_clear(&r);
 
-		if (toggle_maintenance(1) >= 0)
+		if (maintenance &&
+		    toggle_maintenance(1) >= 0)
 			succeeded = 1;
 
 loop_end:
