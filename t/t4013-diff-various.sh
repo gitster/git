@@ -208,7 +208,7 @@ do
 
 	case "$cmd" in
 	whatchanged | whatchanged" "*)
-		prereq=WITHOUT_BREAKING_CHANGES
+		prereq=!WITH_BREAKING_CHANGES
 		;;
 	*)
 		prereq=;;
@@ -476,7 +476,7 @@ diff-tree --stat --compact-summary initial mode
 diff-tree -R --stat --compact-summary initial mode
 EOF
 
-test_expect_success WITHOUT_BREAKING_CHANGES 'whatchanged needs --i-still-use-this' '
+test_expect_success !WITH_BREAKING_CHANGES 'whatchanged needs --i-still-use-this' '
 	test_must_fail git whatchanged >message 2>&1 &&
 	test_grep "nominated for removal" message
 '

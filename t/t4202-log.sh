@@ -487,7 +487,7 @@ test_expect_success !FAIL_PREREQS 'log with various grep.patternType configurati
 '
 
 cmds="show reflog format-patch"
-if test_have_prereq WITHOUT_BREAKING_CHANGES
+if test_have_prereq !WITH_BREAKING_CHANGES
 then
 	cmds="$cmds whatchanged"
 fi
@@ -1207,7 +1207,7 @@ test_expect_success 'reflog is expected format' '
 	test_cmp expect actual
 '
 
-test_expect_success WITHOUT_BREAKING_CHANGES 'whatchanged is expected format' '
+test_expect_success !WITH_BREAKING_CHANGES 'whatchanged is expected format' '
 	whatchanged="whatchanged --i-still-use-this" &&
 	git log --no-merges --raw >expect &&
 	git $whatchanged >actual &&
@@ -1223,7 +1223,7 @@ test_expect_success 'log.abbrevCommit configuration' '
 	git reflog --abbrev-commit >expect.reflog.abbrev &&
 	git reflog --no-abbrev-commit >expect.reflog.full &&
 
-	if test_have_prereq WITHOUT_BREAKING_CHANGES
+	if test_have_prereq !WITH_BREAKING_CHANGES
 	then
 		git $whatchanged --abbrev-commit >expect.whatchanged.abbrev &&
 		git $whatchanged --no-abbrev-commit >expect.whatchanged.full
@@ -1244,7 +1244,7 @@ test_expect_success 'log.abbrevCommit configuration' '
 	git reflog --no-abbrev-commit >actual &&
 	test_cmp expect.reflog.full actual &&
 
-	if test_have_prereq WITHOUT_BREAKING_CHANGES
+	if test_have_prereq !WITH_BREAKING_CHANGES
 	then
 		git $whatchanged >actual &&
 		test_cmp expect.whatchanged.abbrev actual &&
