@@ -9,6 +9,24 @@ promisor.advertise::
 	"false", which means the "promisor-remote" capability is not
 	advertised.
 
+promisor.sendFields::
+	A comma or space separated list of additional remote related
+	fields that a server will send while advertising its promisor
+	remotes using the "promisor-remote" capability, see
+	linkgit:gitprotocol-v2[5]. Currently, only the
+	"partialCloneFilter" and "token" fields are supported. The
+	"partialCloneFilter" field contains the partial clone filter
+	used for the remote, and the "token" field contains an
+	authentication token for the remote.
++
+When a field is part of this list and a corresponding
+"remote.foo.<field>" config variable is set on the server to a
+non-empty value, then the field and its value will be sent when
+advertising the promisor remote "foo". This list has no effect unless
+the "promisor.advertise" config variable is set to "true", and the
+"name" and "url" fields are always advertised regardless of this
+setting.
+
 promisor.acceptFromServer::
 	If set to "all", a client will accept all the promisor remotes
 	a server might advertise using the "promisor-remote"
@@ -28,3 +46,28 @@ promisor.acceptFromServer::
 	lazily fetchable from this promisor remote from its responses
 	to "fetch" and "clone" requests from the client. Name and URL
 	comparisons are case sensitive. See linkgit:gitprotocol-v2[5].
+
+promisor.checkFields::
+	A comma or space separated list of additional remote related
+	fields that a client will check before accepting a promisor
+	remote. Currently, only the "partialCloneFilter" and "token"
+	fields are supported.
++
+When a field is part of this list and a corresponding
+"remote.foo.<field>" config variable is set locally for remote "foo",
+then the value of this config variable will be checked against the
+value of the same field passed by the server for the remote "foo". The
+remote "foo" will be rejected if the values don't match.
++
+For the "partialCloneFilter" field, this allows the client to ensure
+that the server's filter matches what it expects locally, preventing
+inconsistencies in filtering behavior. For the "token" field, this can
+be used to verify that authentication credentials match expected
+values.
++
+The fields should be passed by the server through the
+"promisor-remote" capability by using the `promisor.sendFields` config
+variable. The fields will be checked only if the
+`promisor.acceptFromServer` config variable is not set to "None".  If
+set to "None", this config variable will have no effect.  See
+linkgit:gitprotocol-v2[5].
