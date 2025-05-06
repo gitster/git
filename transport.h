@@ -5,7 +5,7 @@
 #include "remote.h"
 #include "list-objects-filter-options.h"
 #include "string-list.h"
-#include "object-store.h"
+#include "odb.h"
 
 struct git_transport_options {
 	unsigned thin : 1;

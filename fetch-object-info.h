@@ -3,7 +3,7 @@
 
 #include "pkt-line.h"
 #include "protocol.h"
-#include "object-store.h"
+#include "odb.h"
 
 struct object_info_args {
 	struct string_list *object_info_options;
