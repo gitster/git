@@ -48,7 +48,7 @@ commit_file () {
 	git commit "$@" -m "Commit $*" >/dev/null
 }
 
-test_create_repo sm1 &&
+test_create_repo sm1 >/dev/null &&
 add_file . foo >/dev/null
 
 head1=$(add_file sm1 foo1 foo2)
@@ -236,7 +236,7 @@ test_expect_success 'typechanged submodule(submodule->blob)' '
 '
 
 rm -f sm1 &&
-test_create_repo sm1 &&
+test_create_repo sm1 >/dev/null &&
 head6=$(add_file sm1 foo6 foo7)
 fullhead6=$(cd sm1; git rev-parse --verify HEAD)
 test_expect_success 'nonexistent commit' '

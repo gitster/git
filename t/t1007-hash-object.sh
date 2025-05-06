@@ -30,7 +30,7 @@ setup_repo() {
 
 test_repo=test
 push_repo() {
-	test_create_repo $test_repo
+	test_create_repo $test_repo >/dev/null
 	cd $test_repo
 
 	setup_repo
