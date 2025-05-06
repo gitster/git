@@ -21,7 +21,7 @@
 #include "loose.h"
 #include "object-file-convert.h"
 #include "object-file.h"
-#include "object-store.h"
+#include "odb.h"
 #include "oidtree.h"
 #include "pack.h"
 #include "packfile.h"
@@ -55,7 +55,7 @@ static void fill_loose_path(struct strbuf *buf, const struct object_id *oid)
 	}
 }
 
-const char *odb_loose_path(struct object_directory *odb,
+const char *odb_loose_path(struct odb_backend *odb,
 			   struct strbuf *buf,
 			   const struct object_id *oid)
 {
@@ -88,7 +88,7 @@ int check_and_freshen_file(const char *fn, int freshen)
 	return 1;
 }
 
-static int check_and_freshen_odb(struct object_directory *odb,
+static int check_and_freshen_odb(struct odb_backend *odb,
 				 const struct object_id *oid,
 				 int freshen)
 {
@@ -99,16 +99,16 @@ static int check_and_freshen_odb(struct object_directory *odb,
 
 static int check_and_freshen_local(const struct object_id *oid, int freshen)
 {
-	return check_and_freshen_odb(the_repository->objects->odb, oid, freshen);
+	return check_and_freshen_odb(the_repository->objects->backends, oid, freshen);
 }
 
 static int check_and_freshen_nonlocal(const struct object_id *oid, int freshen)
 {
-	struct object_directory *odb;
+	struct odb_backend *backend;
 
-	prepare_alt_odb(the_repository);
-	for (odb = the_repository->objects->odb->next; odb; odb = odb->next) {
-		if (check_and_freshen_odb(odb, oid, freshen))
+	odb_prepare_alternates(the_repository->objects);
+	for (backend = the_repository->objects->backends->next; backend; backend = backend->next) {
+		if (check_and_freshen_odb(backend, oid, freshen))
 			return 1;
 	}
 	return 0;
@@ -208,12 +208,12 @@ int stream_object_signature(struct repository *r, const struct object_id *oid)
 static int stat_loose_object(struct repository *r, const struct object_id *oid,
 			     struct stat *st, const char **path)
 {
-	struct object_directory *odb;
+	struct odb_backend *backend;
 	static struct strbuf buf = STRBUF_INIT;
 
-	prepare_alt_odb(r);
-	for (odb = r->objects->odb; odb; odb = odb->next) {
-		*path = odb_loose_path(odb, &buf, oid);
+	odb_prepare_alternates(r->objects);
+	for (backend = r->objects->backends; backend; backend = backend->next) {
+		*path = odb_loose_path(backend, &buf, oid);
 		if (!lstat(*path, st))
 			return 0;
 	}
@@ -229,13 +229,13 @@ static int open_loose_object(struct repository *r,
 			     const struct object_id *oid, const char **path)
 {
 	int fd;
-	struct object_directory *odb;
+	struct odb_backend *backend;
 	int most_interesting_errno = ENOENT;
 	static struct strbuf buf = STRBUF_INIT;
 
-	prepare_alt_odb(r);
-	for (odb = r->objects->odb; odb; odb = odb->next) {
-		*path = odb_loose_path(odb, &buf, oid);
+	odb_prepare_alternates(r->objects);
+	for (backend = r->objects->backends; backend; backend = backend->next) {
+		*path = odb_loose_path(backend, &buf, oid);
 		fd = git_open(*path);
 		if (fd >= 0)
 			return fd;
@@ -250,11 +250,11 @@ static int open_loose_object(struct repository *r,
 static int quick_has_loose(struct repository *r,
 			   const struct object_id *oid)
 {
-	struct object_directory *odb;
+	struct odb_backend *backend;
 
-	prepare_alt_odb(r);
-	for (odb = r->objects->odb; odb; odb = odb->next) {
-		if (oidtree_contains(odb_loose_cache(odb, oid), oid))
+	odb_prepare_alternates(r->objects);
+	for (backend = r->objects->backends; backend; backend = backend->next) {
+		if (oidtree_contains(odb_loose_cache(backend, oid), oid))
 			return 1;
 	}
 	return 0;
@@ -750,7 +750,7 @@ void hash_object_file(const struct git_hash_algo *algo, const void *buf,
 /* Finalize a file on disk, and close it. */
 static void close_loose_object(int fd, const char *filename)
 {
-	if (the_repository->objects->odb->will_destroy)
+	if (the_repository->objects->backends->will_destroy)
 		goto out;
 
 	if (batch_fsync_enabled(FSYNC_COMPONENT_LOOSE_OBJECT))
@@ -932,7 +932,7 @@ static int write_loose_object(const struct object_id *oid, char *hdr,
 	if (batch_fsync_enabled(FSYNC_COMPONENT_LOOSE_OBJECT))
 		prepare_loose_object_bulk_checkin();
 
-	odb_loose_path(the_repository->objects->odb, &filename, oid);
+	odb_loose_path(the_repository->objects->backends, &filename, oid);
 
 	fd = start_loose_object_common(&tmp_file, filename.buf, flags,
 				       &stream, compressed, sizeof(compressed),
@@ -1079,7 +1079,7 @@ int stream_loose_object(struct input_stream *in_stream, size_t len,
 		goto cleanup;
 	}
 
-	odb_loose_path(the_repository->objects->odb, &filename, oid);
+	odb_loose_path(the_repository->objects->backends, &filename, oid);
 
 	/* We finally know the object path, and create the missing dir. */
 	dirlen = directory_size(filename.buf);
@@ -1211,7 +1211,7 @@ int force_object_loose(const struct object_id *oid, time_t mtime)
 	oi.typep = &type;
 	oi.sizep = &len;
 	oi.contentp = &buf;
-	if (oid_object_info_extended(the_repository, oid, &oi, 0))
+	if (odb_read_object_info_extended(the_repository->objects, oid, &oi, 0))
 		return error(_("cannot read object for %s"), oid_to_hex(oid));
 	if (compat) {
 		if (repo_oid_to_algop(repo, oid, compat, &compat_oid))
@@ -1540,11 +1540,11 @@ int for_each_loose_file_in_objdir(const char *path,
 int for_each_loose_object(each_loose_object_fn cb, void *data,
 			  enum for_each_object_flags flags)
 {
-	struct object_directory *odb;
+	struct odb_backend *backend;
 
-	prepare_alt_odb(the_repository);
-	for (odb = the_repository->objects->odb; odb; odb = odb->next) {
-		int r = for_each_loose_file_in_objdir(odb->path, cb, NULL,
+	odb_prepare_alternates(the_repository->objects);
+	for (backend = the_repository->objects->backends; backend; backend = backend->next) {
+		int r = for_each_loose_file_in_objdir(backend->path, cb, NULL,
 						      NULL, data);
 		if (r)
 			return r;
@@ -1564,7 +1564,7 @@ static int append_loose_object(const struct object_id *oid,
 	return 0;
 }
 
-struct oidtree *odb_loose_cache(struct object_directory *odb,
+struct oidtree *odb_loose_cache(struct odb_backend *odb,
 				  const struct object_id *oid)
 {
 	int subdir_nr = oid->hash[0];
@@ -1595,7 +1595,7 @@ struct oidtree *odb_loose_cache(struct object_directory *odb,
 	return odb->loose_objects_cache;
 }
 
-void odb_clear_loose_cache(struct object_directory *odb)
+void odb_clear_loose_cache(struct odb_backend *odb)
 {
 	oidtree_clear(odb->loose_objects_cache);
 	FREE_AND_NULL(odb->loose_objects_cache);

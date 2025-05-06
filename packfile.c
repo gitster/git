@@ -19,7 +19,7 @@
 #include "tree-walk.h"
 #include "tree.h"
 #include "object-file.h"
-#include "object-store.h"
+#include "odb.h"
 #include "midx.h"
 #include "commit-graph.h"
 #include "pack-revindex.h"
@@ -359,7 +359,7 @@ void close_pack(struct packed_git *p)
 	oidset_clear(&p->bad_objects);
 }
 
-void close_object_store(struct raw_object_store *o)
+void close_object_store(struct object_database *o)
 {
 	struct packed_git *p;
 
@@ -1018,16 +1018,16 @@ static void prepare_packed_git_mru(struct repository *r)
 
 static void prepare_packed_git(struct repository *r)
 {
-	struct object_directory *odb;
+	struct odb_backend *backend;
 
 	if (r->objects->packed_git_initialized)
 		return;
 
-	prepare_alt_odb(r);
-	for (odb = r->objects->odb; odb; odb = odb->next) {
-		int local = (odb == r->objects->odb);
-		prepare_multi_pack_index_one(r, odb->path, local);
-		prepare_packed_git_one(r, odb->path, local);
+	odb_prepare_alternates(r->objects);
+	for (backend = r->objects->backends; backend; backend = backend->next) {
+		int local = (backend == r->objects->backends);
+		prepare_multi_pack_index_one(r, backend->path, local);
+		prepare_packed_git_one(r, backend->path, local);
 	}
 	rearrange_packed_git(r);
 
@@ -1037,7 +1037,7 @@ static void prepare_packed_git(struct repository *r)
 
 void reprepare_packed_git(struct repository *r)
 {
-	struct object_directory *odb;
+	struct odb_backend *backend;
 
 	obj_read_lock();
 
@@ -1048,10 +1048,10 @@ void reprepare_packed_git(struct repository *r)
 	 * the lifetime of the process.
 	 */
 	r->objects->loaded_alternates = 0;
-	prepare_alt_odb(r);
+	odb_prepare_alternates(r->objects);
 
-	for (odb = r->objects->odb; odb; odb = odb->next)
-		odb_clear_loose_cache(odb);
+	for (backend = r->objects->backends; backend; backend = backend->next)
+		odb_clear_loose_cache(backend);
 
 	r->objects->approximate_object_count_valid = 0;
 	r->objects->packed_git_initialized = 0;
@@ -1310,7 +1310,7 @@ static int retry_bad_packed_offset(struct repository *r,
 		return OBJ_BAD;
 	nth_packed_object_id(&oid, p, pack_pos_to_index(p, pos));
 	mark_bad_packed_object(p, &oid);
-	type = oid_object_info(r, &oid, NULL);
+	type = odb_read_object_info(r->objects, &oid, NULL);
 	if (type <= OBJ_NONE)
 		return OBJ_BAD;
 	return type;
@@ -1843,7 +1843,8 @@ void *unpack_entry(struct repository *r, struct packed_git *p, off_t obj_offset,
 				oi.typep = &type;
 				oi.sizep = &base_size;
 				oi.contentp = &base;
-				if (oid_object_info_extended(r, &base_oid, &oi, 0) < 0)
+				if (odb_read_object_info_extended(r->objects, &base_oid,
+								  &oi, 0) < 0)
 					base = NULL;
 
 				external_base = base;
