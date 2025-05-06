@@ -988,6 +988,36 @@ done:
 	return rc;
 }
 
+int get_worktree_names(struct repository *repo, struct strvec *out)
+{
+	char *worktrees_dir;
+	struct dirent *d;
+	DIR *dir;
+	int ret;
+
+	worktrees_dir = repo_git_path(repo, "worktrees");
+	dir = opendir(worktrees_dir);
+	if (!dir) {
+		if (errno == ENOENT) {
+			ret = 0;
+			goto out;
+		}
+
+		ret = -1;
+		goto out;
+	}
+
+	while ((d = readdir_skip_dot_and_dotdot(dir)) != NULL)
+		strvec_push(out, d->d_name);
+
+	ret = 0;
+out:
+	if (dir)
+		closedir(dir);
+	free(worktrees_dir);
+	return ret;
+}
+
 static int move_config_setting(const char *key, const char *value,
 			       const char *from_file, const char *to_file)
 {
