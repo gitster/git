@@ -206,7 +206,7 @@ test_expect_success 'status during rebase -ir after conflicted merge (exec git m
 	cat >expect <<EOF &&
 interactive rebase in progress; onto $ONTO
 Last commands done (8 commands done):
-   pick $PICK side1
+   pick $PICK # side1
    exec git merge refs/rewritten/rebase-i-merge-side
   (see more in file .git/rebase-merge/done)
 No commands remaining.
@@ -237,11 +237,11 @@ test_expect_success 'status during rebase -ir after replaying conflicted merge (
 	cat >expect <<EOF &&
 interactive rebase in progress; onto $ONTO
 Last commands done (8 commands done):
-   pick $PICK side1
+   pick $PICK # side1
    merge -C $MERGE rebase-i-merge-side # Merge branch '\''rebase_i_merge_side'\'' into rebase_i_merge
   (see more in file .git/rebase-merge/done)
 Next command to do (1 remaining command):
-   pick $UNRELATED unrelated
+   pick $UNRELATED # unrelated
   (use "git rebase --edit-todo" to view and edit)
 You are currently rebasing branch '\''rebase_i_merge'\'' on '\''$ONTO'\''.
   (fix conflicts and then run "git rebase --continue")
