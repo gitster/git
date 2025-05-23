@@ -199,7 +199,7 @@ order of similar options. For example, for `-C <object> -m<message>`,
 `--stripspace` will be used because the default for `-m` overrides the
 previous `-C`.
 
-`--ref <ref>`::
+`--ref=<ref>`::
 	Manipulate the notes tree in _<ref>_.  This overrides
 	`GIT_NOTES_REF` and the `core.notesRef` configuration.  The ref
 	specifies the full refname when it begins with `refs/notes/`; when it
