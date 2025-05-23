@@ -9,19 +9,6 @@
 #include "string-list.h"
 #include "reflog-walk.h"
 
-struct complete_reflogs {
-	char *ref;
-	char *short_ref;
-	struct reflog_info {
-		struct object_id ooid, noid;
-		char *email;
-		timestamp_t timestamp;
-		int tz;
-		char *message;
-	} *items;
-	int nr, alloc;
-};
-
 static int read_one_reflog(struct object_id *ooid, struct object_id *noid,
 		const char *email, timestamp_t timestamp, int tz,
 		const char *message, void *cb_data)
@@ -41,7 +28,7 @@ static int read_one_reflog(struct object_id *ooid, struct object_id *noid,
 	return 0;
 }
 
-static void free_complete_reflog(struct complete_reflogs *array)
+void free_complete_reflog(struct complete_reflogs *array)
 {
 	int i;
 
@@ -64,7 +51,7 @@ static void complete_reflogs_clear(void *util, const char *str UNUSED)
 	free_complete_reflog(array);
 }
 
-static struct complete_reflogs *read_complete_reflog(const char *ref)
+struct complete_reflogs *read_complete_reflog(const char *ref)
 {
 	struct complete_reflogs *reflogs =
 		xcalloc(1, sizeof(struct complete_reflogs));
