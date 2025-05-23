@@ -364,7 +364,7 @@ test_expect_success 'typechanged submodule(submodule->blob)' '
 '
 
 rm -f sm1 &&
-test_create_repo sm1 &&
+test_create_repo sm1 >/dev/null &&
 head6=$(add_file sm1 foo6 foo7)
 test_expect_success 'nonexistent commit' '
 	git diff-index -p --submodule=diff HEAD >actual &&

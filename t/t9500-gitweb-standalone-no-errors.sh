@@ -701,13 +701,13 @@ test_expect_success \
 # syntax highlighting
 
 
-highlight_version=$(highlight --version </dev/null 2>/dev/null)
-if [ $? -eq 127 ]; then
-	say "Skipping syntax highlighting tests: 'highlight' not found"
-elif test -z "$highlight_version"; then
-	say "Skipping syntax highlighting tests: incorrect 'highlight' found"
-else
-	test_set_prereq HIGHLIGHT
+test_lazy_prereq HIGHLIGHT '
+	highlight_version=$(highlight --version </dev/null 2>/dev/null) &&
+	test -n "$highlight_version"
+'
+
+if test_have_prereq HIGHLIGHT
+then
 	cat >>gitweb_config.perl <<-\EOF
 	our $highlight_bin = "highlight";
 	$feature{'highlight'}{'override'} = 1;
