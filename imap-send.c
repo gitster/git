@@ -205,7 +205,7 @@ static int ssl_socket_connect(struct imap_socket *sock UNUSED,
 			      const struct imap_server_conf *cfg UNUSED,
 			      int use_tls_only UNUSED)
 {
-	fprintf(stderr, "SSL requested but SSL support not compiled in\n");
+	fprintf(stderr, "SSL requested, but SSL support is not compiled in.\n");
 	return -1;
 }
 
@@ -249,9 +249,9 @@ static int verify_hostname(X509 *cert, const char *hostname)
 
 	/* try the common name */
 	if (!(subj = X509_get_subject_name(cert)))
-		return error("cannot get certificate subject");
+		return error("Cannot get certificate subject");
 	if ((len = X509_NAME_get_text_by_NID(subj, NID_commonName, cname, sizeof(cname))) < 0)
-		return error("cannot get certificate common name");
+		return error("Cannot get certificate common name");
 	if (strlen(cname) == (size_t)len && host_matches(hostname, cname))
 		return 0;
 	return error("certificate owner '%s' does not match hostname '%s'",
@@ -905,7 +905,7 @@ static char *cram(const char *challenge_64, const char *user, const char *pass)
 	decoded_len = EVP_DecodeBlock((unsigned char *)challenge,
 				      (unsigned char *)challenge_64, encoded_len);
 	if (decoded_len < 0)
-		die("invalid challenge %s", challenge_64);
+		die("Invalid challenge %s", challenge_64);
 	if (!HMAC(EVP_md5(), pass, strlen(pass), (unsigned char *)challenge, decoded_len, hash, NULL))
 		die("HMAC error");
 
@@ -1050,7 +1050,7 @@ static int auth_cram_md5(struct imap_store *ctx, const char *prompt)
 	ret = socket_write(&ctx->imap->buf.sock, response, strlen(response));
 	if (ret != strlen(response)) {
 		free(response);
-		return error("IMAP error: sending response failed");
+		return error("IMAP error: sending CRAM-MD5 response failed");
 	}
 
 	free(response);
@@ -1144,12 +1144,12 @@ static struct imap_store *imap_open_store(struct imap_server_conf *srvc, const c
 		tunnel.in = -1;
 		tunnel.out = -1;
 		if (start_command(&tunnel))
-			die("cannot start proxy %s", srvc->tunnel);
+			die("Cannot start proxy %s", srvc->tunnel);
 
 		imap->buf.sock.fd[0] = tunnel.out;
 		imap->buf.sock.fd[1] = tunnel.in;
 
-		imap_info("ok\n");
+		imap_info("OK\n");
 	} else {
 #ifndef NO_IPV6
 		struct addrinfo hints, *ai0, *ai;
@@ -1168,7 +1168,7 @@ static struct imap_store *imap_open_store(struct imap_server_conf *srvc, const c
 			fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(gai));
 			goto bail;
 		}
-		imap_info("ok\n");
+		imap_info("OK\n");
 
 		for (ai0 = ai; ai; ai = ai->ai_next) {
 			char addr[NI_MAXHOST];
@@ -1206,7 +1206,7 @@ static struct imap_store *imap_open_store(struct imap_server_conf *srvc, const c
 			perror("gethostbyname");
 			goto bail;
 		}
-		imap_info("ok\n");
+		imap_info("OK\n");
 
 		addr.sin_addr.s_addr = *((int *) he->h_addr_list[0]);
 
@@ -1220,7 +1220,7 @@ static struct imap_store *imap_open_store(struct imap_server_conf *srvc, const c
 		}
 #endif
 		if (s < 0) {
-			fputs("Error: unable to connect to server.\n", stderr);
+			fputs("Error: unable to connect to server\n", stderr);
 			goto bail;
 		}
 
@@ -1232,7 +1232,7 @@ static struct imap_store *imap_open_store(struct imap_server_conf *srvc, const c
 			close(s);
 			goto bail;
 		}
-		imap_info("ok\n");
+		imap_info("OK\n");
 	}
 
 	/* read the greeting string */
@@ -1340,13 +1340,13 @@ static struct imap_store *imap_open_store(struct imap_server_conf *srvc, const c
 			}
 		} else {
 			if (CAP(NOLOGIN)) {
-				fprintf(stderr, "Skipping account %s@%s, server forbids LOGIN\n",
+				fprintf(stderr, "Skipping account %s@%s, server forbids LOGIN.\n",
 					srvc->user, srvc->host);
 				goto bail;
 			}
 			if (!imap->buf.sock.ssl)
 				imap_warn("*** IMAP Warning *** Password is being "
-					  "sent in the clear\n");
+					  "sent in the clear.\n");
 			if (imap_exec(ctx, NULL, "LOGIN \"%s\" \"%s\"", srvc->user, srvc->pass) != RESP_OK) {
 				fprintf(stderr, "IMAP error: LOGIN failed\n");
 				goto bail;
@@ -1591,12 +1591,12 @@ static int append_msgs_to_imap(struct imap_server_conf *server,
 
 	ctx = imap_open_store(server, server->folder);
 	if (!ctx) {
-		fprintf(stderr, "failed to open store\n");
+		fprintf(stderr, "Failed to open store.\n");
 		return 1;
 	}
 	ctx->name = server->folder;
 
-	fprintf(stderr, "sending %d message%s\n", total, (total != 1) ? "s" : "");
+	fprintf(stderr, "Sending %d message%s\n", total, (total != 1) ? "s" : "");
 	while (1) {
 		unsigned percent = n * 100 / total;
 
@@ -1648,7 +1648,7 @@ static CURL *setup_curl(struct imap_server_conf *srvc, struct credential *cred)
 
 	uri_encoded_folder = curl_easy_escape(curl, srvc->folder, 0);
 	if (!uri_encoded_folder)
-		die("failed to encode server folder");
+		die("Failed to encode server folder.");
 	strbuf_addstr(&path, uri_encoded_folder);
 	curl_free(uri_encoded_folder);
 
@@ -1704,7 +1704,7 @@ static int curl_append_msgs_to_imap(struct imap_server_conf *server,
 	curl = setup_curl(server, &cred);
 	curl_easy_setopt(curl, CURLOPT_READDATA, &msgbuf);
 
-	fprintf(stderr, "sending %d message%s\n", total, (total != 1) ? "s" : "");
+	fprintf(stderr, "Sending %d message%s\n", total, (total != 1) ? "s" : "");
 	while (1) {
 		unsigned percent = n * 100 / total;
 		int prev_len;
@@ -1788,13 +1788,13 @@ int cmd_main(int argc, const char **argv)
 		server.port = server.use_ssl ? 993 : 143;
 
 	if (!server.folder) {
-		fprintf(stderr, "no imap store specified\n");
+		fprintf(stderr, "No IMAP store specified.\n");
 		ret = 1;
 		goto out;
 	}
 	if (!server.host) {
 		if (!server.tunnel) {
-			fprintf(stderr, "no imap host specified\n");
+			fprintf(stderr, "No IMAP host specified.\n");
 			ret = 1;
 			goto out;
 		}
@@ -1803,20 +1803,20 @@ int cmd_main(int argc, const char **argv)
 
 	/* read the messages */
 	if (strbuf_read(&all_msgs, 0, 0) < 0) {
-		error_errno(_("could not read from stdin"));
+		error_errno(_("Could not read from stdin."));
 		ret = 1;
 		goto out;
 	}
 
 	if (all_msgs.len == 0) {
-		fprintf(stderr, "nothing to send\n");
+		fprintf(stderr, "Nothing to send.\n");
 		ret = 1;
 		goto out;
 	}
 
 	total = count_messages(&all_msgs);
 	if (!total) {
-		fprintf(stderr, "no messages to send\n");
+		fprintf(stderr, "No messages found to send.\n");
 		ret = 1;
 		goto out;
 	}
