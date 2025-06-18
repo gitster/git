@@ -46,7 +46,7 @@ static int read_directory_contents(const char *path, struct string_list *list,
 
 			if (!match_leading_pathspec(NULL, pathspec,
 						    match.buf, match.len,
-						    0, NULL, e->d_type == DT_DIR ? 1 : 0))
+						    0, NULL, DTYPE(e) == DT_DIR ? 1 : 0))
 				continue;
 		}
 
