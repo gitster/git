@@ -7,6 +7,7 @@
 #include "parse-options.h"
 #include "quote.h"
 #include "refs.h"
+#include "shallow.h"
 
 enum output_format {
 	FORMAT_JSON,
@@ -23,7 +24,8 @@ enum repo_info_references_field {
 };
 
 enum repo_info_layout_field {
-	FIELD_LAYOUT_BARE = 1 << 0
+	FIELD_LAYOUT_BARE = 1 << 0,
+	FIELD_LAYOUT_SHALLOW = 1 << 1
 };
 
 struct repo_info_field {
@@ -49,6 +51,10 @@ static struct repo_info_field default_fields[] = {
 	{
 		.category = CATEGORY_LAYOUT,
 		.field.layout = FIELD_LAYOUT_BARE
+	},
+	{
+		.category = CATEGORY_LAYOUT,
+		.field.layout = FIELD_LAYOUT_SHALLOW
 	}
 };
 
@@ -91,6 +97,9 @@ static void repo_info_init(struct repo_info *repo_info,
 			} else if (!strcmp(arg, "layout.bare")) {
 				field->category = CATEGORY_LAYOUT;
 				field->field.layout = FIELD_LAYOUT_BARE;
+			} else if (!strcmp(arg, "layout.shallow")) {
+				field->category = CATEGORY_LAYOUT;
+				field->field.layout = FIELD_LAYOUT_SHALLOW;
 			} else {
 				die("invalid field '%s'", arg);
 			}
@@ -123,6 +132,11 @@ static void repo_info_print_plaintext(struct repo_info *repo_info) {
 			case FIELD_LAYOUT_BARE:
 				print_key_value("layout.bare",
 						is_bare_repository() ?
+							"true" : "false");
+				break;
+			case FIELD_LAYOUT_SHALLOW:
+				print_key_value("layout.shallow",
+						is_repository_shallow(repo) ?
 							"true" : "false");
 				break;
 			}
@@ -172,6 +186,11 @@ static void repo_info_print_json(struct repo_info *repo_info)
 		if (layout_fields & FIELD_LAYOUT_BARE) {
 			jw_object_bool(&jw, "bare",
 				       is_bare_repository());
+		}
+
+		if (layout_fields & FIELD_LAYOUT_SHALLOW) {
+			jw_object_bool(&jw, "shallow",
+				       is_repository_shallow(repo));
 		}
 		jw_end(&jw);
 	}
