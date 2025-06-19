@@ -6,7 +6,7 @@ export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
 
 . ./test-lib.sh
 
-DEFAULT_NUMBER_OF_FIELDS=1
+DEFAULT_NUMBER_OF_FIELDS=2
 
 parse_json () {
 	tr '\n' ' ' | "$PERL_PATH" "$TEST_DIRECTORY/t0019/parse_json.perl"
@@ -70,6 +70,12 @@ test_repo_info 'ref format files is retrieved correctly' '
 
 test_repo_info 'ref format reftable is retrieved correctly' '
 	git init --ref-format=reftable repo' 'references.format' 'reftable'
+
+test_repo_info 'bare repository = false is retrieved correctly' '
+	git init repo' 'layout.bare' 'false'
+
+test_repo_info 'bare repository = true is retrieved correctly' '
+	git init --bare repo' 'layout.bare' 'true'
 
 test_expect_success 'plaintext: output all default fields' "
 	git repo-info --format=plaintext >actual &&
