@@ -18,5 +18,9 @@ test_expect_success PERLJSON 'json: returns empty output with allow-empty' '
 	git repo-info --format=json >output &&
 	test_line_count = 2 output
 '
+test_expect_success 'plaintext: returns empty output with allow-empty' '
+	git repo-info --format=plaintext >output &&
+	test_line_count = 0 output
+'
 
 test_done

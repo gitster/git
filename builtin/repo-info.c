@@ -3,7 +3,8 @@
 #include "parse-options.h"
 
 enum output_format {
-	FORMAT_JSON
+	FORMAT_JSON,
+	FORMAT_PLAINTEXT
 };
 
 struct repo_info {
@@ -19,8 +20,14 @@ static void repo_info_init(struct repo_info *repo_info,
 
 	if (format == NULL || !strcmp(format, "json"))
 		repo_info->format = FORMAT_JSON;
+	else if (!strcmp(format, "plaintext"))
+		repo_info->format = FORMAT_PLAINTEXT;
 	else
 		die("invalid format %s", format);
+}
+
+static void repo_info_print_plaintext(struct repo_info *repo_info UNUSED)
+{
 }
 
 static void repo_info_print_json(struct repo_info *repo_info UNUSED)
@@ -43,6 +50,9 @@ static void repo_info_print(struct repo_info *repo_info)
 	switch (format) {
 	case FORMAT_JSON:
 		repo_info_print_json(repo_info);
+		break;
+	case FORMAT_PLAINTEXT:
+		repo_info_print_plaintext(repo_info);
 		break;
 	}
 }
