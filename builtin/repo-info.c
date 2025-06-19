@@ -68,9 +68,12 @@ int cmd_repo_info(int argc,
 	};
 	struct repo_info repo_info;
 	char *format = NULL;
+	int allow_empty = 0;
 	struct option options[] = {
 		OPT_STRING(0, "format", &format, N_("format"),
 			   N_("output format")),
+		OPT_BOOL(0, "allow-empty", &allow_empty,
+			 "when set, it will use an empty set of fields if no field is requested"),
 		OPT_END()
 	};
 
