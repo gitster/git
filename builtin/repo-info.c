@@ -1,21 +1,56 @@
 #include "builtin.h"
 #include "json-writer.h"
 #include "parse-options.h"
+#include "quote.h"
+#include "refs.h"
 
 enum output_format {
 	FORMAT_JSON,
 	FORMAT_PLAINTEXT
 };
 
+enum repo_info_category {
+	CATEGORY_REFERENCES = 1 << 0
+};
+
+enum repo_info_references_field {
+	FIELD_REFERENCES_FORMAT = 1 << 0
+};
+
+struct repo_info_field {
+	enum repo_info_category category;
+	union {
+		enum repo_info_references_field references;
+	} field;
+};
+
 struct repo_info {
 	struct repository *repo;
 	enum output_format format;
+	int n_fields;
+	struct repo_info_field *fields;
 };
+
+static struct repo_info_field default_fields[] = {
+	{
+		.category = CATEGORY_REFERENCES,
+		.field.references = FIELD_REFERENCES_FORMAT
+	}
+};
+
+static void print_key_value(const char *key, const char *value) {
+	printf("%s=", key);
+	quote_c_style(value, NULL, stdout, 0);
+	putchar('\n');
+}
 
 static void repo_info_init(struct repo_info *repo_info,
 			   struct repository *repo,
-			   char *format)
+			   char *format,
+			   int allow_empty,
+			   int argc, const char **argv)
 {
+	int i;
 	repo_info->repo = repo;
 
 	if (format == NULL || !strcmp(format, "json"))
@@ -24,19 +59,83 @@ static void repo_info_init(struct repo_info *repo_info,
 		repo_info->format = FORMAT_PLAINTEXT;
 	else
 		die("invalid format %s", format);
+
+	if (argc == 0 && !allow_empty) {
+		repo_info->n_fields = ARRAY_SIZE(default_fields);
+		repo_info->fields = default_fields;
+	} else {
+		repo_info->n_fields = argc;
+		ALLOC_ARRAY(repo_info->fields, argc);
+
+		for (i = 0; i < argc; i++) {
+			const char *arg = argv[i];
+			struct repo_info_field *field = repo_info->fields + i;
+
+			if (!strcmp(arg, "references.format")) {
+				field->category = CATEGORY_REFERENCES;
+				field->field.references = FIELD_REFERENCES_FORMAT;
+			} else {
+				die("invalid field '%s'", arg);
+			}
+		}
+	}
 }
 
-static void repo_info_print_plaintext(struct repo_info *repo_info UNUSED)
+static void repo_info_release(struct repo_info *repo_info)
 {
+	if (repo_info->fields != default_fields) free(repo_info->fields);
 }
 
-static void repo_info_print_json(struct repo_info *repo_info UNUSED)
+static void repo_info_print_plaintext(struct repo_info *repo_info) {
+	struct repository *repo = repo_info->repo;
+	int i;
+	for (i = 0; i < repo_info->n_fields; i++) {
+		struct repo_info_field *field = &repo_info->fields[i];
+		switch (field->category) {
+		case CATEGORY_REFERENCES:
+			switch (field->field.references) {
+			case FIELD_REFERENCES_FORMAT:
+				print_key_value("references.format",
+						ref_storage_format_to_name(
+							repo->ref_storage_format));
+				break;
+			}
+			break;
+		}
+	}
+}
+
+static void repo_info_print_json(struct repo_info *repo_info)
 {
 	struct json_writer jw;
+	int i;
+	unsigned int categories = 0;
+	unsigned int references_fields = 0;
+	struct repository *repo = repo_info->repo;
+
+	for (i = 0; i < repo_info->n_fields; i++) {
+		struct repo_info_field *field = repo_info->fields + i;
+		categories |= field->category;
+		switch (field->category) {
+		case CATEGORY_REFERENCES:
+			references_fields |= field->field.references;
+			break;
+		}
+	}
 
 	jw_init(&jw);
 
 	jw_object_begin(&jw, 1);
+
+	if (categories & CATEGORY_REFERENCES) {
+		jw_object_inline_begin_object(&jw, "references");
+		if (references_fields & FIELD_REFERENCES_FORMAT) {
+			const char *format_name = ref_storage_format_to_name(
+				repo->ref_storage_format);
+			jw_object_string(&jw, "format", format_name);
+		}
+		jw_end(&jw);
+	}
 	jw_end(&jw);
 
 	puts(jw.json.buf);
@@ -79,8 +178,9 @@ int cmd_repo_info(int argc,
 
 	argc = parse_options(argc, argv, prefix, options, repo_info_usage,
 			     PARSE_OPT_KEEP_UNKNOWN_OPT);
-	repo_info_init(&repo_info, repo, format);
+	repo_info_init(&repo_info, repo, format, allow_empty, argc, argv);
 	repo_info_print(&repo_info);
+	repo_info_release(&repo_info);
 
 	return 0;
 }
