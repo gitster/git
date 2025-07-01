@@ -23,10 +23,8 @@ static void show_entry(const char *path, const struct commit *commit, void *d)
 	fflush(stdout);
 }
 
-int cmd_last_modified(int argc,
-		   const char **argv,
-		   const char *prefix,
-		   struct repository *repo)
+int cmd_last_modified(int argc, const char **argv, const char *prefix,
+		      struct repository *repo)
 {
 	struct last_modified lm;
 
