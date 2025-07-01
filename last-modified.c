@@ -116,7 +116,7 @@ void last_modified_release(struct last_modified *lm)
 	struct hashmap_iter iter;
 	struct last_modified_entry *ent;
 
-	hashmap_for_each_entry (&lm->paths, &iter, ent, hashent)
+	hashmap_for_each_entry(&lm->paths, &iter, ent, hashent)
 		clear_bloom_key(&ent->key);
 
 	hashmap_clear_and_free(&lm->paths, struct last_modified_entry, hashent);
@@ -210,7 +210,7 @@ static int maybe_changed_path(struct last_modified *lm, struct commit *origin)
 	if (!filter)
 		return 1;
 
-	hashmap_for_each_entry (&lm->paths, &iter, ent, hashent) {
+	hashmap_for_each_entry(&lm->paths, &iter, ent, hashent) {
 		if (bloom_filter_contains(filter, &ent->key,
 					  lm->rev.bloom_filter_settings))
 			return 1;
@@ -218,8 +218,8 @@ static int maybe_changed_path(struct last_modified *lm, struct commit *origin)
 	return 0;
 }
 
-int last_modified_run(struct last_modified *lm, last_modified_callback cb,
-		      void *cbdata)
+int last_modified_run(struct last_modified *lm,
+		      last_modified_callback cb, void *cbdata)
 {
 	struct last_modified_callback_data data;
 
