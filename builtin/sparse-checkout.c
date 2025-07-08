@@ -23,7 +23,7 @@
 static const char *empty_base = "";
 
 static char const * const builtin_sparse_checkout_usage[] = {
-	N_("git sparse-checkout (init | list | set | add | reapply | disable | check-rules) [<options>]"),
+	N_("git sparse-checkout (init | list | set | add | reapply | disable | check-rules | clean) [<options>]"),
 	NULL
 };
 
@@ -924,6 +924,76 @@ static int sparse_checkout_reapply(int argc, const char **argv,
 	return update_working_directory(repo, NULL);
 }
 
+static char const * const builtin_sparse_checkout_clean_usage[] = {
+	"git sparse-checkout clean [-n|--dry-run]",
+	NULL
+};
+
+static struct sparse_checkout_clean_opts {
+	int dry_run;
+} clean_opts;
+
+static int sparse_checkout_clean(int argc, const char **argv,
+				   const char *prefix,
+				   struct repository *repo)
+{
+	struct strbuf full_path = STRBUF_INIT;
+	size_t worktree_len;
+	static struct option builtin_sparse_checkout_clean_options[] = {
+		OPT_BOOL('n', "dry-run", &clean_opts.dry_run,
+			 N_("list the directories that would be removed without making filesystem changes")),
+		OPT_END(),
+	};
+
+	setup_work_tree();
+	if (!core_apply_sparse_checkout)
+		die(_("must be in a sparse-checkout to clean directories"));
+	if (!core_sparse_checkout_cone)
+		die(_("must be in a cone-mode sparse-checkout to clean directories"));
+
+	argc = parse_options(argc, argv, prefix,
+			     builtin_sparse_checkout_clean_options,
+			     builtin_sparse_checkout_clean_usage, 0);
+
+	if (repo_read_index(repo) < 0)
+		die(_("failed to read index"));
+
+	if (convert_to_sparse(repo->index, SPARSE_INDEX_MEMORY_ONLY))
+		die(_("failed to convert index to a sparse index"));
+
+	strbuf_addstr(&full_path, repo->worktree);
+	strbuf_addch(&full_path, '/');
+	worktree_len = full_path.len;
+
+	for (size_t i = 0; i < repo->index->cache_nr; i++) {
+		DIR* dir;
+		struct cache_entry *ce = repo->index->cache[i];
+		if (!S_ISSPARSEDIR(ce->ce_mode))
+			continue;
+		strbuf_setlen(&full_path, worktree_len);
+		strbuf_add(&full_path, ce->name, ce->ce_namelen);
+
+		dir = opendir(full_path.buf);
+		if (!dir)
+			continue;
+		else if (ENOENT != errno) {
+			warning_errno(_("failed to check for existence of '%s'"), ce->name);
+			continue;
+		}
+
+		closedir(dir);
+
+		printf("%s\n", ce->name);
+		if (!clean_opts.dry_run) {
+			if (remove_dir_recursively(&full_path, 0))
+				warning_errno(_("failed to remove '%s'"), ce->name);
+		}
+	}
+
+	strbuf_release(&full_path);
+	return 0;
+}
+
 static char const * const builtin_sparse_checkout_disable_usage[] = {
 	"git sparse-checkout disable",
 	NULL
@@ -1080,6 +1150,7 @@ int cmd_sparse_checkout(int argc,
 		OPT_SUBCOMMAND("set", &fn, sparse_checkout_set),
 		OPT_SUBCOMMAND("add", &fn, sparse_checkout_add),
 		OPT_SUBCOMMAND("reapply", &fn, sparse_checkout_reapply),
+		OPT_SUBCOMMAND("clean", &fn, sparse_checkout_clean),
 		OPT_SUBCOMMAND("disable", &fn, sparse_checkout_disable),
 		OPT_SUBCOMMAND("check-rules", &fn, sparse_checkout_check_rules),
 		OPT_END(),
