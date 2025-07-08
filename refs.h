@@ -1299,21 +1299,32 @@ struct ref_iterator *refs_ref_iterator_begin(
  */
 int ref_iterator_advance(struct ref_iterator *ref_iterator);
 
+enum ref_iterator_seek_flag {
+	/*
+	 * Also set the seek pattern as a prefix for iteration. This ensures
+	 * that only references which match the prefix are yielded.
+	 */
+	REF_ITERATOR_SEEK_SET_PREFIX = (1 << 0),
+};
+
 /*
- * Seek the iterator to the first reference with the given prefix.
- * The prefix is matched as a literal string, without regard for path
- * separators. If prefix is NULL or the empty string, seek the iterator to the
+ * Seek the iterator to the first reference matching the given seek string.
+ * The seek string is matched as a literal string, without regard for path
+ * separators. If seek is NULL or the empty string, seek the iterator to the
  * first reference again.
  *
- * This function is expected to behave as if a new ref iterator with the same
- * prefix had been created, but allows reuse of iterators and thus may allow
- * the backend to optimize. Parameters other than the prefix that have been
- * passed when creating the iterator will remain unchanged.
+ * This function is expected to behave as if a new ref iterator has been
+ * created, but allows reuse of existing iterators for optimization.
+ *
+ * When the REF_ITERATOR_SEEK_SET_PREFIX flag is set, the iterator's prefix is
+ * updated to match the seek string, affecting all subsequent iterations. If
+ * not, the iterator seeks to the specified reference and clears any previously
+ * set prefix.
  *
  * Returns 0 on success, a negative error code otherwise.
  */
-int ref_iterator_seek(struct ref_iterator *ref_iterator,
-		      const char *prefix);
+int ref_iterator_seek(struct ref_iterator *ref_iterator, const char *seek,
+		      unsigned int flags);
 
 /*
  * If possible, peel the reference currently being viewed by the
