@@ -62,6 +62,7 @@ struct odb_source {
 	 * should only be accessed directly by packfile.c and midx.c
 	 */
 	struct multi_pack_index *multi_pack_index;
+	int multi_pack_index_loaded;
 
 	/*
 	 * This is a temporary object store created by the tmp_objdir

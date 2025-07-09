@@ -728,12 +728,12 @@ int prepare_multi_pack_index_one(struct odb_source *source, int local)
 	struct repository *r = source->odb->repo;
 	struct multi_pack_index *m;
 
+	if (source->multi_pack_index_loaded)
+		return !!source->multi_pack_index;
+
 	prepare_repo_settings(r);
 	if (!r->settings.core_multi_pack_index)
 		return 0;
-
-	if (source->multi_pack_index)
-		return 1;
 
 	m = load_multi_pack_index(r, source->path, local);
 	if (m) {
@@ -745,11 +745,10 @@ int prepare_multi_pack_index_one(struct odb_source *source, int local)
 			r->objects->multi_pack_index = m;
 		}
 		source->multi_pack_index = m;
-
-		return 1;
 	}
 
-	return 0;
+	source->multi_pack_index_loaded = 1;
+	return !!source->multi_pack_index;
 }
 
 int midx_checksum_valid(struct multi_pack_index *m)
@@ -839,6 +838,7 @@ void clear_midx_file(struct repository *r)
 			if (source->multi_pack_index)
 				close_midx(source->multi_pack_index);
 			source->multi_pack_index = NULL;
+			source->multi_pack_index_loaded = 0;
 		}
 		r->objects->multi_pack_index = NULL;
 	}
