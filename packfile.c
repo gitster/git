@@ -369,12 +369,12 @@ void close_object_store(struct object_database *o)
 		else
 			close_pack(p);
 
-	if (o->multi_pack_index) {
-		close_midx(o->multi_pack_index);
-		o->multi_pack_index = NULL;
-		for (struct odb_source *source = o->sources; source; source = source->next)
-			source->multi_pack_index = NULL;
+	for (struct odb_source *source = o->sources; source; source = source->next) {
+		if (source->multi_pack_index)
+			close_midx(source->multi_pack_index);
+		source->multi_pack_index = NULL;
 	}
+	o->multi_pack_index = NULL;
 
 	close_commit_graph(o);
 }
