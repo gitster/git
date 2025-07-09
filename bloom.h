@@ -74,24 +74,36 @@ struct bloom_key {
 	uint32_t *hashes;
 };
 
+/*
+ * A bloom_keyvec is a vector of bloom_keys, which
+ * can be used to store multiple keys for a single
+ * pathspec item.
+ */
+struct bloom_keyvec {
+	size_t count;
+	struct bloom_key key[FLEX_ARRAY];
+};
+
 int load_bloom_filter_from_graph(struct commit_graph *g,
 				 struct bloom_filter *filter,
 				 uint32_t graph_pos);
 
-/*
- * Calculate the murmur3 32-bit hash value for the given data
- * using the given seed.
- * Produces a uniformly distributed hash value.
- * Not considered to be cryptographically secure.
- * Implemented as described in https://en.wikipedia.org/wiki/MurmurHash#Algorithm
- */
-uint32_t murmur3_seeded_v2(uint32_t seed, const char *data, size_t len);
-
-void fill_bloom_key(const char *data,
+void bloom_key_fill(const char *data,
 		    size_t len,
 		    struct bloom_key *key,
 		    const struct bloom_filter_settings *settings);
-void clear_bloom_key(struct bloom_key *key);
+void bloom_key_clear(struct bloom_key *key);
+
+struct bloom_keyvec *bloom_keyvec_new(size_t count);
+void bloom_keyvec_free(struct bloom_keyvec *vec);
+
+static inline void bloom_keyvec_fill_key(const char *data, size_t len,
+					 struct bloom_keyvec *vec, size_t nr,
+					 const struct bloom_filter_settings *settings)
+{
+	assert(nr < vec->count);
+	bloom_key_fill(data, len, &vec->key[nr], settings);
+}
 
 void add_key_to_filter(const struct bloom_key *key,
 		       struct bloom_filter *filter,
@@ -136,5 +148,12 @@ struct bloom_filter *get_bloom_filter(struct repository *r, struct commit *c);
 int bloom_filter_contains(const struct bloom_filter *filter,
 			  const struct bloom_key *key,
 			  const struct bloom_filter_settings *settings);
+
+int bloom_filter_contains_vec(const struct bloom_filter *filter,
+			      const struct bloom_keyvec *v,
+			      const struct bloom_filter_settings *settings);
+
+uint32_t test_bloom_murmur3_seeded(uint32_t seed, const char *data, size_t len,
+				   int version);
 
 #endif
