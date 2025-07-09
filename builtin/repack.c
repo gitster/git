@@ -1531,7 +1531,7 @@ int cmd_repack(int argc,
 		 * midx_has_unknown_packs() will make the decision for
 		 * us.
 		 */
-		if (!get_local_multi_pack_index(the_repository))
+		if (!get_multi_pack_index(the_repository->objects->sources))
 			midx_must_contain_cruft = 1;
 	}
 
@@ -1614,9 +1614,9 @@ int cmd_repack(int argc,
 
 	string_list_sort(&names);
 
-	if (get_local_multi_pack_index(the_repository)) {
+	if (get_multi_pack_index(the_repository->objects->sources)) {
 		struct multi_pack_index *m =
-			get_local_multi_pack_index(the_repository);
+			get_multi_pack_index(the_repository->objects->sources);
 
 		ALLOC_ARRAY(midx_pack_names,
 			    m->num_packs + m->num_packs_in_base);
