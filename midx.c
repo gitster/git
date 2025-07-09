@@ -726,7 +726,6 @@ int midx_preferred_pack(struct multi_pack_index *m, uint32_t *pack_int_id)
 int prepare_multi_pack_index_one(struct odb_source *source, int local)
 {
 	struct repository *r = source->odb->repo;
-	struct multi_pack_index *m;
 
 	if (source->multi_pack_index_loaded)
 		return !!source->multi_pack_index;
@@ -735,19 +734,9 @@ int prepare_multi_pack_index_one(struct odb_source *source, int local)
 	if (!r->settings.core_multi_pack_index)
 		return 0;
 
-	m = load_multi_pack_index(r, source->path, local);
-	if (m) {
-		struct multi_pack_index *mp = r->objects->multi_pack_index;
-		if (mp) {
-			m->next = mp->next;
-			mp->next = m;
-		} else {
-			r->objects->multi_pack_index = m;
-		}
-		source->multi_pack_index = m;
-	}
-
+	source->multi_pack_index = load_multi_pack_index(r, source->path, local);
 	source->multi_pack_index_loaded = 1;
+
 	return !!source->multi_pack_index;
 }
 
@@ -840,7 +829,6 @@ void clear_midx_file(struct repository *r)
 			source->multi_pack_index = NULL;
 			source->multi_pack_index_loaded = 0;
 		}
-		r->objects->multi_pack_index = NULL;
 	}
 
 	if (remove_path(midx.buf))

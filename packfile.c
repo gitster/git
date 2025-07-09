@@ -375,7 +375,6 @@ void close_object_store(struct object_database *o)
 		source->multi_pack_index = NULL;
 		source->multi_pack_index_loaded = 0;
 	}
-	o->multi_pack_index = NULL;
 
 	close_commit_graph(o);
 }
