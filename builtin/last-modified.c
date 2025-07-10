@@ -47,7 +47,7 @@ static void last_modified_release(struct last_modified *lm)
 	struct last_modified_entry *ent;
 
 	hashmap_for_each_entry(&lm->paths, &iter, ent, hashent)
-		clear_bloom_key(&ent->key);
+		bloom_key_clear(&ent->key);
 
 	hashmap_clear_and_free(&lm->paths, struct last_modified_entry, hashent);
 	release_revisions(&lm->rev);
@@ -77,7 +77,7 @@ static void add_path_from_diff(struct diff_queue_struct *q,
 		FLEX_ALLOC_STR(ent, path, path);
 		oidcpy(&ent->oid, &p->two->oid);
 		if (lm->rev.bloom_filter_settings)
-			fill_bloom_key(path, strlen(path), &ent->key,
+			bloom_key_fill(&ent->key, path, strlen(path),
 				       lm->rev.bloom_filter_settings);
 		hashmap_entry_init(&ent->hashent, strhash(ent->path));
 		hashmap_add(&lm->paths, &ent->hashent);
@@ -138,7 +138,7 @@ static void mark_path(const char *path, const struct object_id *oid,
 		data->callback(path, data->commit, data->callback_data);
 
 	hashmap_remove(data->paths, &ent->hashent, path);
-	clear_bloom_key(&ent->key);
+	bloom_key_clear(&ent->key);
 	free(ent);
 }
 
