@@ -1,7 +1,10 @@
+#define USE_THE_REPOSITORY_VARIABLE
+
 #include "builtin.h"
 #include "parse-options.h"
 #include "strbuf.h"
 #include "refs.h"
+#include "environment.h"
 
 typedef void add_field_fn(struct strbuf *buf, struct repository *repo);
 
@@ -16,6 +19,13 @@ static void add_string(struct strbuf *buf,
 	strbuf_addf(buf, "%s\n%s%c", key, value, '\0');
 }
 
+static void add_bool(struct strbuf *buf,
+		     const char *key, const int value)
+{
+	const char *output_value = value ? "true" : "false";
+	strbuf_addf(buf, "%s\n%s%c", key, output_value, '\0');
+}
+
 static void add_references_format(struct strbuf *buf,
 				  struct repository *repo)
 {
@@ -23,8 +33,15 @@ static void add_references_format(struct strbuf *buf,
 		   ref_storage_format_to_name(repo->ref_storage_format));
 }
 
+
+static void add_layout_bare(struct strbuf *buf, struct repository *repo UNUSED)
+{
+	add_bool(buf, "layout.bare", is_bare_repository());
+}
+
 // repo_info_fields keys should be in lexicographical order
 static const struct field repo_info_fields[] = {
+	{"layout.bare", add_layout_bare},
 	{"references.format", add_references_format},
 };
 
