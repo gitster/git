@@ -42,12 +42,34 @@ test_repo_info 'bare repository = false is retrieved correctly' '
 test_repo_info 'bare repository = true is retrieved correctly' '
 	git init --bare repo' 'layout.bare' 'true'
 
+test_repo_info 'shallow repository = false is retrieved correctly' '
+	git init repo' 'layout.shallow' 'false'
+
+test_repo_info 'shallow repository = true is retrieved correctly' '
+	git init remote &&
+	cd remote &&
+	echo x >x &&
+	git add x &&
+	git commit -m x &&
+	cd .. &&
+	git clone --depth 1 "file://$PWD/remote" repo &&
+	rm -rf remote
+	' 'layout.shallow' 'true'
+
 test_expect_success "only one value is returned if the same key is requested twice" '
 	echo "references.format" > expected &&
 	git rev-parse --show-ref-format > ref-format &&
 	lf_to_nul <ref-format >>expected &&
 	git repo info references.format references.format > actual &&
 	test_cmp expected actual
+'
+
+test_expect_success 'output is returned correctly when two keys are requested' '
+	test_when_finished "rm -f expect" &&
+	printf "layout.bare\nfalseQlayout.shallow\nfalseQ" >expect &&
+	git repo info layout.shallow layout.bare >output &&
+	nul_to_q <output >actual &&
+	test_cmp expect actual
 '
 
 test_done

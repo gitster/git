@@ -5,6 +5,7 @@
 #include "strbuf.h"
 #include "refs.h"
 #include "environment.h"
+#include "shallow.h"
 
 typedef void add_field_fn(struct strbuf *buf, struct repository *repo);
 
@@ -39,9 +40,15 @@ static void add_layout_bare(struct strbuf *buf, struct repository *repo UNUSED)
 	add_bool(buf, "layout.bare", is_bare_repository());
 }
 
+static void add_layout_shallow(struct strbuf *buf, struct repository *repo)
+{
+	add_bool(buf, "layout.shallow", is_repository_shallow(repo));
+}
+
 // repo_info_fields keys should be in lexicographical order
 static const struct field repo_info_fields[] = {
 	{"layout.bare", add_layout_bare},
+	{"layout.shallow", add_layout_shallow},
 	{"references.format", add_references_format},
 };
 
