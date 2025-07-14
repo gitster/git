@@ -45,6 +45,10 @@ INFO KEYS
 The set of data that `git repo` can return is grouped into the following
 categories:
 
+`references`::
+Reference-related data:
+* `format`: the reference storage format, either `files` or `reftable`.
+
 SEE ALSO
 --------
 linkgit:git-rev-parse[1]
