@@ -771,10 +771,10 @@ static int comment_char_config_cb(const char *key, const char *value,
 		return 0;
 
 	cfg->last_key_id = key_id;
-	if (!kvi->path) {
+	if (kvi->origin_type != CONFIG_ORIGIN_FILE) {
 		return 0;
-	} else if (get_comment_key_flags(cfg, kvi->path, key_id)) {
-		set_comment_key_flags(cfg, kvi->path, key_id, KEY_SEEN_TWICE);
+	} else if (get_comment_key_flags(cfg, kvi->filename, key_id)) {
+		set_comment_key_flags(cfg, kvi->filename, key_id, KEY_SEEN_TWICE);
 	} else {
 		struct comment_char_cfg_item *item;
 
@@ -782,8 +782,8 @@ static int comment_char_config_cb(const char *key, const char *value,
 		item = &cfg->item[cfg->nr - 1];
 		item->key_id = key_id;
 		item->scope = kvi->scope;
-		item->path = xstrdup(kvi->path);
-		set_comment_key_flags(cfg, kvi->path, key_id, KEY_SEEN_ONCE);
+		item->path = xstrdup(kvi->filename);
+		set_comment_key_flags(cfg, kvi->filename, key_id, KEY_SEEN_ONCE);
 	}
 	cfg->auto_set_in_file =	value && !strcmp(value, "auto");
 
