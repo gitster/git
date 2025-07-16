@@ -3307,7 +3307,8 @@ static unsigned char *deflate_it(char *data,
 	unsigned char *deflated;
 	git_zstream stream;
 
-	git_deflate_init(&stream, zlib_compression_level);
+	prepare_repo_settings(the_repository);
+	git_deflate_init(&stream, the_repository->settings.zlib_compression_level);
 	bound = git_deflate_bound(&stream, size);
 	deflated = xmalloc(bound);
 	stream.next_out = deflated;

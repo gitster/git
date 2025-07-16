@@ -374,7 +374,8 @@ static void start_put(struct transfer_request *request)
 	hdrlen = format_object_header(hdr, sizeof(hdr), type, len);
 
 	/* Set it up */
-	git_deflate_init(&stream, zlib_compression_level);
+	prepare_repo_settings(the_repository);
+	git_deflate_init(&stream, the_repository->settings.zlib_compression_level);
 	size = git_deflate_bound(&stream, len + hdrlen);
 	strbuf_grow(&request->buffer.buf, size);
 	request->buffer.posn = 0;

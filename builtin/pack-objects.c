@@ -385,7 +385,8 @@ static unsigned long do_compress(void **pptr, unsigned long size)
 	void *in, *out;
 	unsigned long maxsize;
 
-	git_deflate_init(&stream, pack_compression_level);
+	prepare_repo_settings(the_repository);
+	git_deflate_init(&stream, the_repository->settings.pack_compression_level);
 	maxsize = git_deflate_bound(&stream, size);
 
 	in = *pptr;
@@ -412,7 +413,8 @@ static unsigned long write_large_blob_data(struct git_istream *st, struct hashfi
 	unsigned char obuf[1024 * 16];
 	unsigned long olen = 0;
 
-	git_deflate_init(&stream, pack_compression_level);
+	prepare_repo_settings(the_repository);
+	git_deflate_init(&stream, the_repository->settings.pack_compression_level);
 
 	for (;;) {
 		ssize_t readlen;
@@ -1455,7 +1457,7 @@ static void write_pack_file(void)
 				strbuf_setlen(&tmpname, tmpname_len);
 			}
 
-			rename_tmp_packfile_idx(&tmpname, &idx_tmp_name);
+			rename_tmp_packfile_idx(the_repository, &tmpname, &idx_tmp_name);
 
 			free(idx_tmp_name);
 			strbuf_release(&tmpname);
@@ -1709,8 +1711,16 @@ static int want_object_in_pack_mtime(const struct object_id *oid,
 	struct odb_source *source;
 	struct list_head *pos;
 
-	if (!exclude && local && has_loose_object_nonlocal(oid))
-		return 0;
+	if (!exclude && local) {
+		/*
+		 * Note that we start iterating at `sources->next` so that we
+		 * skip the local object source.
+		 */
+		struct odb_source *source = the_repository->objects->sources->next;
+		for (; source; source = source->next)
+			if (has_loose_object(source, oid))
+				return 0;
+	}
 
 	/*
 	 * If we already know the pack object lives in, start checks from that
@@ -3966,7 +3976,14 @@ static void add_cruft_object_entry(const struct object_id *oid, enum object_type
 	} else {
 		if (!want_object_in_pack_mtime(oid, 0, &pack, &offset, mtime))
 			return;
-		if (!pack && type == OBJ_BLOB && !has_loose_object(oid)) {
+		if (!pack && type == OBJ_BLOB) {
+			struct odb_source *source = the_repository->objects->sources;
+			int found = 0;
+
+			for (; !found && source; source = source->next)
+				if (has_loose_object(source, oid))
+					found = 1;
+
 			/*
 			 * If a traversed tree has a missing blob then we want
 			 * to avoid adding that missing object to our pack.
@@ -3980,7 +3997,8 @@ static void add_cruft_object_entry(const struct object_id *oid, enum object_type
 			 * limited to "ensure non-tip blobs which don't exist in
 			 * packs do exist via loose objects". Confused?
 			 */
-			return;
+			if (!found)
+				return;
 		}
 
 		entry = create_object_entry(oid, type, pack_name_hash_fn(name),
@@ -4368,7 +4386,7 @@ static int add_loose_object(const struct object_id *oid, const char *path,
  */
 static void add_unreachable_loose_objects(struct rev_info *revs)
 {
-	for_each_loose_file_in_objdir(repo_get_object_directory(the_repository),
+	for_each_loose_file_in_source(the_repository->objects->sources,
 				      add_loose_object, NULL, NULL, revs);
 }
 
@@ -4437,7 +4455,8 @@ static void loosen_unused_packed_objects(void)
 			if (!packlist_find(&to_pack, &oid) &&
 			    !has_sha1_pack_kept_or_nonlocal(&oid) &&
 			    !loosened_object_can_be_discarded(&oid, p->mtime)) {
-				if (force_object_loose(&oid, p->mtime))
+				if (force_object_loose(the_repository->objects->sources,
+						       &oid, p->mtime))
 					die(_("unable to force loose object"));
 				loosened_objects_nr++;
 			}
@@ -4845,6 +4864,7 @@ int cmd_pack_objects(int argc,
 		     const char *prefix,
 		     struct repository *repo UNUSED)
 {
+	int compression_level = INT_MIN;
 	int use_internal_rev_list = 0;
 	int all_progress_implied = 0;
 	struct strvec rp = STRVEC_INIT;
@@ -4937,7 +4957,7 @@ int cmd_pack_objects(int argc,
 			 N_("ignore packs that have companion .keep file")),
 		OPT_STRING_LIST(0, "keep-pack", &keep_pack_list, N_("name"),
 				N_("ignore this pack")),
-		OPT_INTEGER(0, "compression", &pack_compression_level,
+		OPT_INTEGER(0, "compression", &compression_level,
 			    N_("pack compression level")),
 		OPT_BOOL(0, "keep-true-parents", &grafts_keep_true_parents,
 			 N_("do not hide commits by grafts")),
@@ -5092,10 +5112,14 @@ int cmd_pack_objects(int argc,
 
 	if (!reuse_object)
 		reuse_delta = 0;
-	if (pack_compression_level == -1)
-		pack_compression_level = Z_DEFAULT_COMPRESSION;
-	else if (pack_compression_level < 0 || pack_compression_level > Z_BEST_COMPRESSION)
-		die(_("bad pack compression level %d"), pack_compression_level);
+	if (compression_level != INT_MIN) {
+		if (compression_level == -1)
+			compression_level = Z_DEFAULT_COMPRESSION;
+		else if (compression_level < 0 || compression_level > Z_BEST_COMPRESSION)
+			die(_("bad pack compression level %d"), compression_level);
+		prepare_repo_settings(the_repository);
+		the_repository->settings.pack_compression_level = compression_level;
+	}
 
 	if (!delta_search_threads)	/* --threads=0 means autodetect */
 		delta_search_threads = online_cpus();

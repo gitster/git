@@ -150,8 +150,6 @@ extern int warn_on_object_refname_ambiguity;
 extern char *apply_default_whitespace;
 extern char *apply_default_ignorewhitespace;
 extern char *git_attributes_file;
-extern int zlib_compression_level;
-extern int pack_compression_level;
 extern unsigned long pack_size_limit_cfg;
 extern int max_allowed_tree_depth;
 
@@ -176,12 +174,6 @@ enum push_default_type {
 	PUSH_DEFAULT_UNSPECIFIED
 };
 extern enum push_default_type push_default;
-
-enum object_creation_mode {
-	OBJECT_CREATION_USES_HARDLINKS = 0,
-	OBJECT_CREATION_USES_RENAMES = 1
-};
-extern enum object_creation_mode object_creation_mode;
 
 extern int grafts_keep_true_parents;
 

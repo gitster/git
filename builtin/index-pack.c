@@ -1420,7 +1420,8 @@ static int write_compressed(struct hashfile *f, void *in, unsigned int size)
 	int status;
 	unsigned char outbuf[4096];
 
-	git_deflate_init(&stream, zlib_compression_level);
+	prepare_repo_settings(the_repository);
+	git_deflate_init(&stream, the_repository->settings.zlib_compression_level);
 	stream.next_in = in;
 	stream.avail_in = size;
 
@@ -1598,7 +1599,7 @@ static void rename_tmp_packfile(const char **final_name,
 	if (!*final_name || strcmp(*final_name, curr_name)) {
 		if (!*final_name)
 			*final_name = odb_pack_name(the_repository, name, hash, ext);
-		if (finalize_object_file(curr_name, *final_name))
+		if (finalize_object_file(the_repository, curr_name, *final_name))
 			die(_("unable to rename temporary '*.%s' file to '%s'"),
 			    ext, *final_name);
 	} else if (make_read_only_if_same) {

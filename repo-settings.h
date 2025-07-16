@@ -23,6 +23,11 @@ enum log_refs_config {
 	LOG_REFS_ALWAYS
 };
 
+enum object_creation_mode {
+	OBJECT_CREATION_USES_HARDLINKS = 0,
+	OBJECT_CREATION_USES_RENAMES = 1
+};
+
 struct repo_settings {
 	int initialized;
 
@@ -36,6 +41,8 @@ struct repo_settings {
 	int pack_read_reverse_index;
 	int pack_use_bitmap_boundary_traversal;
 	int pack_use_multi_pack_reuse;
+	int pack_compression_level;
+	int zlib_compression_level;
 
 	int shared_repository;
 	int shared_repository_initialized;
@@ -58,6 +65,7 @@ struct repo_settings {
 	int pack_use_sparse;
 	int pack_use_path_walk;
 	enum fetch_negotiation_setting fetch_negotiation_algorithm;
+	enum object_creation_mode object_creation_mode;
 
 	int core_multi_pack_index;
 	int warn_ambiguous_refs; /* lazily loaded via accessor */

@@ -1,5 +1,7 @@
 #include "git-compat-util.h"
 #include "config.h"
+#include "git-zlib.h"
+#include "gettext.h"
 #include "repo-settings.h"
 #include "repository.h"
 #include "midx.h"
@@ -29,6 +31,8 @@ static void repo_cfg_ulong(struct repository *r, const char *key, unsigned long 
 
 void prepare_repo_settings(struct repository *r)
 {
+	int pack_compression_seen = 0;
+	int zlib_compression_seen = 0;
 	int experimental;
 	int value;
 	const char *strval;
@@ -153,6 +157,56 @@ void prepare_repo_settings(struct repository *r)
 
 	if (!repo_config_get_ulong(r, "core.packedgitlimit", &ulongval))
 		r->settings.packed_git_limit = ulongval;
+
+	if (!repo_config_get_int(r, "core.loosecompression", &value)) {
+		if (value == -1)
+			value = Z_DEFAULT_COMPRESSION;
+		else if (value < 0 || value > Z_BEST_COMPRESSION)
+			die(_("bad zlib compression level %d"), value);
+		r->settings.zlib_compression_level = value;
+		zlib_compression_seen = 1;
+	}
+
+	if (!repo_config_get_int(r, "pack.compression", &value)) {
+		if (value == -1)
+			value = Z_DEFAULT_COMPRESSION;
+		else if (value < 0 || value > Z_BEST_COMPRESSION)
+			die(_("bad pack compression level %d"), value);
+		r->settings.pack_compression_level = value;
+		pack_compression_seen = 1;
+	}
+
+	if (!repo_config_get_int(r, "core.compression", &value)) {
+		if (value == -1)
+			value = Z_DEFAULT_COMPRESSION;
+		else if (value < 0 || value > Z_BEST_COMPRESSION)
+			die(_("bad zlib compression level %d"), value);
+		if (!zlib_compression_seen)
+			r->settings.zlib_compression_level = value;
+		if (!pack_compression_seen)
+			r->settings.pack_compression_level = value;
+	} else {
+		if (!zlib_compression_seen)
+			r->settings.zlib_compression_level = Z_BEST_SPEED;
+		if (!pack_compression_seen)
+			r->settings.pack_compression_level = Z_DEFAULT_COMPRESSION;
+	}
+
+	if (!repo_config_get_string_tmp(r, "core.createobject", &strval)) {
+		if (!strval)
+			die(_("missing value for '%s'"), strval);
+		if (!strcmp(strval, "rename"))
+			r->settings.object_creation_mode = OBJECT_CREATION_USES_RENAMES;
+		else if (!strcmp(strval, "link"))
+			r->settings.object_creation_mode = OBJECT_CREATION_USES_HARDLINKS;
+		else
+			die(_("invalid mode for object creation: %s"), strval);
+	} else {
+#ifndef OBJECT_CREATION_MODE
+# define OBJECT_CREATION_MODE OBJECT_CREATION_USES_HARDLINKS
+#endif
+		r->settings.object_creation_mode = OBJECT_CREATION_MODE;
+	}
 }
 
 void repo_settings_clear(struct repository *r)

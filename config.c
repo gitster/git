@@ -70,9 +70,6 @@ struct config_source {
 };
 #define CONFIG_SOURCE_INIT { 0 }
 
-static int pack_compression_seen;
-static int zlib_compression_seen;
-
 /*
  * Config that comes from trusted scopes, namely:
  * - CONFIG_SCOPE_SYSTEM (e.g. /etc/gitconfig)
@@ -1463,30 +1460,6 @@ static int git_default_core_config(const char *var, const char *value,
 	if (!strcmp(var, "core.disambiguate"))
 		return set_disambiguate_hint_config(var, value);
 
-	if (!strcmp(var, "core.loosecompression")) {
-		int level = git_config_int(var, value, ctx->kvi);
-		if (level == -1)
-			level = Z_DEFAULT_COMPRESSION;
-		else if (level < 0 || level > Z_BEST_COMPRESSION)
-			die(_("bad zlib compression level %d"), level);
-		zlib_compression_level = level;
-		zlib_compression_seen = 1;
-		return 0;
-	}
-
-	if (!strcmp(var, "core.compression")) {
-		int level = git_config_int(var, value, ctx->kvi);
-		if (level == -1)
-			level = Z_DEFAULT_COMPRESSION;
-		else if (level < 0 || level > Z_BEST_COMPRESSION)
-			die(_("bad zlib compression level %d"), level);
-		if (!zlib_compression_seen)
-			zlib_compression_level = level;
-		if (!pack_compression_seen)
-			pack_compression_level = level;
-		return 0;
-	}
-
 	if (!strcmp(var, "core.autocrlf")) {
 		if (value && !strcasecmp(value, "input")) {
 			auto_crlf = AUTO_CRLF_INPUT;
@@ -1591,18 +1564,6 @@ static int git_default_core_config(const char *var, const char *value,
 		if (fsync_object_files < 0)
 			warning(_("core.fsyncObjectFiles is deprecated; use core.fsync instead"));
 		fsync_object_files = git_config_bool(var, value);
-		return 0;
-	}
-
-	if (!strcmp(var, "core.createobject")) {
-		if (!value)
-			return config_error_nonbool(var);
-		if (!strcmp(value, "rename"))
-			object_creation_mode = OBJECT_CREATION_USES_RENAMES;
-		else if (!strcmp(value, "link"))
-			object_creation_mode = OBJECT_CREATION_USES_HARDLINKS;
-		else
-			die(_("invalid mode for object creation: %s"), value);
 		return 0;
 	}
 
@@ -1777,17 +1738,6 @@ int git_default_config(const char *var, const char *value,
 
 	if (!strcmp(var, "pack.packsizelimit")) {
 		pack_size_limit_cfg = git_config_ulong(var, value, ctx->kvi);
-		return 0;
-	}
-
-	if (!strcmp(var, "pack.compression")) {
-		int level = git_config_int(var, value, ctx->kvi);
-		if (level == -1)
-			level = Z_DEFAULT_COMPRESSION;
-		else if (level < 0 || level > Z_BEST_COMPRESSION)
-			die(_("bad pack compression level %d"), level);
-		pack_compression_level = level;
-		pack_compression_seen = 1;
 		return 0;
 	}
 

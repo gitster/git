@@ -16,7 +16,6 @@
 #include "convert.h"
 #include "environment.h"
 #include "gettext.h"
-#include "git-zlib.h"
 #include "repository.h"
 #include "config.h"
 #include "refs.h"
@@ -42,8 +41,6 @@ char *git_log_output_encoding;
 char *apply_default_whitespace;
 char *apply_default_ignorewhitespace;
 char *git_attributes_file;
-int zlib_compression_level = Z_BEST_SPEED;
-int pack_compression_level = Z_DEFAULT_COMPRESSION;
 int fsync_object_files = -1;
 int use_fsync = -1;
 enum fsync_method fsync_method = FSYNC_METHOD_DEFAULT;
@@ -58,10 +55,6 @@ char *check_roundtrip_encoding;
 enum branch_track git_branch_track = BRANCH_TRACK_REMOTE;
 enum rebase_setup_type autorebase = AUTOREBASE_NEVER;
 enum push_default_type push_default = PUSH_DEFAULT_UNSPECIFIED;
-#ifndef OBJECT_CREATION_MODE
-#define OBJECT_CREATION_MODE OBJECT_CREATION_USES_HARDLINKS
-#endif
-enum object_creation_mode object_creation_mode = OBJECT_CREATION_MODE;
 int grafts_keep_true_parents;
 int merge_log_config = -1;
 int precomposed_unicode = -1; /* see probe_utf8_pathname_composition() */
