@@ -4,7 +4,7 @@
 #include "config.h"
 #include "gettext.h"
 #include "hex.h"
-#include "object-store.h"
+#include "odb.h"
 #include "revision.h"
 #include "reachable.h"
 #include "wildmatch.h"
@@ -429,13 +429,13 @@ static int cmd_reflog_write(int argc, const char **argv, const char *prefix,
 	ret = get_oid_hex_algop(argv[1], &old_oid, repo->hash_algo);
 	if (ret)
 		die(_("invalid old object ID: '%s'"), argv[1]);
-	if (!is_null_oid(&old_oid) && !has_object(the_repository, &old_oid, 0))
+	if (!is_null_oid(&old_oid) && !odb_has_object(repo->objects, &old_oid, 0))
 		die(_("old object '%s' does not exist"), argv[1]);
 
 	ret = get_oid_hex_algop(argv[2], &new_oid, repo->hash_algo);
 	if (ret)
 		die(_("invalid new object ID: '%s'"), argv[2]);
-	if (!is_null_oid(&new_oid) && !has_object(the_repository, &new_oid, 0))
+	if (!is_null_oid(&new_oid) && !odb_has_object(repo->objects, &new_oid, 0))
 		die(_("new object '%s' does not exist"), argv[2]);
 
 	message = argv[3];
