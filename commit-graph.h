@@ -132,6 +132,14 @@ struct commit_graph *parse_commit_graph(struct repo_settings *s,
 					void *graph_map, size_t graph_size);
 
 /*
+ * Return 1 if commit_graph is non-NULL, and 0 otherwise.
+ *
+ * On the first invocation, this function attempts to load the commit
+ * graph if the_repository is configured to have one.
+ */
+int prepare_commit_graph(struct repository *r);
+
+/*
  * Return 1 if and only if the repository has a commit-graph
  * file and generation numbers are computed in that file.
  */
