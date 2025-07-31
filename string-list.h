@@ -285,6 +285,9 @@ int string_list_split_in_place(struct string_list *list, char *string,
 /* trim() resulting string piece before adding it to the list */
 #define STRING_LIST_SPLIT_TRIM 01
 
+/* omit adding empty string piece to the resulting list */
+#define STRING_LIST_SPLIT_NONEMPTY 02
+
 int string_list_split_f(struct string_list *, const char *string,
 			const char *delim, int maxsplit, unsigned flags);
 
