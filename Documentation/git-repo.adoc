@@ -1,0 +1,58 @@
+git-repo(1)
+===========
+
+NAME
+----
+git-repo - Retrieve information about a repository
+
+SYNOPSIS
+--------
+[synopsis]
+git repo info [<key>...]
+
+DESCRIPTION
+-----------
+This command retrieve repository level information.
+
+THIS COMMAND IS EXPERIMENTAL. THE BEHAVIOR MAY CHANGE.
+
+COMMANDS
+--------
+info [--format=<format>] [<key>...]::
+	Retrieve metadata-related information about the current repository. Only
+	the requested data will be returned based on their keys (see "INFO KEYS"
+	section below).
++
+The output format can be chosen through the flag `--format`. Two formats are
+supported:
++
+* `keyvalue`: output key-value pairs one per line using the `=` character as
+the delimiter between the key and the value. This is the default.
+
+* `null`: similar to `keyvalue`, but using a newline character as the delimiter
+between the key and the value and using a null character after each value.
+This format is better suited for being parsed by another applications than
+`keyvalue`.
+
+INFO KEYS
+---------
+
+The set of data that `git repo` can return is grouped into the following
+categories:
+
+`references`::
+Reference-related data:
+* `format`: the reference storage format
+
+`layout`::
+Information about the how the current repository is represented:
+* `bare`: `true` if this is a bare repository, otherwise `false`.
+* `shallow`: `true` if this is a shallow repository, otherwise `false`.
+
+SEE ALSO
+--------
+linkgit:git-rev-parse[1]
+
+GIT
+---
+Part of the linkgit:git[1] suite
