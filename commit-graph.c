@@ -740,13 +740,7 @@ static void prepare_commit_graph_one(struct repository *r,
 	r->objects->commit_graph = read_commit_graph_one(r, source);
 }
 
-/*
- * Return 1 if commit_graph is non-NULL, and 0 otherwise.
- *
- * On the first invocation, this function attempts to load the commit
- * graph if the_repository is configured to have one.
- */
-static int prepare_commit_graph(struct repository *r)
+int prepare_commit_graph(struct repository *r)
 {
 	struct odb_source *source;
 
