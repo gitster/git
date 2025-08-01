@@ -21,10 +21,17 @@ test_repo_info () {
 	key=$4
 	expected_value=$5
 
-	test_expect_success "$label" '
-		eval "$init_command $repo_name" &&
+	test_expect_success "keyvalue: $label" '
+		eval "$init_command keyvalue-$repo_name" &&
 		echo "$key=$expected_value" >expected &&
-		git -C $repo_name repo info "$key" >actual &&
+		git -C keyvalue-$repo_name repo info "$key" >actual &&
+		test_cmp expected actual
+	'
+
+	test_expect_success "nul: $label" '
+		eval "$init_command nul-$repo_name" &&
+		printf "%s\n%s\0" "$key" "$expected_value" >expected &&
+		git -C nul-$repo_name repo info --format=nul "$key" >actual &&
 		test_cmp expected actual
 	'
 }
@@ -45,6 +52,7 @@ test_repo_info 'shallow repository = false is retrieved correctly' '
 	git init' 'nonshallow' 'layout.shallow' 'false'
 
 test_repo_info 'shallow repository = true is retrieved correctly' '
+	test_when_finished "rm -rf remote" &&
 	git init remote &&
 	echo x >remote/x &&
 	git -C remote add x &&
@@ -77,6 +85,13 @@ test_expect_success 'output is returned correctly when two keys are requested' '
 	EOF
 	git init --ref-format=files two-keys &&
 	git -C two-keys repo info layout.bare references.format
+'
+
+test_expect_success 'git-repo-info aborts when requesting an invalid format' '
+	test_when_finished "rm -f err expected" &&
+	echo "fatal: invalid format '\'foo\''" >expected &&
+	test_must_fail git repo info --format=foo 2>err &&
+	test_cmp expected err
 '
 
 test_done
