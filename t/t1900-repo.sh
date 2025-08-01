@@ -35,6 +35,12 @@ test_repo_info 'ref format files is retrieved correctly' '
 test_repo_info 'ref format reftable is retrieved correctly' '
 	git init --ref-format=reftable' 'format-reftable' 'references.format' 'reftable'
 
+test_repo_info 'bare repository = false is retrieved correctly' '
+	git init' 'bare' 'layout.bare' 'false'
+
+test_repo_info 'bare repository = true is retrieved correctly' '
+	git init --bare' 'nonbare' 'layout.bare' 'true'
+
 test_expect_success 'git-repo-info fails if an invalid key is requested' '
 	echo "error: key '\'foo\'' not found" >expected_err &&
 	test_must_fail git repo info foo 2>actual_err &&
@@ -54,4 +60,12 @@ test_expect_success 'only one value is returned if the same key is requested twi
 	test_cmp expect actual
 '
 
+test_expect_success 'output is returned correctly when two keys are requested' '
+	cat >expect <<-\EOF &&
+	layout.bare=false
+	references.format=files
+	EOF
+	git init --ref-format=files two-keys &&
+	git -C two-keys repo info layout.bare references.format
+'
 test_done
