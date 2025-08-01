@@ -41,6 +41,16 @@ test_repo_info 'bare repository = false is retrieved correctly' '
 test_repo_info 'bare repository = true is retrieved correctly' '
 	git init --bare' 'nonbare' 'layout.bare' 'true'
 
+test_repo_info 'shallow repository = false is retrieved correctly' '
+	git init' 'nonshallow' 'layout.shallow' 'false'
+
+test_repo_info 'shallow repository = true is retrieved correctly' '
+	git init remote &&
+	echo x >remote/x &&
+	git -C remote add x &&
+	git -C remote commit -m x &&
+	git clone --depth 1 "file://$PWD/remote"' 'shallow' 'layout.shallow' 'true'
+
 test_expect_success 'git-repo-info fails if an invalid key is requested' '
 	echo "error: key '\'foo\'' not found" >expected_err &&
 	test_must_fail git repo info foo 2>actual_err &&
@@ -68,4 +78,5 @@ test_expect_success 'output is returned correctly when two keys are requested' '
 	git init --ref-format=files two-keys &&
 	git -C two-keys repo info layout.bare references.format
 '
+
 test_done
