@@ -471,15 +471,17 @@ static int write_zip_entry(struct archiver_args *args,
 
 			zstream.next_in = buf;
 			zstream.avail_in = readlen;
-			zstream.next_out = compressed;
-			zstream.avail_out = sizeof(compressed);
-			result = git_deflate(&zstream, 0);
-			if (result != Z_OK)
-				die(_("deflate error (%d)"), result);
-			out_len = zstream.next_out - compressed;
+			do {
+				zstream.next_out = compressed;
+				zstream.avail_out = sizeof(compressed);
+				result = git_deflate(&zstream, 0);
+				if (result != Z_OK)
+					die(_("deflate error (%d)"), result);
+				out_len = zstream.next_out - compressed;
 
-			write_or_die(1, compressed, out_len);
-			compressed_size += out_len;
+				write_or_die(1, compressed, out_len);
+				compressed_size += out_len;
+			} while (zstream.avail_out == 0);
 		}
 		close_istream(stream);
 		if (readlen)
