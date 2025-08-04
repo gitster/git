@@ -451,7 +451,7 @@ static int write_zip_entry(struct archiver_args *args,
 		unsigned char buf[STREAM_BUFFER_SIZE];
 		ssize_t readlen;
 		git_zstream zstream;
-		int result;
+		int result, flush;
 		size_t out_len;
 		unsigned char compressed[STREAM_BUFFER_SIZE * 2];
 
@@ -459,44 +459,37 @@ static int write_zip_entry(struct archiver_args *args,
 
 		compressed_size = 0;
 
-		for (;;) {
+		do {
 			readlen = read_istream(stream, buf, sizeof(buf));
-			if (readlen <= 0)
+			if (readlen < 0)
 				break;
 			crc = crc32(crc, buf, readlen);
-			if (is_binary == -1)
+			if ((is_binary == -1) && readlen)
 				is_binary = entry_is_binary(args->repo->index,
 							    path_without_prefix,
 							    buf, readlen);
 
+			flush = readlen ? Z_NO_FLUSH : Z_FINISH;
 			zstream.next_in = buf;
 			zstream.avail_in = readlen;
 			do {
 				zstream.next_out = compressed;
 				zstream.avail_out = sizeof(compressed);
-				result = git_deflate(&zstream, 0);
-				if (result != Z_OK)
+				result = git_deflate(&zstream, flush);
+				if ((result != Z_OK) && (result != Z_STREAM_END))
 					die(_("deflate error (%d)"), result);
 				out_len = zstream.next_out - compressed;
 
 				write_or_die(1, compressed, out_len);
 				compressed_size += out_len;
 			} while (zstream.avail_out == 0);
-		}
+		} while (flush != Z_FINISH);
+
 		close_istream(stream);
 		if (readlen)
 			return readlen;
 
-		zstream.next_in = buf;
-		zstream.avail_in = 0;
-		result = git_deflate(&zstream, Z_FINISH);
-		if (result != Z_STREAM_END)
-			die("deflate error (%d)", result);
-
 		git_deflate_end(&zstream);
-		out_len = zstream.next_out - compressed;
-		write_or_die(1, compressed, out_len);
-		compressed_size += out_len;
 		zip_offset += compressed_size;
 
 		write_zip_data_desc(size, compressed_size, crc);
