@@ -478,11 +478,8 @@ static int write_zip_entry(struct archiver_args *args,
 				die(_("deflate error (%d)"), result);
 			out_len = zstream.next_out - compressed;
 
-			if (out_len > 0) {
-				write_or_die(1, compressed, out_len);
-				compressed_size += out_len;
-			}
-
+			write_or_die(1, compressed, out_len);
+			compressed_size += out_len;
 		}
 		close_istream(stream);
 		if (readlen)
