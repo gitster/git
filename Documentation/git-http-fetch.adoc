@@ -25,7 +25,8 @@ commit-id::
         Either the hash or the filename under [URL]/refs/ to
         pull.
 
--a::-c::
+-a::
+-c::
 -t::
 	These options are ignored for historical reasons.
 
