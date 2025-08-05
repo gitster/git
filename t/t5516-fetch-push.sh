@@ -509,7 +509,7 @@ test_expect_success 'push ref expression with non-existent, incomplete dest' '
 
 '
 
-test_expect_failure 'push ref expression with non-existent oid src' '
+test_expect_success 'push ref expression with non-existent oid src' '
 
 	mk_test testrepo &&
 	test_must_fail git push testrepo $(test_oid 001):branch
