@@ -2874,6 +2874,17 @@ static int process_renames(struct merge_options *opt,
 		}
 
 		/*
+		 * Directory renames can result in rename-to-self, which we
+		 * want to skip so we don't mark oldpath for deletion.
+		 *
+		 * Note that we can avoid strcmp here because of prior
+		 * diligence in apply_directory_rename_modifications() to
+		 * ensure we reused existing paths from opt->priv->paths.
+		 */
+		if (oldpath == newpath)
+			continue;
+
+		/*
 		 * If pair->one->path isn't in opt->priv->paths, that means
 		 * that either directory rename detection removed that
 		 * path, or a parent directory of oldpath was resolved and
