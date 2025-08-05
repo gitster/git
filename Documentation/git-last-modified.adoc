@@ -22,24 +22,24 @@ THIS COMMAND IS EXPERIMENTAL. THE BEHAVIOR MAY CHANGE.
 OPTIONS
 -------
 
--r::
---recursive::
+`-r`::
+`--recursive`::
 	Instead of showing tree entries, step into subtrees and show all entries
 	inside them recursively.
 
--t::
---show-trees::
+`-t`::
+`--show-trees`::
 	Show tree entries even when recursing into them. It has no effect
 	without `--recursive`.
 
-<revision-range>::
+`<revision-range>`::
 	Only traverse commits in the specified revision range. When no
 	`<revision-range>` is specified, it defaults to `HEAD` (i.e. the whole
 	history leading to the current commit). For a complete list of ways to
 	spell `<revision-range>`, see the 'Specifying Ranges' section of
 	linkgit:gitrevisions[7].
 
-[--] <path>...::
+`[--] <path>...`::
 	For each _<path>_ given, the commit which last modified it is returned.
 	Without an optional path parameter, all files and subdirectories
 	in path traversal the are included in the output.
