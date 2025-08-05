@@ -17,7 +17,7 @@ git refs list [--count=<count>] [--shell|--perl|--python|--tcl]
 		   [--merged[=<object>]] [--no-merged[=<object>]]
 		   [--contains[=<object>]] [--no-contains[=<object>]]
 		   [(--exclude=<pattern>)...] [--start-after=<marker>]
-		   [ --stdin | <pattern>... ]
+		   [ --stdin | (<pattern>...)]
 
 DESCRIPTION
 -----------
