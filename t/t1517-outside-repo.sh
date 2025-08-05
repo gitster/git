@@ -123,8 +123,18 @@ do
 	*)
 		expect_outcome=expect_success ;;
 	esac
-	test_$expect_outcome "'git $cmd -h' outside a repository" '
+	case "$cmd" in
+	instaweb)
+		prereq=PERL ;;
+	*)
+		prereq= ;;
+	esac
+	test_$expect_outcome $prereq "'git $cmd -h' outside a repository" '
 		test_expect_code 129 nongit git $cmd -h >usage &&
+		test_grep "[Uu]sage: git $cmd " usage
+	'
+	test_$expect_outcome $prereq "'git $cmd --help-all' outside a repository" '
+		test_expect_code 129 nongit git $cmd --help-all >usage &&
 		test_grep "[Uu]sage: git $cmd " usage
 	'
 done
