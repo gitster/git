@@ -160,6 +160,9 @@ static void xdl_parse_lines(mmfile_t *mf, long narec, xdfile_t *xdf) {
 }
 
 
+extern u64 xxh3_64(u8 const* ptr, usize size);
+
+
 static int xdl_prepare_ctx(unsigned int pass, mmfile_t *mf, long narec, xpparam_t const *xpp,
 			   xdlclassifier_t *cf, xdfile_t *xdf) {
 	unsigned long *ha;
@@ -175,12 +178,24 @@ static int xdl_prepare_ctx(unsigned int pass, mmfile_t *mf, long narec, xpparam_
 
 	xdl_parse_lines(mf, narec, xdf);
 
+	if ((xpp->flags & XDF_WHITESPACE_FLAGS) == 0) {
+		for (usize i = 0; i < (usize) xdf->nrec; i++) {
+			xrecord_t *rec = xdf->recs[i];
+			rec->ha = xxh3_64(rec->ptr, rec->size);
+		}
+	} else {
+		for (usize i = 0; i < (usize) xdf->nrec; i++) {
+			xrecord_t *rec = xdf->recs[i];
+			char const* dump = (char const*) rec->ptr;
+			rec->ha = xdl_hash_record(&dump, (char const*) (rec->ptr + rec->size), xpp->flags);
+		}
+	}
+
 	for (usize i = 0; i < (usize) xdf->nrec; i++) {
 		xrecord_t *rec = xdf->recs[i];
-		char const* dump = (char const*) rec->ptr;
-		rec->ha = xdl_hash_record(&dump, (char const*) (rec->ptr + rec->size), xpp->flags);
 		xdl_classify_record(pass, cf, rec);
 	}
+
 
 
 	if (!XDL_CALLOC_ARRAY(rchg, xdf->nrec + 2))
