@@ -277,8 +277,16 @@ else
   rustflags = '-Aunused_imports -Adead_code -C debuginfo=2 -C opt-level=1 -C force-frame-pointers=yes'
 endif
 
+compiler = meson.get_compiler('c')
+
+if compiler.get_id() == 'msvc'
+  xdiff_lib_filename = 'xdiff.lib'
+else
+  xdiff_lib_filename = 'libxdiff.a'
+endif
+
 rust_build_xdiff = custom_target('rust_build_xdiff',
-  output: 'libxdiff.a',
+  output: xdiff_lib_filename,
   build_by_default: true,
   build_always_stale: true,
   command: [
@@ -287,8 +295,6 @@ rust_build_xdiff = custom_target('rust_build_xdiff',
   ],
   install: false,
 )
-
-compiler = meson.get_compiler('c')
 
 libgit_sources = [
   'abspath.c',

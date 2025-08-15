@@ -44,7 +44,12 @@ fi
 
 cd $dir_rust && cargo clean && pwd && cargo build -p $crate $rust_args; cd ..
 
-libfile="lib${crate}.a"
+if grep x86_64-pc-windows-msvc rust/target/.rustc_info.json
+then
+  libfile="${crate}.lib"
+else
+  libfile="lib${crate}.a"
+fi
 dst=$dir_build/$libfile
 
 if [ "$dir_git_root" != "$dir_build" ]; then
