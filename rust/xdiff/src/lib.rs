@@ -15,12 +15,6 @@ pub const XDF_WHITESPACE_FLAGS: u64 = XDF_IGNORE_WHITESPACE |
 
 
 #[no_mangle]
-unsafe extern "C" fn xxh3_64(ptr: *const u8, size: usize) -> u64 {
-    let slice = std::slice::from_raw_parts(ptr, size);
-    xxhash_rust::xxh3::xxh3_64(slice)
-}
-
-#[no_mangle]
 unsafe extern "C" fn xdl_line_hash(ptr: *const u8, size: usize, flags: u64) -> u64 {
     let line = std::slice::from_raw_parts(ptr, size);
 

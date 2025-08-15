@@ -33,8 +33,8 @@
 typedef struct s_xdlclass {
 	struct s_xdlclass *next;
 	u64 ha;
-	char const *line;
-	long size;
+	u8 const *line;
+	usize size;
 	long idx;
 	long len1, len2;
 } xdlclass_t;
@@ -93,15 +93,15 @@ static void xdl_free_classifier(xdlclassifier_t *cf) {
 
 static int xdl_classify_record(unsigned int pass, xdlclassifier_t *cf, xrecord_t *rec) {
 	long hi;
-	char const *line;
+	u8 const *line;
 	xdlclass_t *rcrec;
 
-	line = (char const*) rec->ptr;
+	line = rec->ptr;
 	hi = (long) XDL_HASHLONG(rec->ha, cf->hbits);
 	for (rcrec = cf->rchash[hi]; rcrec; rcrec = rcrec->next)
 		if (rcrec->ha == rec->ha &&
-				xdl_recmatch(rcrec->line, rcrec->size,
-					(const char*) rec->ptr, rec->size, cf->flags))
+				xdl_line_equal(rcrec->line, rcrec->size,
+					rec->ptr, rec->size, cf->flags))
 			break;
 
 	if (!rcrec) {
@@ -160,9 +160,6 @@ static void xdl_parse_lines(mmfile_t *mf, long narec, xdfile_t *xdf) {
 }
 
 
-extern u64 xxh3_64(u8 const* ptr, usize size);
-
-
 static int xdl_prepare_ctx(unsigned int pass, mmfile_t *mf, long narec, xpparam_t const *xpp,
 			   xdlclassifier_t *cf, xdfile_t *xdf) {
 	unsigned long *ha;
@@ -178,21 +175,9 @@ static int xdl_prepare_ctx(unsigned int pass, mmfile_t *mf, long narec, xpparam_
 
 	xdl_parse_lines(mf, narec, xdf);
 
-	if ((xpp->flags & XDF_WHITESPACE_FLAGS) == 0) {
-		for (usize i = 0; i < (usize) xdf->nrec; i++) {
-			xrecord_t *rec = xdf->recs[i];
-			rec->ha = xxh3_64(rec->ptr, rec->size);
-		}
-	} else {
-		for (usize i = 0; i < (usize) xdf->nrec; i++) {
-			xrecord_t *rec = xdf->recs[i];
-			char const* dump = (char const*) rec->ptr;
-			rec->ha = xdl_hash_record(&dump, (char const*) (rec->ptr + rec->size), xpp->flags);
-		}
-	}
-
 	for (usize i = 0; i < (usize) xdf->nrec; i++) {
 		xrecord_t *rec = xdf->recs[i];
+		rec->ha = xdl_line_hash(rec->ptr, rec->size, xpp->flags);
 		xdl_classify_record(pass, cf, rec);
 	}
 

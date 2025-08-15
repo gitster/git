@@ -101,8 +101,8 @@ static int xdl_merge_cmp_lines(xdfenv_t *xe1, int i1, xdfenv_t *xe2, int i2,
 	xrecord_t **rec2 = xe2->xdf2.recs + i2;
 
 	for (i = 0; i < line_count; i++) {
-		int result = xdl_recmatch((const char*) rec1[i]->ptr, rec1[i]->size,
-			(const char*) rec2[i]->ptr, rec2[i]->size, flags);
+		bool result = xdl_line_equal(rec1[i]->ptr, rec1[i]->size,
+			rec2[i]->ptr, rec2[i]->size, flags);
 		if (!result)
 			return -1;
 	}
@@ -324,8 +324,8 @@ static int xdl_fill_merge_buffer(xdfenv_t *xe1, const char *name1,
 
 static int recmatch(xrecord_t *rec1, xrecord_t *rec2, unsigned long flags)
 {
-	return xdl_recmatch((char const*) rec1->ptr, rec1->size,
-			    (char const*) rec2->ptr, rec2->size, flags);
+	return xdl_line_equal(rec1->ptr, rec1->size,
+			    rec2->ptr, rec2->size, flags);
 }
 
 /*
