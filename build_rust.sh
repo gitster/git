@@ -1,13 +1,8 @@
 #!/bin/sh
 
-if [ -z "$CARGO_HOME" ]; then
-  export CARGO_HOME=$HOME/.cargo
-  echo >&2 "::warning:: CARGO_HOME is not set"
-fi
-echo "CARGO_HOME=$CARGO_HOME"
 
-rustc -vV
-cargo --version
+rustc -vV || exit $?
+cargo --version || exit $?
 
 dir_git_root=${0%/*}
 dir_build=$1
@@ -55,7 +50,7 @@ dst=$dir_build/$libfile
 if [ "$dir_git_root" != "$dir_build" ]; then
   src=$dir_rust/target/$rust_target/$libfile
   if [ ! -f $src ]; then
-    echo >&2 "::error:: cannot find path of static library"
+    echo >&2 "::error:: cannot find path of static library $src is not a file or does not exist"
     exit 5
   fi
 

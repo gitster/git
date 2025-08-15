@@ -4,7 +4,6 @@ on: [push, pull_request]
 
 env:
   DEVELOPER: 1
-  RUST_VERSION: 1.87.0
 
 # If more than one workflow run is triggered for the very same commit hash
 # (which happens when multiple branches pointing to the same commit), only
@@ -27,6 +26,12 @@ jobs:
     outputs:
       enabled: ${{ steps.check-ref.outputs.enabled }}${{ steps.skip-if-redundant.outputs.enabled }}
       skip_concurrent: ${{ steps.check-ref.outputs.skip_concurrent }}
+      rust_version_minimum: 1.61.0
+      rust_version_windows: 1.78.0
+      rust_version_musl: 1.72.0
+      ## the rust target is inferred by rustup unless specified
+      rust_target_windows: x86_64-pc-windows-gnu
+      rust_target_32bit_linux: i686-unknown-linux-gnu
     steps:
       - name: try to clone ci-config branch
         run: |
@@ -123,11 +128,19 @@ jobs:
           /c/Program\ Files/Git/mingw64/bin/curl -Lo libuserenv.a \
             https://github.com/git-for-windows/git-sdk-64/raw/HEAD/mingw64/lib/libuserenv.a
         }
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ needs.ci-config.outputs.rust_version_windows }}
+        target: ${{ needs.ci-config.outputs.rust_target_windows }}
+        profile: minimal
+        override: true
     - name: build
       shell: bash
       env:
         HOME: ${{runner.workspace}}
         NO_PERL: 1
+        CARGO_HOME: "/c/Users/runneradmin/.cargo"
       run: . /etc/profile && ci/make-test-artifacts.sh artifacts
     - name: zip up tracked files
       run: git archive -o artifacts/tracked.tar.gz HEAD
@@ -269,6 +282,13 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - uses: actions/setup-python@v5
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ needs.ci-config.outputs.rust_version_windows }}
+        target: ${{ needs.ci-config.outputs.rust_target_windows }}
+        profile: minimal
+        override: true
     - name: Set up dependencies
       shell: pwsh
       run: pip install meson ninja
@@ -342,6 +362,12 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - run: ci/install-dependencies.sh
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ needs.ci-config.outputs.rust_version_minimum }}
+        profile: minimal
+        override: true
     - run: ci/run-build-and-tests.sh
     - name: print test failures
       if: failure() && env.FAILED_TEST_ARTIFACTS != ''
@@ -402,9 +428,11 @@ jobs:
           cc: gcc
         - jobname: linux-musl-meson
           image: alpine:latest
+          rust_version_override: ${{ needs.ci-config.outputs.rust_version_musl }}
         # Supported until 2025-04-02.
         - jobname: linux32
           image: i386/ubuntu:focal
+          rust_target_override: ${{ needs.ci-config.outputs.rust_target_32bit_linux }}
         - jobname: pedantic
           image: fedora:latest
         # A RHEL 8 compatible distro.  Supported until 2029-05-31.
@@ -417,7 +445,11 @@ jobs:
       jobname: ${{matrix.vector.jobname}}
       CC: ${{matrix.vector.cc}}
       CI_JOB_IMAGE: ${{matrix.vector.image}}
+      CI_IS_DOCKER: "true"
       CUSTOM_PATH: /custom
+      RUST_VERSION: ${{ matrix.vector.rust_version_override || needs.ci-config.outputs.rust_version_minimum }}
+      RUST_TARGET: ${{ matrix.vector.rust_target_override || '' }}
+      CARGO_HOME: /home/builder/.cargo
     runs-on: ubuntu-latest
     container: ${{matrix.vector.image}}
     steps:

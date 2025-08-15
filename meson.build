@@ -293,6 +293,7 @@ rust_build_xdiff = custom_target('rust_build_xdiff',
     meson.project_source_root() / 'build_rust.sh',
     meson.current_build_dir(), rust_target, 'xdiff',
   ],
+  env: script_environment,
   install: false,
 )
 

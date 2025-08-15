@@ -5,10 +5,12 @@
 
 . ${0%/*}/lib.sh
 
-## install rust per user rather than system wide
-. ${0%/*}/install-rust.sh
+## actions-rs/toolchain@v1 doesn't work for docker targets.
+if [ "$CI_IS_DOCKER" = "true" ]; then
+  . ${0%/*}/install-rust.sh
+fi
 
-rustc -vV
+rustc -vV || exit $?
 cargo --version || exit $?
 
 run_tests=t
