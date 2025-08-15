@@ -33,6 +33,18 @@ impl<'a> Iterator for WhitespaceIter<'a> {
             return None;
         }
 
+        // optimize case where --ignore-cr-at-eol is the only whitespace flag
+        if (self.flags & XDF_WHITESPACE_FLAGS) == XDF_IGNORE_CR_AT_EOL {
+            if self.index == 0 && self.line.ends_with(b"\r\n") {
+                self.index = self.line.len() - 1;
+                return Some(&self.line[..self.line.len() - 2])
+            } else {
+                let off = self.index;
+                self.index = self.line.len();
+                return Some(&self.line[off..])
+            }
+        }
+
         loop {
             let start = self.index;
             if self.index == self.line.len() {
@@ -170,6 +182,28 @@ pub fn line_hash(line: &[u8], flags: u64) -> u64 {
 pub fn line_equal(lhs: &[u8], rhs: &[u8], flags: u64) -> bool {
     if (flags & XDF_WHITESPACE_FLAGS) == 0 {
         return lhs == rhs;
+    }
+
+    // optimize case where --ignore-cr-at-eol is the only whitespace flag
+    if (flags & XDF_WHITESPACE_FLAGS) == XDF_IGNORE_CR_AT_EOL {
+        let a = lhs.ends_with(b"\r\n");
+        let b = rhs.ends_with(b"\r\n");
+
+        if !(a ^ b) {
+            return lhs == rhs;
+        } else {
+            let lm = if a { 1 } else { 0 };
+            let rm = if b { 1 } else { 0 };
+
+            if lhs.len() - lm != rhs.len() - rm {
+                return false;
+            } else if &lhs[..lhs.len() - 1 - lm] != &rhs[..rhs.len() - 1 - rm] {
+                return false;
+            } else if lhs[lhs.len() - 1] != rhs[rhs.len() - 1] {
+                return false;
+            }
+            return true;
+        }
     }
 
     let lhs_it = WhitespaceIter::new(lhs, flags);
