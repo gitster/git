@@ -28,6 +28,9 @@ if [ "$BITNESS" = "32" ]; then
   $CARGO_HOME/bin/rustup default --force-non-host $RUST_VERSION || exit $?
 else
   $CARGO_HOME/bin/rustup default $RUST_VERSION || exit $?
+  if [ "$CI_OS_NAME" = "windows" ]; then
+    $CARGO_HOME/bin/rustup target add x86_64-pc-windows-gnu || exit $?
+  fi
 fi
 
 . $CARGO_HOME/env
