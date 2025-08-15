@@ -71,9 +71,8 @@ static int read_directory_contents(const char *path, struct string_list *list,
 }
 
 /*
- * This should be "(standard input)" or something, but it will
- * probably expose many more breakages in the way no-index code
- * is bolted onto the diff callchain.
+ * stdin should be spelled as "-"; if you have path that is "-",
+ * spell it as "./-".
  */
 static const char file_from_standard_input[] = "-";
 
@@ -97,7 +96,7 @@ static int get_mode(const char *path, int *mode, enum special *special)
 	} else if (!strcasecmp(path, "nul")) {
 		*mode = 0;
 #endif
-	} else if (path == file_from_standard_input) {
+	} else if (!strcmp(path, file_from_standard_input)) {
 		*mode = create_ce_mode(0666);
 		*special = SPECIAL_STDIN;
 	} else if (lstat(path, &st)) {
@@ -305,18 +304,18 @@ static int fixup_paths(const char **path, struct strbuf *replacement)
 	unsigned int isdir0 = 0, isdir1 = 0;
 	unsigned int ispipe0 = 0, ispipe1 = 0;
 
-	if (path[0] != file_from_standard_input && !stat(path[0], &st)) {
+	if (strcmp(path[0], file_from_standard_input) && !stat(path[0], &st)) {
 		isdir0 = S_ISDIR(st.st_mode);
 		ispipe0 = S_ISFIFO(st.st_mode);
 	}
 
-	if (path[1] != file_from_standard_input && !stat(path[1], &st)) {
+	if (strcmp(path[1], file_from_standard_input) && !stat(path[1], &st)) {
 		isdir1 = S_ISDIR(st.st_mode);
 		ispipe1 = S_ISFIFO(st.st_mode);
 	}
 
-	if ((path[0] == file_from_standard_input && isdir1) ||
-	    (isdir0 && path[1] == file_from_standard_input))
+	if ((isdir1 && !strcmp(path[0], file_from_standard_input)) ||
+	    (isdir0 && !strcmp(path[1], file_from_standard_input)))
 		die(_("cannot compare stdin to a directory"));
 
 	if ((isdir0 && ispipe1) || (ispipe0 && isdir1))
@@ -349,9 +348,7 @@ int diff_no_index(struct rev_info *revs, const struct git_hash_algo *algop,
 	int i, no_index, skip1 = 0, skip2 = 0;
 	int ret = 1;
 	const char *paths[2];
-	char *to_free[ARRAY_SIZE(paths)] = { 0 };
 	struct strbuf replacement = STRBUF_INIT;
-	const char *prefix = revs->prefix;
 	struct option no_index_options[] = {
 		OPT_BOOL_F(0, "no-index", &no_index, "",
 			   PARSE_OPT_NONEG | PARSE_OPT_HIDDEN),
@@ -359,8 +356,11 @@ int diff_no_index(struct rev_info *revs, const struct git_hash_algo *algop,
 	};
 	struct option *options;
 
+	if (revs->prefix)
+		BUG("caller of diff_no_index() forgot to undo setup");
+
 	options = add_diff_options(no_index_options, &revs->diffopt);
-	argc = parse_options(argc, argv, revs->prefix, options,
+	argc = parse_options(argc, argv, NULL, options,
 			     diff_no_index_usage, 0);
 	if (argc < 2) {
 		if (implicit_no_index)
@@ -368,18 +368,8 @@ int diff_no_index(struct rev_info *revs, const struct git_hash_algo *algop,
 				  "compare two paths outside a working tree"));
 		usage_with_options(diff_no_index_usage, options);
 	}
-	for (i = 0; i < 2; i++) {
-		const char *p = argv[i];
-		if (!strcmp(p, "-"))
-			/*
-			 * stdin should be spelled as "-"; if you have
-			 * path that is "-", spell it as "./-".
-			 */
-			p = file_from_standard_input;
-		else if (prefix)
-			p = to_free[i] = prefix_filename(prefix, p);
-		paths[i] = p;
-	}
+	for (i = 0; i < 2; i++)
+		paths[i] = argv[i];
 
 	if (fixup_paths(paths, &replacement)) {
 		parse_pathspec(&pathspec, PATHSPEC_FROMTOP | PATHSPEC_ATTR,
@@ -406,7 +396,7 @@ int diff_no_index(struct rev_info *revs, const struct git_hash_algo *algop,
 	revs->diffopt.flags.no_index = 1;
 
 	revs->diffopt.flags.relative_name = 1;
-	revs->diffopt.prefix = prefix;
+	revs->diffopt.prefix = NULL;
 
 	revs->max_count = -2;
 	diff_setup_done(&revs->diffopt);
@@ -428,8 +418,6 @@ int diff_no_index(struct rev_info *revs, const struct git_hash_algo *algop,
 	ret = diff_result_code(revs);
 
 out:
-	for (i = 0; i < ARRAY_SIZE(to_free); i++)
-		free(to_free[i]);
 	strbuf_release(&replacement);
 	if (ps)
 		clear_pathspec(ps);
