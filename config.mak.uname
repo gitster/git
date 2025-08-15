@@ -765,6 +765,8 @@ ifeq ($(uname_S),MINGW)
 
 	export CARGO_BUILD_TARGET
 	RUST_TARGET_DIR = rust/target/$(CARGO_BUILD_TARGET)/$(RUST_BUILD_MODE)
+	# Unfortunately now needed because of Rust
+	EXTLIBS += -luserenv
 
 	CC = gcc
 	COMPAT_CFLAGS += -D__USE_MINGW_ANSI_STDIO=0 -DDETECT_MSYS_TTY \
