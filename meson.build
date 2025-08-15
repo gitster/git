@@ -277,25 +277,16 @@ else
   rustflags = '-Aunused_imports -Adead_code -C debuginfo=2 -C opt-level=1 -C force-frame-pointers=yes'
 endif
 
-
-rust_leaf = custom_target('rust_leaf',
+rust_build_xdiff = custom_target('rust_build_xdiff',
   output: 'libxdiff.a',
   build_by_default: true,
   build_always_stale: true,
-  command: ['cargo', 'build',
-            '--manifest-path', meson.project_source_root() / 'rust/Cargo.toml'
-  ] + rust_args,
-  env: {
-    'RUSTFLAGS': rustflags,
-  },
+  command: [
+    meson.project_source_root() / 'build_rust.sh',
+    meson.current_build_dir(), rust_target, 'xdiff',
+  ],
   install: false,
 )
-
-rust_xdiff_dep = declare_dependency(
-  link_args: ['-L' + meson.project_source_root() / 'rust/target' / rust_target, '-lxdiff'],
-#  include_directories: include_directories('xdiff/include'),  # Adjust if you expose headers
-)
-
 
 compiler = meson.get_compiler('c')
 
@@ -1731,17 +1722,18 @@ version_def_h = custom_target(
 )
 libgit_sources += version_def_h
 
-libgit_dependencies += rust_xdiff_dep
-
 libgit = declare_dependency(
-  link_with: static_library('git',
-    sources: libgit_sources,
-    c_args: libgit_c_args + [
-      '-DGIT_VERSION_H="' + version_def_h.full_path() + '"',
-    ],
-    dependencies: libgit_dependencies,
-    include_directories: libgit_include_directories,
-  ),
+  link_with: [
+    static_library('git',
+      sources: libgit_sources,
+      c_args: libgit_c_args + [
+        '-DGIT_VERSION_H="' + version_def_h.full_path() + '"',
+      ],
+      dependencies: libgit_dependencies,
+      include_directories: libgit_include_directories,
+    ),
+    rust_build_xdiff,
+  ],
   compile_args: libgit_c_args,
   dependencies: libgit_dependencies,
   include_directories: libgit_include_directories,
