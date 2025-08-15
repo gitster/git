@@ -1,4 +1,5 @@
 use crate::*;
+use xxhash_rust::xxh3::xxh3_64;
 
 pub(crate) fn xdl_isspace(v: u8) -> bool {
     match v {
@@ -150,6 +151,33 @@ where
 
     run_option0.is_none() && run_option1.is_none()
 }
+
+
+pub fn line_hash(line: &[u8], flags: u64) -> u64 {
+    if (flags & XDF_WHITESPACE_FLAGS) == 0 {
+        return xxh3_64(line);
+    }
+
+    let mut hasher = Xxh3Default::new();
+    for chunk in WhitespaceIter::new(line, flags) {
+        hasher.update(chunk);
+    }
+
+    hasher.finish()
+}
+
+
+pub fn line_equal(lhs: &[u8], rhs: &[u8], flags: u64) -> bool {
+    if (flags & XDF_WHITESPACE_FLAGS) == 0 {
+        return lhs == rhs;
+    }
+
+    let lhs_it = WhitespaceIter::new(lhs, flags);
+    let rhs_it = WhitespaceIter::new(rhs, flags);
+
+    chunked_iter_equal(lhs_it, rhs_it)
+}
+
 
 #[cfg(test)]
 mod tests {
