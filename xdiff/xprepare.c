@@ -129,13 +129,39 @@ static int xdl_classify_record(unsigned int pass, xdlclassifier_t *cf, xrecord_t
 }
 
 
+static void xdl_parse_lines(mmfile_t *mf, long narec, xdfile_t *xdf) {
+	u8 const* ptr = (u8 const*) mf->ptr;
+	usize len = (usize) mf->size;
+
+	xdf->recs = NULL;
+	xdf->nrec = 0;
+	XDL_ALLOC_ARRAY(xdf->recs, narec);
+
+	while (len > 0) {
+		xrecord_t *rec = NULL;
+		usize length;
+		u8 const* result = memchr(ptr, '\n', len);
+		if (result) {
+			length = result - ptr + 1;
+		} else {
+			length = len;
+		}
+		if (XDL_ALLOC_GROW(xdf->recs, xdf->nrec + 1, narec))
+			die("XDL_ALLOC_GROW failed");
+		rec = xdl_cha_alloc(&xdf->rcha);
+		rec->ptr = ptr;
+		rec->size = length;
+		rec->ha = 0;
+		xdf->recs[xdf->nrec++] = rec;
+		ptr += length;
+		len -= length;
+	}
+
+}
+
+
 static int xdl_prepare_ctx(unsigned int pass, mmfile_t *mf, long narec, xpparam_t const *xpp,
 			   xdlclassifier_t *cf, xdfile_t *xdf) {
-	long nrec, bsize;
-	unsigned long hav;
-	char const *blk, *cur, *top, *prev;
-	xrecord_t *crec;
-	xrecord_t **recs;
 	unsigned long *ha;
 	char *rchg;
 	long *rindex;
@@ -143,50 +169,37 @@ static int xdl_prepare_ctx(unsigned int pass, mmfile_t *mf, long narec, xpparam_
 	ha = NULL;
 	rindex = NULL;
 	rchg = NULL;
-	recs = NULL;
 
 	if (xdl_cha_init(&xdf->rcha, sizeof(xrecord_t), narec / 4 + 1) < 0)
 		goto abort;
-	if (!XDL_ALLOC_ARRAY(recs, narec))
-		goto abort;
 
-	nrec = 0;
-	if ((cur = blk = xdl_mmfile_first(mf, &bsize))) {
-		for (top = blk + bsize; cur < top; ) {
-			prev = cur;
-			hav = xdl_hash_record(&cur, top, xpp->flags);
-			if (XDL_ALLOC_GROW(recs, nrec + 1, narec))
-				goto abort;
-			if (!(crec = xdl_cha_alloc(&xdf->rcha)))
-				goto abort;
-			crec->ptr = (u8 const*) prev;
-			crec->size = (long) (cur - prev);
-			crec->ha = hav;
-			recs[nrec++] = crec;
-			if (xdl_classify_record(pass, cf, crec) < 0)
-				goto abort;
-		}
+	xdl_parse_lines(mf, narec, xdf);
+
+	for (usize i = 0; i < (usize) xdf->nrec; i++) {
+		xrecord_t *rec = xdf->recs[i];
+		char const* dump = (char const*) rec->ptr;
+		rec->ha = xdl_hash_record(&dump, (char const*) (rec->ptr + rec->size), xpp->flags);
+		xdl_classify_record(pass, cf, rec);
 	}
 
-	if (!XDL_CALLOC_ARRAY(rchg, nrec + 2))
+
+	if (!XDL_CALLOC_ARRAY(rchg, xdf->nrec + 2))
 		goto abort;
 
 	if ((XDF_DIFF_ALG(xpp->flags) != XDF_PATIENCE_DIFF) &&
 	    (XDF_DIFF_ALG(xpp->flags) != XDF_HISTOGRAM_DIFF)) {
-		if (!XDL_ALLOC_ARRAY(rindex, nrec + 1))
+		if (!XDL_ALLOC_ARRAY(rindex, xdf->nrec + 1))
 			goto abort;
-		if (!XDL_ALLOC_ARRAY(ha, nrec + 1))
+		if (!XDL_ALLOC_ARRAY(ha, xdf->nrec + 1))
 			goto abort;
 	}
 
-	xdf->nrec = nrec;
-	xdf->recs = recs;
 	xdf->rchg = rchg + 1;
 	xdf->rindex = rindex;
 	xdf->nreff = 0;
 	xdf->ha = ha;
 	xdf->dstart = 0;
-	xdf->dend = nrec - 1;
+	xdf->dend = xdf->nrec - 1;
 
 	return 0;
 
@@ -194,7 +207,7 @@ abort:
 	xdl_free(ha);
 	xdl_free(rindex);
 	xdl_free(rchg);
-	xdl_free(recs);
+	xdl_free(xdf->recs);
 	xdl_cha_free(&xdf->rcha);
 	return -1;
 }
