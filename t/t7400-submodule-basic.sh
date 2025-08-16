@@ -13,6 +13,7 @@ GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=main
 export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
 
 . ./test-lib.sh
+. "$TEST_DIRECTORY"/lib-verify-submodule-gitdir-path.sh
 
 test_expect_success 'setup - enable local submodules' '
 	git config --global protocol.file.allow always
@@ -1503,6 +1504,20 @@ test_expect_success 'submodule add fails when name is reused' '
 		test_must_fail git submodule add ../child2-origin child 2>err &&
 		test_grep "already used for" err
 	)
+'
+
+test_expect_success 'submodule helper gitdir config overrides' '
+	verify_submodule_gitdir_path test-submodule child submodules/child &&
+	(
+		cd test-submodule &&
+		git config submodule.child.gitdirpath ".git/submodules/custom-child"
+	) &&
+	verify_submodule_gitdir_path test-submodule child submodules/custom-child &&
+	(
+		cd test-submodule &&
+		git config --unset submodule.child.gitdirpath
+	) &&
+	verify_submodule_gitdir_path test-submodule child submodules/child
 '
 
 test_done

@@ -2611,6 +2611,17 @@ void submodule_name_to_gitdir(struct strbuf *buf, struct repository *r,
 	 * administrators can explicitly set. Nothing has been decided,
 	 * so for now, just append the name at the end of the path.
 	 */
+	char *gitdir_path, *key;
+
+	/* Allow config override. */
+	key = xstrfmt("submodule.%s.gitdirpath", submodule_name);
+	if (!repo_config_get_string(r, key, &gitdir_path)) {
+		strbuf_addstr(buf, gitdir_path);
+		free(key);
+		free(gitdir_path);
+		return;
+	}
+	free(key);
 
 	/* Legacy behavior: allow existing paths under modules/<name>. */
 	repo_git_path_append(r, buf, "modules/");
