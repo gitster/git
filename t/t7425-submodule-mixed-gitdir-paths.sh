@@ -198,7 +198,7 @@ test_expect_success 'submodule encoded name exceeds max name limit' '
 
 		# each "%" char encodes to "%25" (3 chars), ensure we exceed NAME_MAX
 		count=$((name_max + 10)) &&
-		longname=$(printf "%%%0.s" $(seq 1 $count)) &&
+		longname=$(test_seq -f "%%%0.s" 1 $count) &&
 
 		test_must_fail git submodule add ../new-sub "$longname"
 	)
