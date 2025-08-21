@@ -790,6 +790,7 @@ void packfile_store_add_pack(struct packfile_store *store,
 
 	hashmap_entry_init(&pack->packmap_ent, strhash(pack->pack_name));
 	hashmap_add(&store->map, &pack->packmap_ent);
+	list_add_tail(&pack->mru, &store->mru);
 }
 
 void (*report_garbage)(unsigned seen_bits, const char *path);
