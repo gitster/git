@@ -156,6 +156,12 @@ struct object_database *odb_new(struct repository *repo);
 void odb_clear(struct object_database *o);
 
 /*
+ * Clear caches, reload alternates and then reload object sources so that new
+ * objects may become accessible.
+ */
+void odb_reprepare(struct object_database *o);
+
+/*
  * Find source by its object directory path. Dies in case the source couldn't
  * be found.
  */
