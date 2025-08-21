@@ -267,7 +267,7 @@ static void collect_pack_filenames(struct existing_packs *existing,
 	struct packed_git *p;
 	struct strbuf buf = STRBUF_INIT;
 
-	for (p = get_all_packs(the_repository); p; p = p->next) {
+	for (p = packfile_store_get_packs(the_repository->objects->packfiles); p; p = p->next) {
 		int i;
 		const char *base;
 
@@ -499,7 +499,7 @@ static void init_pack_geometry(struct pack_geometry *geometry,
 	struct packed_git *p;
 	struct strbuf buf = STRBUF_INIT;
 
-	for (p = get_all_packs(the_repository); p; p = p->next) {
+	for (p = packfile_store_get_packs(the_repository->objects->packfiles); p; p = p->next) {
 		if (args->local && !p->pack_local)
 			/*
 			 * When asked to only repack local packfiles we skip
@@ -1140,7 +1140,7 @@ static void combine_small_cruft_packs(FILE *in, size_t combine_cruft_below_size,
 	struct strbuf buf = STRBUF_INIT;
 	size_t i;
 
-	for (p = get_all_packs(the_repository); p; p = p->next) {
+	for (p = packfile_store_get_packs(the_repository->objects->packfiles); p; p = p->next) {
 		if (!(p->is_cruft && p->pack_local))
 			continue;
 

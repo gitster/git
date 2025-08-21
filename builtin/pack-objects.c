@@ -3855,7 +3855,7 @@ static void read_packs_list_from_stdin(struct rev_info *revs)
 	string_list_sort(&exclude_packs);
 	string_list_remove_duplicates(&exclude_packs, 0);
 
-	for (p = get_all_packs(the_repository); p; p = p->next) {
+	for (p = packfile_store_get_packs(the_repository->objects->packfiles); p; p = p->next) {
 		const char *pack_name = pack_basename(p);
 
 		if ((item = string_list_lookup(&include_packs, pack_name)))
@@ -4105,7 +4105,7 @@ static void enumerate_and_traverse_cruft_objects(struct string_list *fresh_packs
 	 * Re-mark only the fresh packs as kept so that objects in
 	 * unknown packs do not halt the reachability traversal early.
 	 */
-	for (p = get_all_packs(the_repository); p; p = p->next)
+	for (p = packfile_store_get_packs(the_repository->objects->packfiles); p; p = p->next)
 		p->pack_keep_in_core = 0;
 	mark_pack_kept_in_core(fresh_packs, 1);
 
@@ -4142,7 +4142,7 @@ static void read_cruft_objects(void)
 	string_list_sort(&discard_packs);
 	string_list_sort(&fresh_packs);
 
-	for (p = get_all_packs(the_repository); p; p = p->next) {
+	for (p = packfile_store_get_packs(the_repository->objects->packfiles); p; p = p->next) {
 		const char *pack_name = pack_basename(p);
 		struct string_list_item *item;
 
@@ -4394,7 +4394,7 @@ static int has_sha1_pack_kept_or_nonlocal(const struct object_id *oid)
 	struct packed_git *p;
 
 	p = (last_found != (void *)1) ? last_found :
-					get_all_packs(the_repository);
+					packfile_store_get_packs(the_repository->objects->packfiles);
 
 	while (p) {
 		if ((!p->pack_local || p->pack_keep ||
@@ -4404,7 +4404,7 @@ static int has_sha1_pack_kept_or_nonlocal(const struct object_id *oid)
 			return 1;
 		}
 		if (p == last_found)
-			p = get_all_packs(the_repository);
+			p = packfile_store_get_packs(the_repository->objects->packfiles);
 		else
 			p = p->next;
 		if (p == last_found)
@@ -4441,7 +4441,7 @@ static void loosen_unused_packed_objects(void)
 	uint32_t loosened_objects_nr = 0;
 	struct object_id oid;
 
-	for (p = get_all_packs(the_repository); p; p = p->next) {
+	for (p = packfile_store_get_packs(the_repository->objects->packfiles); p; p = p->next) {
 		if (!p->pack_local || p->pack_keep || p->pack_keep_in_core)
 			continue;
 
@@ -4747,7 +4747,7 @@ static void add_extra_kept_packs(const struct string_list *names)
 	if (!names->nr)
 		return;
 
-	for (p = get_all_packs(the_repository); p; p = p->next) {
+	for (p = packfile_store_get_packs(the_repository->objects->packfiles); p; p = p->next) {
 		const char *name = basename(p->pack_name);
 		int i;
 
@@ -5186,7 +5186,7 @@ int cmd_pack_objects(int argc,
 	add_extra_kept_packs(&keep_pack_list);
 	if (ignore_packed_keep_on_disk) {
 		struct packed_git *p;
-		for (p = get_all_packs(the_repository); p; p = p->next)
+		for (p = packfile_store_get_packs(the_repository->objects->packfiles); p; p = p->next)
 			if (p->pack_local && p->pack_keep)
 				break;
 		if (!p) /* no keep-able packs found */
@@ -5199,7 +5199,7 @@ int cmd_pack_objects(int argc,
 		 * it also covers non-local objects
 		 */
 		struct packed_git *p;
-		for (p = get_all_packs(the_repository); p; p = p->next) {
+		for (p = packfile_store_get_packs(the_repository->objects->packfiles); p; p = p->next) {
 			if (!p->pack_local) {
 				have_non_local_packs = 1;
 				break;

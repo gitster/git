@@ -95,7 +95,7 @@ static void prepare_in_pack_by_idx(struct packing_data *pdata)
 	 * (i.e. in_pack_idx also zero) should return NULL.
 	 */
 	mapping[cnt++] = NULL;
-	for (p = get_all_packs(pdata->repo); p; p = p->next, cnt++) {
+	for (p = packfile_store_get_packs(pdata->repo->objects->packfiles); p; p = p->next, cnt++) {
 		if (cnt == nr) {
 			free(mapping);
 			return;

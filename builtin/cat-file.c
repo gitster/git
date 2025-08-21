@@ -854,7 +854,7 @@ static void batch_each_object(struct batch_options *opt,
 						 batch_one_object_bitmapped, &payload)) {
 		struct packed_git *pack;
 
-		for (pack = get_all_packs(the_repository); pack; pack = pack->next) {
+		for (pack = packfile_store_get_packs(the_repository->objects->packfiles); pack; pack = pack->next) {
 			if (bitmap_index_contains_pack(bitmap, pack) ||
 			    open_pack_index(pack))
 				continue;
