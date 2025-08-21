@@ -1004,7 +1004,7 @@ static void packfile_store_prepare_mru(struct packfile_store *store)
 		list_add_tail(&p->mru, &store->mru);
 }
 
-static void packfile_store_prepare(struct packfile_store *store)
+void packfile_store_prepare(struct packfile_store *store)
 {
 	struct odb_source *source;
 
@@ -1033,12 +1033,6 @@ struct packed_git *get_packed_git(struct repository *r)
 {
 	packfile_store_prepare(r->objects->packfiles);
 	return r->objects->packfiles->packs;
-}
-
-struct multi_pack_index *get_multi_pack_index(struct odb_source *source)
-{
-	packfile_store_prepare(source->odb->packfiles);
-	return source->midx;
 }
 
 struct packed_git *get_all_packs(struct repository *r)
