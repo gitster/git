@@ -64,6 +64,11 @@ struct packfile_store {
 	 */
 	struct packed_git *packs;
 
+	struct {
+		struct packed_git **packs;
+		unsigned flags;
+	} kept_cache;
+
 	/* A most-recently-used ordered version of the packs list. */
 	struct list_head mru;
 
