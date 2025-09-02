@@ -2,8 +2,12 @@
 
 test_description='submodules handle mixed legacy and new (encoded) style gitdir paths'
 
+export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
+GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=master
+
 . ./test-lib.sh
 . "$TEST_DIRECTORY"/lib-verify-submodule-gitdir-path.sh
+
 
 test_expect_success 'setup: allow file protocol' '
 	git config --global protocol.file.allow always
