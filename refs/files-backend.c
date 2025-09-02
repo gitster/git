@@ -776,6 +776,8 @@ retry:
 			goto retry;
 		} else {
 			unable_to_lock_message(ref_file.buf, myerr, err);
+			if (myerr == EEXIST)
+				ret = REF_TRANSACTION_ERROR_CREATE_EXISTS;
 			goto error_return;
 		}
 	}
