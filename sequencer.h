@@ -21,7 +21,8 @@ extern const char *rebase_resolvemsg;
 enum replay_action {
 	REPLAY_REVERT,
 	REPLAY_PICK,
-	REPLAY_INTERACTIVE_REBASE
+	REPLAY_INTERACTIVE_REBASE,
+	REPLAY_HISTORY_EDIT,
 };
 
 enum commit_msg_cleanup_mode {
