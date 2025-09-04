@@ -185,7 +185,7 @@ int write_commit_graph(struct odb_source *source,
 
 int verify_commit_graph(struct commit_graph *g, int flags);
 
-void close_commit_graph(struct object_database *);
+void close_commit_graph(struct odb_source *);
 void free_commit_graph(struct commit_graph *);
 
 /*

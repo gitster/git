@@ -63,6 +63,9 @@ struct odb_source {
 	 */
 	struct multi_pack_index *midx;
 
+	struct commit_graph *commit_graph;
+	bool commit_graph_attempted; /* if loading has been attempted */
+
 	/*
 	 * This is a temporary object store created by the tmp_objdir
 	 * facility. Disable ref updates since the objects in the store
@@ -119,9 +122,6 @@ struct object_database {
 	struct oidmap replace_map;
 	unsigned replace_map_initialized : 1;
 	pthread_mutex_t replace_mutex; /* protect object replace functions */
-
-	struct commit_graph *commit_graph;
-	unsigned commit_graph_attempted : 1; /* if loading has been attempted */
 
 	/*
 	 * private data

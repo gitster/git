@@ -721,11 +721,15 @@ static struct commit_graph *load_commit_graph_chain(struct odb_source *source)
 
 struct commit_graph *read_commit_graph_one(struct odb_source *source)
 {
-	struct commit_graph *g = load_commit_graph_v1(source);
+	struct commit_graph *g;
 
+	if (source->commit_graph_attempted)
+		return NULL;
+	source->commit_graph_attempted = true;
+
+	g = load_commit_graph_v1(source);
 	if (!g)
 		g = load_commit_graph_chain(source);
-
 	return g;
 }
 
@@ -737,6 +741,7 @@ struct commit_graph *read_commit_graph_one(struct odb_source *source)
  */
 static struct commit_graph *prepare_commit_graph(struct repository *r)
 {
+	bool all_attempted = true;
 	struct odb_source *source;
 
 	/*
@@ -749,9 +754,19 @@ static struct commit_graph *prepare_commit_graph(struct repository *r)
 	if (!r->gitdir || r->commit_graph_disabled)
 		return NULL;
 
-	if (r->objects->commit_graph_attempted)
-		return r->objects->commit_graph;
-	r->objects->commit_graph_attempted = 1;
+	odb_prepare_alternates(r->objects);
+	for (source = r->objects->sources; source; source = source->next) {
+		all_attempted &= source->commit_graph_attempted;
+		if (source->commit_graph)
+			return source->commit_graph;
+	}
+
+	/*
+	 * There is no point in re-trying to load commit graphs if we already
+	 * tried loading all of them beforehand.
+	 */
+	if (all_attempted)
+		return NULL;
 
 	prepare_repo_settings(r);
 
@@ -768,14 +783,16 @@ static struct commit_graph *prepare_commit_graph(struct repository *r)
 	if (!commit_graph_compatible(r))
 		return NULL;
 
-	odb_prepare_alternates(r->objects);
 	for (source = r->objects->sources; source; source = source->next) {
-		r->objects->commit_graph = read_commit_graph_one(source);
-		if (r->objects->commit_graph)
-			break;
+		if (source->commit_graph_attempted)
+			continue;
+
+		source->commit_graph = read_commit_graph_one(source);
+		if (source->commit_graph)
+			return source->commit_graph;
 	}
 
-	return r->objects->commit_graph;
+	return NULL;
 }
 
 int generation_numbers_enabled(struct repository *r)
@@ -806,7 +823,7 @@ int corrected_commit_dates_enabled(struct repository *r)
 
 struct bloom_filter_settings *get_bloom_filter_settings(struct repository *r)
 {
-	struct commit_graph *g = r->objects->commit_graph;
+	struct commit_graph *g = prepare_commit_graph(r);
 	while (g) {
 		if (g->bloom_filter_settings)
 			return g->bloom_filter_settings;
@@ -815,15 +832,16 @@ struct bloom_filter_settings *get_bloom_filter_settings(struct repository *r)
 	return NULL;
 }
 
-void close_commit_graph(struct object_database *o)
+void close_commit_graph(struct odb_source *source)
 {
-	if (!o->commit_graph)
+	if (!source->commit_graph)
 		return;
 
 	clear_commit_graph_data_slab(&commit_graph_data_slab);
 	deinit_bloom_filters();
-	free_commit_graph(o->commit_graph);
-	o->commit_graph = NULL;
+	free_commit_graph(source->commit_graph);
+	source->commit_graph = NULL;
+	source->commit_graph_attempted = 0;
 }
 
 static int bsearch_graph(struct commit_graph *g, const struct object_id *oid, uint32_t *pos)
@@ -1119,7 +1137,15 @@ static struct tree *get_commit_tree_in_graph_one(struct commit_graph *g,
 
 struct tree *get_commit_tree_in_graph(struct repository *r, const struct commit *c)
 {
-	return get_commit_tree_in_graph_one(r->objects->commit_graph, c);
+	struct odb_source *source;
+
+	for (source = r->objects->sources; source; source = source->next) {
+		if (!source->commit_graph)
+			continue;
+		return get_commit_tree_in_graph_one(source->commit_graph, c);
+	}
+
+	return NULL;
 }
 
 struct packed_commit_list {
@@ -2165,7 +2191,8 @@ static int write_commit_graph_file(struct write_commit_graph_context *ctx)
 		ctx->commit_graph_hash_after[ctx->num_commit_graphs_after - 2] = new_base_hash;
 	}
 
-	close_commit_graph(ctx->r->objects);
+	for (struct odb_source *s = ctx->r->objects->sources; s; s = s->next)
+		close_commit_graph(s);
 	finalize_hashfile(f, file_hash, FSYNC_COMPONENT_COMMIT_GRAPH,
 			  CSUM_HASH_IN_STREAM | CSUM_FSYNC);
 	free_chunkfile(cf);
@@ -2667,8 +2694,8 @@ cleanup:
 	oid_array_clear(&ctx.oids);
 	clear_topo_level_slab(&topo_levels);
 
-	if (ctx.r->objects->commit_graph) {
-		struct commit_graph *g = ctx.r->objects->commit_graph;
+	if (source->commit_graph) {
+		struct commit_graph *g = source->commit_graph;
 
 		while (g) {
 			g->topo_levels = NULL;
