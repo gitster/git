@@ -72,6 +72,9 @@ struct replay_opts {
 	/* Reflog */
 	char *reflog_action;
 
+	/* Reference to which HEAD shall be reset to after the operation. */
+	char *restore_head_target;
+
 	/* placeholder commit for -i --root */
 	struct object_id squash_onto;
 	int have_squash_onto;

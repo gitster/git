@@ -413,6 +413,7 @@ void replay_opts_release(struct replay_opts *opts)
 	struct replay_ctx *ctx = opts->ctx;
 
 	free(opts->gpg_sign);
+	free(opts->restore_head_target);
 	free(opts->reflog_action);
 	free(opts->default_strategy);
 	free(opts->strategy);
@@ -3143,6 +3144,8 @@ static int populate_opts_cb(const char *key, const char *value,
 	} else if (!strcmp(key, "options.skip-commit-summary")) {
 		opts->skip_commit_summary =
 			git_config_bool_or_int(key, value, ctx->kvi, &error_flag);
+	} else if (!strcmp(key, "options.restore-head-target")) {
+		git_config_string_dup(&opts->restore_head_target, key, value);
 	} else {
 		return error(_("invalid key: %s"), key);
 	}
@@ -3710,6 +3713,10 @@ static int save_opts(struct replay_opts *opts)
 	if (opts->skip_commit_summary)
 		res |= repo_config_set_in_file_gently(the_repository, opts_file,
 					"options.skip-commit-summary", NULL, "true");
+	if (opts->restore_head_target)
+		res |= repo_config_set_in_file_gently(the_repository, opts_file,
+				"options.restore-head-target", NULL, opts->restore_head_target);
+
 	return res;
 }
 
@@ -5178,6 +5185,23 @@ cleanup_head_ref:
 			return -1;
 	}
 
+	if (opts->restore_head_target) {
+		struct reset_head_opts reset_opts = { 0 };
+		const char *msg;
+
+		msg = reflog_message(opts, "finish", "returning to %s", opts->restore_head_target);
+
+		reset_opts.branch = opts->restore_head_target;
+		reset_opts.flags = RESET_HEAD_REFS_ONLY;
+		reset_opts.branch_msg = msg;
+		reset_opts.head_msg = msg;
+
+		if (reset_head(r, &reset_opts)) {
+			error(_("could not switch HEAD back to %s"), opts->restore_head_target);
+			return -1;
+		}
+	}
+
 	/*
 	 * Sequence of picks finished successfully; cleanup by
 	 * removing the .git/sequencer directory
@@ -5534,7 +5558,8 @@ int sequencer_pick_revisions(struct repository *r,
 	if (opts->revs->cmdline.nr == 1 &&
 	    opts->revs->cmdline.rev->whence == REV_CMD_REV &&
 	    opts->revs->no_walk &&
-	    !opts->revs->cmdline.rev->flags) {
+	    !opts->revs->cmdline.rev->flags &&
+	    !opts->restore_head_target) {
 		struct commit *cmit;
 
 		if (prepare_revision_walk(opts->revs)) {
