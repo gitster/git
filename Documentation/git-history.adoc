@@ -13,6 +13,7 @@ git history continue
 git history quit
 git history drop <commit>
 git history reorder <commit> (--before=<following-commit>|--after=<preceding-commit>)
+git history split [<options>] <commit> [--] [<pathspec>...]
 
 DESCRIPTION
 -----------
@@ -51,6 +52,26 @@ child commits, as that would lead to an empty branch.
 	<following-commit> or the child of <preceding-commit>. The commits must
 	be related to one another and must be reachable from the current `HEAD`
 	commit.
+
+`split [--message=<message>] <commit> [--] [<pathspec>...]`::
+	Interactively split up <commit> into two commits by choosing
+	hunks introduced by it that will be moved into the new split-out
+	commit. These hunks will then be written into a new commit that
+	becomes the parent of the previous commit. The original commit
+	stays intact, except that its parent will be the newly split-out
+	commit.
++
+The commit message of the new commit will be asked for by launching the
+configured editor, unless it has been specified with the `-m` option.
+Authorship of the commit will be the same as for the original commit.
++
+If passed, _<pathspec>_ can be used to limit which changes shall be split out
+of the original commit. Files not matching any of the pathspecs will remain
+part of the original commit. For more details, see the 'pathspec' entry in
+linkgit:gitglossary[7].
++
+It is invalid to select either all or no hunks, as that would lead to
+one of the commits becoming empty.
 
 The following commands are used to manage an interrupted history-rewriting
 operation:
@@ -110,6 +131,45 @@ f44a46e third
 8cb4171 second
 bf7438d first
 ----------
+
+Split a commit
+~~~~~~~~~~~~~~
+
+----------
+$ git log --stat --oneline
+3f81232 (HEAD -> main) original
+ bar | 1 +
+ foo | 1 +
+ 2 files changed, 2 insertions(+)
+
+$ git history split HEAD --message="split-out commit"
+diff --git a/bar b/bar
+new file mode 100644
+index 0000000..5716ca5
+--- /dev/null
++++ b/bar
+@@ -0,0 +1 @@
++bar
+(1/1) Stage addition [y,n,q,a,d,e,p,?]? y
+
+diff --git a/foo b/foo
+new file mode 100644
+index 0000000..257cc56
+--- /dev/null
++++ b/foo
+@@ -0,0 +1 @@
++foo
+(1/1) Stage addition [y,n,q,a,d,e,p,?]? n
+
+$ git log --stat --oneline
+7cebe64 (HEAD -> main) original
+ foo | 1 +
+ 1 file changed, 1 insertion(+)
+d1582f3 split-out commit
+ bar | 1 +
+ 1 file changed, 1 insertion(+)
+----------
+
 
 CONFIGURATION
 -------------
