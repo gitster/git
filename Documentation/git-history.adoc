@@ -8,7 +8,9 @@ git-history - EXPERIMENTAL: Rewrite history of the current branch
 SYNOPSIS
 --------
 [synopsis]
-git history [<options>]
+git history abort
+git history continue
+git history quit
 
 DESCRIPTION
 -----------
@@ -32,6 +34,22 @@ COMMANDS
 
 This command requires a subcommand. Several subcommands are available to
 rewrite history in different ways:
+
+The following commands are used to manage an interrupted history-rewriting
+operation:
+
+`abort`::
+	Abort the history-rewriting operation and reset HEAD to the original
+	branch.
+
+`continue`::
+	Restart the history-rewriting process after having resolved a merge
+	conflict.
+
+`quit`::
+	Abort the history-rewriting operation but `HEAD` is not reset back to
+	the original branch. The index and working tree are also left unchanged
+	as a result.
 
 CONFIGURATION
 -------------
