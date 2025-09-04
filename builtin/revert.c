@@ -263,7 +263,7 @@ static int run_sequencer(int argc, const char **argv, const char *prefix,
 	free(options);
 
 	if (cmd == 'q') {
-		int ret = sequencer_remove_state(opts);
+		int ret = sequencer_remove_state(the_repository, opts);
 		if (!ret)
 			remove_branch_state(the_repository, 0);
 		return ret;

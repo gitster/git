@@ -568,7 +568,7 @@ static int finish_rebase(struct rebase_options *opts)
 		struct replay_opts replay = REPLAY_OPTS_INIT;
 
 		replay.action = REPLAY_INTERACTIVE_REBASE;
-		ret = sequencer_remove_state(&replay);
+		ret = sequencer_remove_state(the_repository, &replay);
 		replay_opts_release(&replay);
 	} else {
 		strbuf_addstr(&dir, opts->state_dir);
@@ -1405,7 +1405,7 @@ int cmd_rebase(int argc,
 			struct replay_opts replay = REPLAY_OPTS_INIT;
 
 			replay.action = REPLAY_INTERACTIVE_REBASE;
-			ret = sequencer_remove_state(&replay);
+			ret = sequencer_remove_state(the_repository, &replay);
 			replay_opts_release(&replay);
 		} else {
 			strbuf_reset(&buf);
