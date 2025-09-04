@@ -13,6 +13,7 @@ git history continue
 git history quit
 git history drop <commit>
 git history reorder <commit> (--before=<following-commit>|--after=<preceding-commit>)
+git history reword [<options>] <commit>
 git history split [<options>] <commit> [--] [<pathspec>...]
 
 DESCRIPTION
@@ -52,6 +53,10 @@ child commits, as that would lead to an empty branch.
 	<following-commit> or the child of <preceding-commit>. The commits must
 	be related to one another and must be reachable from the current `HEAD`
 	commit.
+
+`reword <commit> [--message=<message>]`::
+	Rewrite the commit message of the specified commit. All the other
+	details of this commit remain unchanged.
 
 `split [--message=<message>] <commit> [--] [<pathspec>...]`::
 	Interactively split up <commit> into two commits by choosing

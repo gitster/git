@@ -384,6 +384,7 @@ integration_tests = [
   't3451-history-drop.sh',
   't3452-history-reorder.sh',
   't3453-history-split.sh',
+  't3454-history-reword.sh',
   't3500-cherry.sh',
   't3501-revert-cherry-pick.sh',
   't3502-cherry-pick-merge.sh',
