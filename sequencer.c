@@ -1742,7 +1742,7 @@ static int do_commit(struct repository *r,
 			refs_delete_ref(get_main_ref_store(r), "",
 					"CHERRY_PICK_HEAD", NULL, REF_NO_DEREF);
 			unlink(git_path_merge_msg(r));
-			if (!is_rebase_i(opts))
+			if (!is_rebase_i(opts) && !opts->skip_commit_summary)
 				print_commit_summary(r, NULL, &oid,
 						SUMMARY_SHOW_AUTHOR_DATE);
 			return res;
@@ -3140,8 +3140,12 @@ static int populate_opts_cb(const char *key, const char *value,
 	else if (!strcmp(key, "options.default-msg-cleanup")) {
 		opts->explicit_cleanup = 1;
 		opts->default_msg_cleanup = get_cleanup_mode(value, 1);
-	} else
+	} else if (!strcmp(key, "options.skip-commit-summary")) {
+		opts->skip_commit_summary =
+			git_config_bool_or_int(key, value, ctx->kvi, &error_flag);
+	} else {
 		return error(_("invalid key: %s"), key);
+	}
 
 	if (!error_flag)
 		return error(_("invalid value for '%s': '%s'"), key, value);
@@ -3699,11 +3703,13 @@ static int save_opts(struct replay_opts *opts)
 				"options.allow-rerere-auto", NULL,
 				opts->allow_rerere_auto == RERERE_AUTOUPDATE ?
 				"true" : "false");
-
 	if (opts->explicit_cleanup)
 		res |= repo_config_set_in_file_gently(the_repository, opts_file,
 				"options.default-msg-cleanup", NULL,
 				describe_cleanup_mode(opts->default_msg_cleanup));
+	if (opts->skip_commit_summary)
+		res |= repo_config_set_in_file_gently(the_repository, opts_file,
+					"options.skip-commit-summary", NULL, "true");
 	return res;
 }
 

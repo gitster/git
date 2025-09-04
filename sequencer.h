@@ -52,6 +52,7 @@ struct replay_opts {
 	int keep_redundant_commits;
 	int verbose;
 	int quiet;
+	int skip_commit_summary;
 	int reschedule_failed_exec;
 	int committer_date_is_author_date;
 	int ignore_date;
