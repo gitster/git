@@ -11,6 +11,7 @@ SYNOPSIS
 git history abort
 git history continue
 git history quit
+git history drop <commit>
 
 DESCRIPTION
 -----------
@@ -35,6 +36,15 @@ COMMANDS
 This command requires a subcommand. Several subcommands are available to
 rewrite history in different ways:
 
+`drop <commit>`::
+	Drop a commit from the history and reapply all children of that
+	commit on top of the commit's parent. The commit that is to be
+	dropped must be reachable from the currently checked-out commit.
++
+Dropping the root commit converts the child of that commit into the new
+root commit. It is invalid to drop a root commit that does not have any
+child commits, as that would lead to an empty branch.
+
 The following commands are used to manage an interrupted history-rewriting
 operation:
 
@@ -50,6 +60,23 @@ operation:
 	Abort the history-rewriting operation but `HEAD` is not reset back to
 	the original branch. The index and working tree are also left unchanged
 	as a result.
+
+EXAMPLES
+--------
+
+Drop a commit from history
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+----------
+$ git log --oneline
+2d4cd6d third
+125a0f3 second
+e098c27 first
+$ git history drop HEAD~
+$ git log
+b1bc1bd third
+e098c27 first
+----------
 
 CONFIGURATION
 -------------
