@@ -12,6 +12,7 @@ git history abort
 git history continue
 git history quit
 git history drop <commit>
+git history reorder <commit> (--before=<following-commit>|--after=<preceding-commit>)
 
 DESCRIPTION
 -----------
@@ -45,6 +46,12 @@ Dropping the root commit converts the child of that commit into the new
 root commit. It is invalid to drop a root commit that does not have any
 child commits, as that would lead to an empty branch.
 
+`reorder <commit> (--before=<following-commit>|--after=<preceding-commit>)`::
+	Move the commit so that it becomes either the parent of
+	<following-commit> or the child of <preceding-commit>. The commits must
+	be related to one another and must be reachable from the current `HEAD`
+	commit.
+
 The following commands are used to manage an interrupted history-rewriting
 operation:
 
@@ -76,6 +83,32 @@ $ git history drop HEAD~
 $ git log
 b1bc1bd third
 e098c27 first
+----------
+
+Reorder a commit
+~~~~~~~~~~~~~~~~
+
+----------
+$ git log --oneline
+a978f73 fifth
+57594ee fourth
+04eb1c4 third
+d535e30 second
+bf7438d first
+$ git history reorder :/fourth --before=:/second
+$ git log --oneline
+1610fe0 fifth
+444f97d third
+2f90797 second
+b0ae659 fourth
+bf7438d first
+$ git history reorder :/fourth --after=:/second
+$ git log --oneline
+c48729d fifth
+f44a46e third
+26693b8 fourth
+8cb4171 second
+bf7438d first
 ----------
 
 CONFIGURATION

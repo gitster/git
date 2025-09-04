@@ -182,6 +182,33 @@ out:
 	return ret;
 }
 
+static void replace_commits(struct strvec *commits,
+			    const struct object_id *commit_to_replace,
+			    const struct object_id *replacements,
+			    size_t replacements_nr)
+{
+	char commit_to_replace_oid[GIT_MAX_HEXSZ + 1];
+	struct strvec replacement_oids = STRVEC_INIT;
+	bool found = false;
+	size_t i;
+
+	oid_to_hex_r(commit_to_replace_oid, commit_to_replace);
+	for (i = 0; i < replacements_nr; i++)
+		strvec_push(&replacement_oids, oid_to_hex(&replacements[i]));
+
+	for (i = 0; i < commits->nr; i++) {
+		if (strcmp(commits->v[i], commit_to_replace_oid))
+			continue;
+		strvec_splice(commits, i, 1, replacement_oids.v, replacement_oids.nr);
+		found = true;
+		break;
+	}
+	if (!found)
+		BUG("could not find commit to replace");
+
+	strvec_clear(&replacement_oids);
+}
+
 static int apply_commits(struct repository *repo,
 			 const struct strvec *commits,
 			 struct commit *head,
@@ -389,6 +416,107 @@ out:
 	return ret;
 }
 
+static int cmd_history_reorder(int argc,
+			       const char **argv,
+			       const char *prefix,
+			       struct repository *repo)
+{
+	const char * const usage[] = {
+		N_("git history reorder <commit> (--before=<following-commit>|--after=<preceding-commit>)"),
+		NULL,
+	};
+	const char *before = NULL, *after = NULL;
+	struct option options[] = {
+		OPT_STRING(0, "before", &before, N_("commit"), N_("reorder before this commit")),
+		OPT_STRING(0, "after", &after, N_("commit"), N_("reorder after this commit")),
+		OPT_END(),
+	};
+	struct commit *commit_to_reorder, *head, *anchor, *old;
+	struct strvec commits = STRVEC_INIT;
+	struct object_id replacement[2];
+	struct commit_list *list = NULL;
+	int ret;
+
+	argc = parse_options(argc, argv, prefix, options, usage, 0);
+	if (argc != 1)
+		die(_("command expects a single revision"));
+	if (!before && !after)
+		die(_("exactly one option of 'before' or 'after' must be given"));
+	die_for_incompatible_opt2(!!before, "before", !!after, "after");
+
+	repo_config(repo, git_default_config, NULL);
+
+	commit_to_reorder = lookup_commit_reference_by_name(argv[0]);
+	if (!commit_to_reorder)
+		die(_("commit to be reordered cannot be found: %s"), argv[0]);
+	if (commit_to_reorder->parents && commit_to_reorder->parents->next)
+		die(_("commit to be reordered must not be a merge commit"));
+
+	anchor = lookup_commit_reference_by_name(before ? before : after);
+	if (!commit_to_reorder)
+		die(_("anchor commit cannot be found: %s"), before ? before : after);
+
+	if (oideq(&commit_to_reorder->object.oid, &anchor->object.oid))
+		die(_("commit to reorder and anchor must not be the same"));
+
+	head = lookup_commit_reference_by_name("HEAD");
+	if (!head)
+		die(_("could not resolve HEAD to a commit"));
+
+	commit_list_append(commit_to_reorder, &list);
+	if (!repo_is_descendant_of(repo, commit_to_reorder, list))
+		die(_("reordered commit must be reachable from current HEAD commit"));
+
+	/*
+	 * There is no requirement for the user to have either one of the
+	 * provided commits be the parent or child. We thus have to figure out
+	 * ourselves which one is which.
+	*/
+	if (repo_is_descendant_of(repo, anchor, list))
+		old = commit_to_reorder;
+	else
+		old = anchor;
+
+	/*
+	 * Select the whole range of commits, including the boundary commit
+	 * itself. In case the old commit is the root commit we simply pass no
+	 * boundary.
+	*/
+	ret = collect_commits(repo, old->parents ? old->parents->item : NULL,
+			      head, &commits);
+	if (ret < 0)
+		goto out;
+
+	/*
+	 * Perform the reordering of commits in the strvec. This is done by:
+	 *
+	 *   - Deleting the to-be-reordered commit from the range of commits.
+	 *
+	 *   - Replacing the anchor commit with the anchor commit plus the
+	 *     to-be-reordered commit.
+	 */
+	if (before) {
+		replacement[0] = commit_to_reorder->object.oid;
+		replacement[1] = anchor->object.oid;
+	} else {
+		replacement[0] = anchor->object.oid;
+		replacement[1] = commit_to_reorder->object.oid;
+	}
+	replace_commits(&commits, &commit_to_reorder->object.oid, NULL, 0);
+	replace_commits(&commits, &anchor->object.oid, replacement, ARRAY_SIZE(replacement));
+
+	ret = apply_commits(repo, &commits, head, old, "reorder");
+	if (ret < 0)
+		goto out;
+
+	ret = 0;
+
+out:
+	free_commit_list(list);
+	strvec_clear(&commits);
+	return ret;
+}
+
 int cmd_history(int argc,
 		const char **argv,
 		const char *prefix,
@@ -399,6 +527,7 @@ int cmd_history(int argc,
 		N_("git history continue"),
 		N_("git history quit"),
 		N_("git history drop <commit>"),
+		N_("git history reorder <commit> (--before=<following-commit>|--after=<preceding-commit>)"),
 		NULL,
 	};
 	parse_opt_subcommand_fn *fn = NULL;
@@ -407,6 +536,7 @@ int cmd_history(int argc,
 		OPT_SUBCOMMAND("continue", &fn, cmd_history_continue),
 		OPT_SUBCOMMAND("quit", &fn, cmd_history_quit),
 		OPT_SUBCOMMAND("drop", &fn, cmd_history_drop),
+		OPT_SUBCOMMAND("reorder", &fn, cmd_history_reorder),
 		OPT_END(),
 	};
 
