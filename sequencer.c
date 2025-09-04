@@ -2214,6 +2214,13 @@ static void record_in_rewritten(struct object_id *oid,
 	const char *path;
 	FILE *out;
 
+	if (opts->old_oid_mappings) {
+		struct replay_oid_mapping *mapping =
+			oidmap_get(opts->old_oid_mappings, oid);
+		if (mapping)
+			oid = &mapping->rewritten_oid;
+	}
+
 	if (opts->action == REPLAY_HISTORY_EDIT)
 		path = git_path_rewritten_pending_file();
 	else

@@ -1,6 +1,7 @@
 #ifndef SEQUENCER_H
 #define SEQUENCER_H
 
+#include "oidmap.h"
 #include "strbuf.h"
 #include "strvec.h"
 #include "wt-status.h"
@@ -34,6 +35,12 @@ enum commit_msg_cleanup_mode {
 
 struct replay_ctx;
 struct replay_ctx* replay_ctx_new(void);
+
+/* Used as entry for the `original_oid_map`. */
+struct replay_oid_mapping {
+	struct oidmap_entry entry;
+	struct object_id rewritten_oid;
+};
 
 struct replay_opts {
 	enum replay_action action;
@@ -82,6 +89,13 @@ struct replay_opts {
 
 	/* Only used by REPLAY_NONE */
 	struct rev_info *revs;
+
+	/*
+	 * Used by the post-rewrite hook to fix up old object IDs. This can be
+	 * used to rewrite the old object ID to whatever is stored as value in
+	 * this map. The map contains `struct replay_oid_mapping` entries.
+	 */
+	const struct oidmap *old_oid_mappings;
 
 	/* Private use */
 	struct replay_ctx *ctx;
