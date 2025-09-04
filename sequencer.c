@@ -70,6 +70,8 @@ static GIT_PATH_FUNC(git_path_seq_dir, "sequencer")
 static GIT_PATH_FUNC(git_path_todo_file, "sequencer/todo")
 static GIT_PATH_FUNC(git_path_opts_file, "sequencer/opts")
 static GIT_PATH_FUNC(git_path_head_file, "sequencer/head")
+static GIT_PATH_FUNC(git_path_rewritten_list_file, "sequencer/rewritten-list")
+static GIT_PATH_FUNC(git_path_rewritten_pending_file, "sequencer/rewritten-pending")
 static GIT_PATH_FUNC(git_path_abort_safety_file, "sequencer/abort-safety")
 
 static GIT_PATH_FUNC(rebase_path, "rebase-merge")
@@ -2170,15 +2172,25 @@ static int update_squash_messages(struct repository *r,
 	return res;
 }
 
-static void flush_rewritten_pending(void)
+static void flush_rewritten_pending(struct replay_opts *opts)
 {
 	struct strbuf buf = STRBUF_INIT;
 	struct object_id newoid;
+	const char *pending_path;
+	const char *list_path;
 	FILE *out;
 
-	if (strbuf_read_file(&buf, rebase_path_rewritten_pending(), (GIT_MAX_HEXSZ + 1) * 2) > 0 &&
+	if (opts->action == REPLAY_HISTORY_EDIT) {
+		pending_path = git_path_rewritten_pending_file();
+		list_path = git_path_rewritten_list_file();
+	} else {
+		pending_path = rebase_path_rewritten_pending();
+		list_path = rebase_path_rewritten_list();
+	}
+
+	if (strbuf_read_file(&buf, pending_path, (GIT_MAX_HEXSZ + 1) * 2) > 0 &&
 	    !repo_get_oid(the_repository, "HEAD", &newoid) &&
-	    (out = fopen_or_warn(rebase_path_rewritten_list(), "a"))) {
+	    (out = fopen_or_warn(list_path, "a"))) {
 		char *bol = buf.buf, *eol;
 
 		while (*bol) {
@@ -2190,16 +2202,24 @@ static void flush_rewritten_pending(void)
 			bol = eol + 1;
 		}
 		fclose(out);
-		unlink(rebase_path_rewritten_pending());
+		unlink(pending_path);
 	}
 	strbuf_release(&buf);
 }
 
 static void record_in_rewritten(struct object_id *oid,
-		enum todo_command next_command)
+				enum todo_command next_command,
+				struct replay_opts *opts)
 {
-	FILE *out = fopen_or_warn(rebase_path_rewritten_pending(), "a");
+	const char *path;
+	FILE *out;
 
+	if (opts->action == REPLAY_HISTORY_EDIT)
+		path = git_path_rewritten_pending_file();
+	else
+		path = rebase_path_rewritten_pending();
+
+	out = fopen_or_warn(path, "a");
 	if (!out)
 		return;
 
@@ -2207,7 +2227,7 @@ static void record_in_rewritten(struct object_id *oid,
 	fclose(out);
 
 	if (!is_fixup(next_command))
-		flush_rewritten_pending();
+		flush_rewritten_pending(opts);
 }
 
 static int should_edit(struct replay_opts *opts) {
@@ -4985,9 +5005,9 @@ static int pick_one_commit(struct repository *r,
 		return error_with_patch(r, commit,
 					arg, item->arg_len, opts, res, !res);
 	}
-	if (is_rebase_i(opts) && !res)
+	if ((is_rebase_i(opts) || opts->action == REPLAY_HISTORY_EDIT) && !res)
 		record_in_rewritten(&item->commit->object.oid,
-				    peek_command(todo_list, 1));
+				    peek_command(todo_list, 1), opts);
 	if (res && is_fixup(item->command)) {
 		if (res == 1)
 			intend_to_amend();
@@ -5021,6 +5041,7 @@ static int pick_commits(struct repository *r,
 			struct todo_list *todo_list,
 			struct replay_opts *opts)
 {
+	struct strbuf head_ref = STRBUF_INIT, buf = STRBUF_INIT;
 	struct replay_ctx *ctx = opts->ctx;
 	int res = 0, reschedule = 0;
 
@@ -5107,7 +5128,7 @@ static int pick_commits(struct repository *r,
 				reschedule = 1;
 			else if (item->commit)
 				record_in_rewritten(&item->commit->object.oid,
-						    peek_command(todo_list, 1));
+						    peek_command(todo_list, 1), opts);
 			if (res > 0)
 				/* failed with merge conflicts */
 				return error_with_patch(r, item->commit,
@@ -5143,9 +5164,6 @@ static int pick_commits(struct repository *r,
 	}
 
 	if (is_rebase_i(opts)) {
-		struct strbuf head_ref = STRBUF_INIT, buf = STRBUF_INIT;
-		struct stat st;
-
 		if (read_oneliner(&head_ref, rebase_path_head_name(), 0) &&
 				starts_with(head_ref.buf, "refs/")) {
 			const char *msg;
@@ -5207,13 +5225,24 @@ cleanup_head_ref:
 			}
 			release_revisions(&log_tree_opt);
 		}
-		flush_rewritten_pending();
-		if (!stat(rebase_path_rewritten_list(), &st) &&
-				st.st_size > 0) {
+	}
+
+	if (is_rebase_i(opts) || opts->action == REPLAY_HISTORY_EDIT) {
+		const char *rewritten_list_path;
+		struct stat st;
+
+		flush_rewritten_pending(opts);
+
+		if (opts->action == REPLAY_HISTORY_EDIT)
+			rewritten_list_path = git_path_rewritten_list_file();
+		else
+			rewritten_list_path = rebase_path_rewritten_list();
+
+		if (!stat(rewritten_list_path, &st) && st.st_size > 0) {
 			struct child_process child = CHILD_PROCESS_INIT;
 			struct run_hooks_opt hook_opt = RUN_HOOKS_OPT_INIT;
 
-			child.in = open(rebase_path_rewritten_list(), O_RDONLY);
+			child.in = open(rewritten_list_path, O_RDONLY);
 			child.git_cmd = 1;
 			strvec_push(&child.args, "notes");
 			strvec_push(&child.args, "copy");
@@ -5221,10 +5250,13 @@ cleanup_head_ref:
 			/* we don't care if this copying failed */
 			run_command(&child);
 
-			hook_opt.path_to_stdin = rebase_path_rewritten_list();
-			strvec_push(&hook_opt.args, "rebase");
+			hook_opt.path_to_stdin = rewritten_list_path;
+			strvec_push(&hook_opt.args, is_rebase_i(opts) ? "rebase" : "history");
 			run_hooks_opt(r, "post-rewrite", &hook_opt);
 		}
+	}
+
+	if (is_rebase_i(opts)) {
 		apply_autostash(rebase_path_autostash());
 
 		if (!opts->quiet) {
@@ -5556,7 +5588,7 @@ int sequencer_continue(struct repository *r, struct replay_opts *opts)
 		if (read_oneliner(&buf, rebase_path_stopped_sha(),
 				  READ_ONELINER_SKIP_IF_EMPTY) &&
 		    !get_oid_hex(buf.buf, &oid))
-			record_in_rewritten(&oid, peek_command(&todo_list, 0));
+			record_in_rewritten(&oid, peek_command(&todo_list, 0), opts);
 		strbuf_release(&buf);
 	}
 
@@ -6397,7 +6429,8 @@ int todo_list_write_to_file(struct repository *r, struct todo_list *todo_list,
 /* skip picking commits whose parents are unchanged */
 static int skip_unnecessary_picks(struct repository *r,
 				  struct todo_list *todo_list,
-				  struct object_id *base_oid)
+				  struct object_id *base_oid,
+				  struct replay_opts *opts)
 {
 	struct object_id *parent_oid;
 	int i;
@@ -6436,7 +6469,7 @@ static int skip_unnecessary_picks(struct repository *r,
 		todo_list->done_nr += i;
 
 		if (is_fixup(peek_command(todo_list, 0)))
-			record_in_rewritten(base_oid, peek_command(todo_list, 0));
+			record_in_rewritten(base_oid, peek_command(todo_list, 0), opts);
 	}
 
 	return 0;
@@ -6631,7 +6664,7 @@ int complete_action(struct repository *r, struct replay_opts *opts, unsigned fla
 		BUG("invalid todo list after expanding IDs:\n%s",
 		    new_todo.buf.buf);
 
-	if (opts->allow_ff && skip_unnecessary_picks(r, &new_todo, &oid)) {
+	if (opts->allow_ff && skip_unnecessary_picks(r, &new_todo, &oid, opts)) {
 		todo_list_release(&new_todo);
 		return error(_("could not skip unnecessary pick commands"));
 	}
