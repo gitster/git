@@ -29,12 +29,14 @@ static size_t get_entry_index(const struct string_list *list, const char *string
 		else if (compare > 0)
 			left = middle + 1;
 		else {
-			*exact_match = 1;
+			if (exact_match)
+				*exact_match = 1;
 			return middle;
 		}
 	}
 
-	*exact_match = 0;
+	if (exact_match)
+		*exact_match = 0;
 	return right;
 }
 
