@@ -895,7 +895,7 @@ test_expect_success "submodule absorbgitdirs implicitly starts daemon" '
 	cat >expect <<-EOF &&
 	Migrating git directory of '\''dir_1/dir_2/sub'\'' from
 	'\''$cwd/dir_1/dir_2/sub/.git'\'' to
-	'\''$cwd/.git/submodules/dir_1/dir_2/sub'\''
+	'\''$cwd/.git/submodules/dir_1%2fdir_2%2fsub'\''
 	EOF
 	GIT_TRACE2_EVENT="$PWD/super-sub.trace" \
 		git -C super submodule absorbgitdirs >out 2>actual &&

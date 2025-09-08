@@ -2271,8 +2271,13 @@ int validate_submodule_git_dir(char *git_dir, const char *submodule_name)
 
 	if (len <= suffix_len || (p = git_dir + len - suffix_len)[-1] != '/' ||
 	    strcmp(p, submodule_name))
-		BUG("submodule name '%s' not a suffix of git dir '%s'",
-		    submodule_name, git_dir);
+		/*
+		 * TODO: revisit and cleanup this test short-circuit, because
+		 * submodules with encoded names are expected to take this path.
+		 * Likely just move the invariants to submodule_name_to_gitdir()
+		 * and delete this entire function in a future commit.
+		 */
+		return 0;
 
 	/*
 	 * We prevent the contents of sibling submodules' git directories to
@@ -2588,30 +2593,26 @@ cleanup:
 	return ret;
 }
 
+static void strbuf_addstr_case_encode(struct strbuf *dst, const char *src)
+{
+	for (; *src; src++) {
+		unsigned char c = *src;
+		if (c >= 'A' && c <= 'Z') {
+			strbuf_addch(dst, '_');
+			strbuf_addch(dst, c - 'A' + 'a');
+		} else {
+			strbuf_addch(dst, c);
+		}
+	}
+}
+
 void submodule_name_to_gitdir(struct strbuf *buf, struct repository *r,
 			      const char *submodule_name)
 {
-	/*
-	 * NEEDSWORK: The current way of mapping a submodule's name to
-	 * its location in .git/modules/ has problems with some naming
-	 * schemes. For example, if a submodule is named "foo" and
-	 * another is named "foo/bar" (whether present in the same
-	 * superproject commit or not - the problem will arise if both
-	 * superproject commits have been checked out at any point in
-	 * time), or if two submodule names only have different cases in
-	 * a case-insensitive filesystem.
-	 *
-	 * There are several solutions, including encoding the path in
-	 * some way, introducing a submodule.<name>.gitdir config in
-	 * .git/config (not .gitmodules) that allows overriding what the
-	 * gitdir of a submodule would be (and teach Git, upon noticing
-	 * a clash, to automatically determine a non-clashing name and
-	 * to write such a config), or introducing a
-	 * submodule.<name>.gitdir config in .gitmodules that repo
-	 * administrators can explicitly set. Nothing has been decided,
-	 * so for now, just append the name at the end of the path.
-	 */
+	struct strbuf encoded_sub_name = STRBUF_INIT, tmp = STRBUF_INIT;
+	size_t base_len, encoded_len;
 	char *gitdir_path, *key;
+	long name_max;
 
 	/* Allow config override. */
 	key = xstrfmt("submodule.%s.gitdirpath", submodule_name);
@@ -2632,5 +2633,13 @@ void submodule_name_to_gitdir(struct strbuf *buf, struct repository *r,
 	/* New style (encoded) paths go under submodules/<encoded>. */
 	strbuf_reset(buf);
 	repo_git_path_append(r, buf, "submodules/");
-	strbuf_addstr(buf, submodule_name);
+	base_len = buf->len;
+
+	/* URL-encode then case case-encode A to _a, B to _b and so on */
+	strbuf_addstr_urlencode(&tmp, submodule_name, is_rfc3986_unreserved);
+	strbuf_addstr_case_encode(&encoded_sub_name, tmp.buf);
+	strbuf_release(&tmp);
+	strbuf_addbuf(buf, &encoded_sub_name);
+
+	strbuf_release(&encoded_sub_name);
 }
