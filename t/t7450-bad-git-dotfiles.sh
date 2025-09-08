@@ -77,28 +77,28 @@ test_expect_success 'create innocent subrepo' '
 
 test_expect_success 'submodule add refuses invalid names' '
 	test_must_fail \
-		git submodule add --name ../../modules/evil "$PWD/innocent" evil
+		git submodule add --name ../../submodules/evil "$PWD/innocent" evil
 '
 
 test_expect_success 'add evil submodule' '
 	git submodule add "$PWD/innocent" evil &&
 
-	mkdir modules &&
-	cp -r .git/modules/evil modules &&
-	write_script modules/evil/hooks/post-checkout <<-\EOF &&
+	mkdir submodules &&
+	cp -r .git/submodules/evil submodules &&
+	write_script submodules/evil/hooks/post-checkout <<-\EOF &&
 	echo >&2 "RUNNING POST CHECKOUT"
 	EOF
 
 	git config -f .gitmodules submodule.evil.update checkout &&
 	git config -f .gitmodules --rename-section \
-		submodule.evil submodule.../../modules/evil &&
-	git add modules &&
+		submodule.evil submodule.../../submodules/evil &&
+	git add submodules &&
 	git commit -am evil
 '
 
 # This step seems like it shouldn't be necessary, since the payload is
 # contained entirely in the evil submodule. But due to the vagaries of the
-# submodule code, checking out the evil module will fail unless ".git/modules"
+# submodule code, checking out the evil module will fail unless ".git/submodules"
 # exists. Adding another submodule (with a name that sorts before "evil") is an
 # easy way to make sure this is the case in the victim clone.
 test_expect_success 'add other submodule' '
@@ -350,8 +350,8 @@ test_expect_success 'submodule git dir nesting detection must work with parallel
 	cat err &&
 	grep -E "(already exists|is inside git dir|not a git repository)" err &&
 	{
-		test_path_is_missing .git/modules/hippo/HEAD ||
-		test_path_is_missing .git/modules/hippo/hooks/HEAD
+		test_path_is_missing .git/submodules/hippo/HEAD ||
+		test_path_is_missing .git/submodules/hippo/hooks/HEAD
 	}
 '
 
@@ -361,10 +361,10 @@ test_expect_success 'checkout -f --recurse-submodules must not use a nested gitd
 		cd nested_checkout &&
 		git submodule init &&
 		git submodule update thing1 &&
-		mkdir -p .git/modules/hippo/hooks/refs &&
-		mkdir -p .git/modules/hippo/hooks/objects/info &&
-		echo "../../../../objects" >.git/modules/hippo/hooks/objects/info/alternates &&
-		echo "ref: refs/heads/master" >.git/modules/hippo/hooks/HEAD
+		mkdir -p .git/submodules/hippo/hooks/refs &&
+		mkdir -p .git/submodules/hippo/hooks/objects/info &&
+		echo "../../../../objects" >.git/submodules/hippo/hooks/objects/info/alternates &&
+		echo "ref: refs/heads/master" >.git/submodules/hippo/hooks/HEAD
 	) &&
 	test_must_fail git -C nested_checkout checkout -f --recurse-submodules HEAD 2>err &&
 	cat err &&
@@ -390,13 +390,13 @@ test_expect_success SYMLINKS,!WINDOWS,!MINGW 'submodule must not checkout into d
 	git config unset -f repo/.gitmodules submodule.sub.path &&
 	printf "\tpath = \"sub\r\"\n" >>repo/.gitmodules &&
 
-	git config unset -f repo/.git/modules/sub/config core.worktree &&
+	git config unset -f repo/.git/submodules/sub/config core.worktree &&
 	{
 		printf "[core]\n" &&
 		printf "\tworktree = \"../../../sub\r\"\n"
-	} >>repo/.git/modules/sub/config &&
+	} >>repo/.git/submodules/sub/config &&
 
-	ln -s .git/modules/sub/hooks repo/sub &&
+	ln -s .git/submodules/sub/hooks repo/sub &&
 	git -C repo add -A &&
 	git -C repo commit -m submodule &&
 

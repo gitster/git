@@ -1278,22 +1278,29 @@ void check_for_new_submodule_commits(struct object_id *oid)
 
 /*
  * Returns 1 if there is at least one submodule gitdir in
- * $GIT_DIR/modules and 0 otherwise. This follows
+ * $GIT_DIR/(sub)modules and 0 otherwise. This follows
  * submodule_name_to_gitdir(), which looks for submodules in
- * $GIT_DIR/modules, not $GIT_COMMON_DIR.
+ * $GIT_DIR/(sub)modules, not $GIT_COMMON_DIR.
  *
- * A submodule can be moved to $GIT_DIR/modules manually by running "git
- * submodule absorbgitdirs", or it may be initialized there by "git
- * submodule update".
+ * A submodule can be moved to $GIT_DIR/(sub)modules manually by running
+ * "git submodule absorbgitdirs", or it may be initialized there by
+ * "git submodule update".
  */
 static int repo_has_absorbed_submodules(struct repository *r)
 {
 	int ret;
 	struct strbuf buf = STRBUF_INIT;
 
+	/* check legacy path */
 	repo_git_path_append(r, &buf, "modules/");
 	ret = file_exists(buf.buf) && !is_empty_dir(buf.buf);
+	strbuf_reset(&buf);
+
+	/* new (encoded name) path */
+	repo_git_path_append(r, &buf, "submodules/");
+	ret |= file_exists(buf.buf) && !is_empty_dir(buf.buf);
 	strbuf_release(&buf);
+
 	return ret;
 }
 
@@ -2273,7 +2280,7 @@ int validate_submodule_git_dir(char *git_dir, const char *submodule_name)
 	 *
 	 * Example: having a submodule named `hippo` and another one named
 	 * `hippo/hooks` would result in the git directories
-	 * `.git/modules/hippo/` and `.git/modules/hippo/hooks/`, respectively,
+	 * `.git/submodules/hippo/` and `.git/submodules/hippo/hooks/`, respectively,
 	 * but the latter directory is already designated to contain the hooks
 	 * of the former.
 	 */
@@ -2604,6 +2611,15 @@ void submodule_name_to_gitdir(struct strbuf *buf, struct repository *r,
 	 * administrators can explicitly set. Nothing has been decided,
 	 * so for now, just append the name at the end of the path.
 	 */
+
+	/* Legacy behavior: allow existing paths under modules/<name>. */
 	repo_git_path_append(r, buf, "modules/");
+	strbuf_addstr(buf, submodule_name);
+	if (!access(buf->buf, F_OK))
+		return;
+
+	/* New style (encoded) paths go under submodules/<encoded>. */
+	strbuf_reset(buf);
+	repo_git_path_append(r, buf, "submodules/");
 	strbuf_addstr(buf, submodule_name);
 }
