@@ -3,6 +3,7 @@
 test_description='submodules handle mixed legacy and new (encoded) style gitdir paths'
 
 . ./test-lib.sh
+. "$TEST_DIRECTORY"/lib-verify-submodule-gitdir-path.sh
 
 test_expect_success 'setup: allow file protocol' '
 	git config --global protocol.file.allow always
@@ -96,6 +97,59 @@ test_expect_success 'fetch mixed submodule changes and verify updates' '
 		test_grep "$legacy_rev legacy" list &&
 		test_grep "$new_rev new" list
 	)
+'
+
+test_expect_success 'setup submodules with nested git dirs' '
+	git init nested &&
+	test_commit -C nested nested &&
+	(
+		cd nested &&
+		cat >.gitmodules <<-EOF &&
+		[submodule "hippo"]
+			url = .
+			path = thing1
+		[submodule "hippo/hooks"]
+			url = .
+			path = thing2
+		EOF
+		git clone . thing1 &&
+		git clone . thing2 &&
+		git add .gitmodules thing1 thing2 &&
+		test_tick &&
+		git commit -m nested
+	)
+'
+
+test_expect_success 'git dirs of sibling submodules must not be nested' '
+	git clone --recurse-submodules nested clone_nested &&
+	verify_submodule_gitdir_path clone_nested hippo submodules/hippo &&
+	verify_submodule_gitdir_path clone_nested hippo/hooks submodules/hippo%2fhooks
+'
+
+test_expect_success 'submodule git dir nesting detection must work with parallel cloning' '
+	git clone --recurse-submodules --jobs=2 nested clone_parallel &&
+	verify_submodule_gitdir_path clone_nested hippo submodules/hippo &&
+	verify_submodule_gitdir_path clone_nested hippo/hooks submodules/hippo%2fhooks
+'
+
+test_expect_success 'checkout -f --recurse-submodules must corectly handle nested gitdirs' '
+	git clone nested clone_recursive_checkout &&
+	(
+		cd clone_recursive_checkout &&
+
+		git submodule init &&
+		git submodule update thing1 thing2 &&
+
+		# simulate a malicious nested alternate which git should not follow
+		mkdir -p .git/submodules/hippo/hooks/refs &&
+		mkdir -p .git/submodules/hippo/hooks/objects/info &&
+		echo "../../../../objects" >.git/submodules/hippo/hooks/objects/info/alternates &&
+		echo "ref: refs/heads/master" >.git/submodules/hippo/hooks/HEAD &&
+
+		git checkout -f --recurse-submodules HEAD
+	) &&
+	verify_submodule_gitdir_path clone_nested hippo submodules/hippo &&
+	verify_submodule_gitdir_path clone_nested hippo/hooks submodules/hippo%2fhooks
 '
 
 test_done
