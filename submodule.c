@@ -2163,27 +2163,10 @@ int submodule_move_head(const char *path, const char *super_prefix,
 			if (!submodule_uses_gitfile(path))
 				absorb_git_dir_into_superproject(path,
 								 super_prefix);
-			else {
-				char *dotgit = xstrfmt("%s/.git", path);
-				char *git_dir = xstrdup(read_gitfile(dotgit));
-
-				free(dotgit);
-				if (validate_submodule_git_dir(git_dir,
-							       sub->name) < 0)
-					die(_("refusing to create/use '%s' in "
-					      "another submodule's git dir"),
-					    git_dir);
-				free(git_dir);
-			}
 		} else {
 			struct strbuf gitdir = STRBUF_INIT;
 			submodule_name_to_gitdir(&gitdir, the_repository,
 						 sub->name);
-			if (validate_submodule_git_dir(gitdir.buf,
-						       sub->name) < 0)
-				die(_("refusing to create/use '%s' in another "
-				      "submodule's git dir"),
-				    gitdir.buf);
 			connect_work_tree_and_git_dir(path, gitdir.buf, 0);
 			strbuf_release(&gitdir);
 
@@ -2263,52 +2246,6 @@ out:
 	return ret;
 }
 
-int validate_submodule_git_dir(char *git_dir, const char *submodule_name)
-{
-	size_t len = strlen(git_dir), suffix_len = strlen(submodule_name);
-	char *p;
-	int ret = 0;
-
-	if (len <= suffix_len || (p = git_dir + len - suffix_len)[-1] != '/' ||
-	    strcmp(p, submodule_name))
-		/*
-		 * TODO: revisit and cleanup this test short-circuit, because
-		 * submodules with encoded names are expected to take this path.
-		 * Likely just move the invariants to submodule_name_to_gitdir()
-		 * and delete this entire function in a future commit.
-		 */
-		return 0;
-
-	/*
-	 * We prevent the contents of sibling submodules' git directories to
-	 * clash.
-	 *
-	 * Example: having a submodule named `hippo` and another one named
-	 * `hippo/hooks` would result in the git directories
-	 * `.git/submodules/hippo/` and `.git/submodules/hippo/hooks/`, respectively,
-	 * but the latter directory is already designated to contain the hooks
-	 * of the former.
-	 */
-	for (; *p; p++) {
-		if (is_dir_sep(*p)) {
-			char c = *p;
-
-			*p = '\0';
-			if (is_git_directory(git_dir))
-				ret = -1;
-			*p = c;
-
-			if (ret < 0)
-				return error(_("submodule git dir '%s' is "
-					       "inside git dir '%.*s'"),
-					     git_dir,
-					     (int)(p - git_dir), git_dir);
-		}
-	}
-
-	return 0;
-}
-
 int validate_submodule_path(const char *path)
 {
 	char *p = xstrdup(path);
@@ -2367,9 +2304,6 @@ static void relocate_single_git_dir_into_superproject(const char *path,
 		die(_("could not lookup name for submodule '%s'"), path);
 
 	submodule_name_to_gitdir(&new_gitdir, the_repository, sub->name);
-	if (validate_submodule_git_dir(new_gitdir.buf, sub->name) < 0)
-		die(_("refusing to move '%s' into an existing git dir"),
-		    real_old_git_dir);
 	if (safe_create_leading_directories_const(the_repository, new_gitdir.buf) < 0)
 		die(_("could not create directory '%s'"), new_gitdir.buf);
 	real_new_git_dir = real_pathdup(new_gitdir.buf, 1);
@@ -2611,7 +2545,7 @@ void submodule_name_to_gitdir(struct strbuf *buf, struct repository *r,
 {
 	struct strbuf encoded_sub_name = STRBUF_INIT, tmp = STRBUF_INIT;
 	size_t base_len, encoded_len;
-	char *gitdir_path, *key;
+	char *gitdir_path, *key, *p;
 	long name_max;
 
 	/* Allow config override. */
@@ -2654,6 +2588,12 @@ void submodule_name_to_gitdir(struct strbuf *buf, struct repository *r,
 		 */
 		die(_("encoded submodule name '%s' is too long (%"PRIuMAX" bytes, limit %"PRIuMAX")"),
 		    encoded_sub_name.buf, (uintmax_t)encoded_len, (uintmax_t)name_max);
+
+	/* Trigger a BUG if these invariants do not hold */
+	p = buf->buf + buf->len - encoded_len;
+	if (buf->len <= encoded_len || p[-1] != '/' || strcmp(p, encoded_sub_name.buf))
+		BUG("encoded submodule name '%s' is not a suffix of git dir '%s'",
+		    encoded_sub_name.buf, buf->buf);
 
 	strbuf_release(&encoded_sub_name);
 }
