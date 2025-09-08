@@ -2641,5 +2641,19 @@ void submodule_name_to_gitdir(struct strbuf *buf, struct repository *r,
 	strbuf_release(&tmp);
 	strbuf_addbuf(buf, &encoded_sub_name);
 
+	/* Ensure final path length is below NAME_MAX after encoding */
+	name_max = pathconf(buf->buf, _PC_NAME_MAX);
+	if (name_max == -1)
+		name_max = NAME_MAX;
+
+	encoded_len = buf->len - base_len;
+	if (encoded_len > name_max)
+		/*
+		 * TODO: make this smarter; instead of erroring out, maybe we could trim or
+		 * shard the gitdir names to make them fit under NAME_MAX.
+		 */
+		die(_("encoded submodule name '%s' is too long (%"PRIuMAX" bytes, limit %"PRIuMAX")"),
+		    encoded_sub_name.buf, (uintmax_t)encoded_len, (uintmax_t)name_max);
+
 	strbuf_release(&encoded_sub_name);
 }
