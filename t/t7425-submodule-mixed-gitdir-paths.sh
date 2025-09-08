@@ -152,4 +152,51 @@ test_expect_success 'checkout -f --recurse-submodules must corectly handle neste
 	verify_submodule_gitdir_path clone_nested hippo/hooks submodules/hippo%2fhooks
 '
 
+test_expect_success 'new style submodule gitdir paths are properly encoded' '
+	(
+		cd main &&
+
+		# add new-style submodule name containing /
+		git submodule add ../new-sub foo/bar &&
+		git commit -m "add foo/bar" &&
+
+		# simulate existing legacy submodule name containing escaping char %
+		git clone --separate-git-dir .git/modules/foo%bar ../legacy-sub foo%bar  &&
+		cat >>.gitmodules <<-EOF &&
+		[submodule "foo%bar"]
+			path = foo%bar
+			url = ../legacy-sub
+		EOF
+		git add .gitmodules &&
+		git commit -m "add foo%bar" &&
+
+		# add new style submodule name containing escaping char %
+		git submodule add ../new-sub fooish%bar &&
+		git commit -m "add fooish%bar" &&
+
+		# add a mixed case submdule name
+		git submodule add ../new-sub FooBar &&
+		git commit -m "add FooBar"
+	) &&
+	verify_submodule_gitdir_path main foo/bar submodules/foo%2fbar &&
+	verify_submodule_gitdir_path main foo%bar modules/foo%bar &&
+	verify_submodule_gitdir_path main fooish%bar submodules/fooish%25bar &&
+	verify_submodule_gitdir_path main FooBar submodules/_foo_bar
+'
+
+test_expect_success 'submodule encoded name exceeds max name limit' '
+	(
+		cd main &&
+
+		# find the system NAME_MAX (fall back to 255 if unknown)
+		name_max=$(getconf NAME_MAX . 2>/dev/null || echo 255) &&
+
+		# each "%" char encodes to "%25" (3 chars), ensure we exceed NAME_MAX
+		count=$((name_max + 10)) &&
+		longname=$(test_seq -f "%%%0.s" 1 $count) &&
+
+		test_must_fail git submodule add ../new-sub "$longname"
+	)
+'
+
 test_done
