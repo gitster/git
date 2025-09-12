@@ -437,7 +437,7 @@ further recursion will occur. In this case, "only" is treated as "on-demand".
 --ipv6::
 	Use IPv6 addresses only, ignoring IPv4 addresses.
 
-include::urls-remotes.adoc[]
+include::urls-remotes-upstreams.adoc[]
 
 OUTPUT
 ------

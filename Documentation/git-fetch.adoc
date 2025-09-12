@@ -52,7 +52,7 @@ include::pull-fetch-param.adoc[]
 	Read refspecs, one per line, from stdin in addition to those provided
 	as arguments. The "tag <name>" format is not supported.
 
-include::urls-remotes.adoc[]
+include::urls-remotes-upstreams.adoc[]
 
 
 CONFIGURED REMOTE-TRACKING BRANCHES[[CRTB]]
