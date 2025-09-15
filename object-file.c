@@ -691,7 +691,7 @@ static void prepare_loose_object_transaction(struct odb_transaction *transaction
 	 * We lazily create the temporary object directory
 	 * the first time an object might be added, since
 	 * callers may not know whether any objects will be
-	 * added at the time they call begin_odb_transaction.
+	 * added at the time they call object_file_transaction_begin.
 	 */
 	if (!transaction || transaction->objdir)
 		return;
@@ -1623,14 +1623,14 @@ int index_fd(struct index_state *istate, struct object_id *oid,
 		struct odb_transaction *transaction = NULL;
 
 		if (!the_repository->objects->transaction)
-			transaction = begin_odb_transaction(the_repository->objects);
+			transaction = odb_transaction_begin(the_repository->objects);
 
 		ret = index_blob_packfile_transaction(the_repository->objects->transaction,
 						      oid, fd,
 						      xsize_t(st->st_size),
 						      path, flags);
 
-		end_odb_transaction(transaction);
+		odb_transaction_commit(transaction);
 	}
 
 	close(fd);
@@ -1970,8 +1970,10 @@ out:
 	return ret;
 }
 
-struct odb_transaction *begin_odb_transaction(struct object_database *odb)
+struct odb_transaction *object_file_transaction_begin(struct odb_source *source)
 {
+	struct object_database *odb = source->odb;
+
 	if (odb->transaction)
 		BUG("ODB transaction already started");
 
@@ -1981,7 +1983,7 @@ struct odb_transaction *begin_odb_transaction(struct object_database *odb)
 	return odb->transaction;
 }
 
-void end_odb_transaction(struct odb_transaction *transaction)
+void object_file_transaction_commit(struct odb_transaction *transaction)
 {
 	if (!transaction)
 		return;
