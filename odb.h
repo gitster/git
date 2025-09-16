@@ -178,6 +178,20 @@ void odb_clear(struct object_database *o);
 void odb_reprepare(struct object_database *o);
 
 /*
+ * Starts an ODB transaction. Subsequent objects are written to the transaction
+ * and not committed until odb_transaction_commit() is invoked on the
+ * transaction. Caller are responsible to ensure there is only a single ODB
+ * transaction pending at a time.
+ */
+struct odb_transaction *odb_transaction_begin(struct object_database *odb);
+
+/*
+ * Commits an ODB transaction making the written objects visible. If the
+ * specified transaction is NULL, the function is a no-op.
+ */
+void odb_transaction_commit(struct odb_transaction *transaction);
+
+/*
  * Find source by its object directory path. Returns a `NULL` pointer in case
  * the source could not be found.
  */
