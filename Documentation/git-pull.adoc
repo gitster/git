@@ -141,7 +141,7 @@ include::fetch-options.adoc[]
 
 include::pull-fetch-param.adoc[]
 
-include::urls-remotes.adoc[]
+include::urls-remotes-upstreams.adoc[]
 
 include::merge-strategies.adoc[]
 
