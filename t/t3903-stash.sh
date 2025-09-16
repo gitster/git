@@ -111,6 +111,19 @@ test_expect_success 'apply stashed changes' '
 	test 1 = $(git show HEAD:file)
 '
 
+test_expect_success 'apply stashed changes with stash.index' '
+	test_config stash.index true &&
+	git reset --hard HEAD^ &&
+	echo 5 >other-file &&
+	git add other-file &&
+	test_tick &&
+	git commit -m other-file &&
+	git stash apply &&
+	test 3 = $(cat file) &&
+	test 2 = $(git show :file) &&
+	test 1 = $(git show HEAD:file)
+'
+
 test_expect_success 'apply stashed changes (including index)' '
 	git reset --hard HEAD^ &&
 	echo 6 >other-file &&
@@ -150,6 +163,21 @@ test_expect_success 'drop top stash' '
 	test 1 = $(git show HEAD:file)
 '
 
+test_expect_success 'drop top stash with stash.index' '
+	test_config stash.index true &&
+	git reset --hard &&
+	git stash list >expected &&
+	echo 7 >file &&
+	git stash &&
+	git stash drop &&
+	git stash list >actual &&
+	test_cmp expected actual &&
+	git stash apply &&
+	test 3 = $(cat file) &&
+	test 2 = $(git show :file) &&
+	test 1 = $(git show HEAD:file)
+'
+
 test_expect_success 'drop middle stash' '
 	git reset --hard &&
 	echo 8 >file &&
@@ -167,6 +195,27 @@ test_expect_success 'drop middle stash' '
 	git stash apply &&
 	test 3 = $(cat file) &&
 	test 1 = $(git show :file) &&
+	test 1 = $(git show HEAD:file)
+'
+
+test_expect_success 'drop middle stash with stash.index' '
+	test_config stash.index true &&
+	git reset --hard &&
+	echo 8 >file &&
+	git stash &&
+	echo 9 >file &&
+	git stash &&
+	git stash drop stash@{1} &&
+	test 2 = $(git stash list | wc -l) &&
+	git stash apply &&
+	test 9 = $(cat file) &&
+	test 1 = $(git show :file) &&
+	test 1 = $(git show HEAD:file) &&
+	git reset --hard &&
+	git stash drop &&
+	git stash apply &&
+	test 3 = $(cat file) &&
+	test 2 = $(git show :file) &&
 	test 1 = $(git show HEAD:file)
 '
 
@@ -232,6 +281,17 @@ test_expect_success 'stash pop' '
 	git stash pop &&
 	test 3 = $(cat file) &&
 	test 1 = $(git show :file) &&
+	test 1 = $(git show HEAD:file) &&
+	test 0 = $(git stash list | wc -l)
+'
+
+test_expect_success 'stash pop with stash.index' '
+	test_config stash.index true &&
+	git reset --hard &&
+	setup_stash &&
+	git stash pop &&
+	test 3 = $(cat file) &&
+	test 2 = $(git show :file) &&
 	test 1 = $(git show HEAD:file) &&
 	test 0 = $(git stash list | wc -l)
 '
@@ -323,6 +383,22 @@ test_expect_success 'save -q is quiet' '
 test_expect_success 'pop -q works and is quiet' '
 	git stash pop -q >output.out 2>&1 &&
 	echo bar >expect &&
+	git show :file >actual &&
+	test_cmp expect actual &&
+	test_must_be_empty output.out
+'
+
+test_expect_success 'pop -q works and is quiet with stash.index' '
+	# Added file, deleted file, modified file all staged for commit
+	echo foo >new-file &&
+	echo test >file &&
+	git add new-file file &&
+	git rm other-file &&
+	git stash &&
+
+	test_config stash.index true &&
+	git stash pop -q >output.out 2>&1 &&
+	echo test >expect &&
 	git show :file >actual &&
 	test_cmp expect actual &&
 	test_must_be_empty output.out
@@ -1178,6 +1254,19 @@ test_expect_success 'stash -- <pathspec> stashes and restores the file' '
 	test_path_is_file bar
 '
 
+test_expect_success 'stash -- <pathspec> stashes and restores the file with stash.index' '
+	test_config stash.index true &&
+	>foo &&
+	>bar &&
+	git add foo bar &&
+	git stash push -- foo &&
+	test_path_is_file bar &&
+	test_path_is_missing foo &&
+	git stash pop --no-index &&
+	test_path_is_file foo &&
+	test_path_is_file bar
+'
+
 test_expect_success 'stash -- <pathspec> stashes in subdirectory' '
 	mkdir sub &&
 	>foo &&
@@ -1190,6 +1279,24 @@ test_expect_success 'stash -- <pathspec> stashes in subdirectory' '
 	test_path_is_file bar &&
 	test_path_is_missing foo &&
 	git stash pop &&
+	test_path_is_file foo &&
+	test_path_is_file bar
+'
+
+test_expect_success 'stash -- <pathspec> stashes in subdirectory with stash.index' '
+	test_config stash.index true &&
+	rm -r sub &&
+	mkdir sub &&
+	>foo &&
+	>bar &&
+	git add foo bar &&
+	(
+		cd sub &&
+		git stash push -- ../foo
+	) &&
+	test_path_is_file bar &&
+	test_path_is_missing foo &&
+	git stash pop --no-index &&
 	test_path_is_file foo &&
 	test_path_is_file bar
 '
@@ -1209,6 +1316,22 @@ test_expect_success 'stash with multiple pathspec arguments' '
 	test_path_is_file extra
 '
 
+test_expect_success 'stash with multiple pathspec arguments with stash.index' '
+	test_config stash.index true &&
+	>foo &&
+	>bar &&
+	>extra &&
+	git add foo bar extra &&
+	git stash push -- foo bar &&
+	test_path_is_missing bar &&
+	test_path_is_missing foo &&
+	test_path_is_file extra &&
+	git stash pop --no-index &&
+	test_path_is_file foo &&
+	test_path_is_file bar &&
+	test_path_is_file extra
+'
+
 test_expect_success 'stash with file including $IFS character' '
 	>"foo bar" &&
 	>foo &&
@@ -1219,6 +1342,22 @@ test_expect_success 'stash with file including $IFS character' '
 	test_path_is_file foo &&
 	test_path_is_file bar &&
 	git stash pop &&
+	test_path_is_file "foo bar" &&
+	test_path_is_file foo &&
+	test_path_is_file bar
+'
+
+test_expect_success 'stash with file including $IFS character with stash.index' '
+	test_config stash.index true &&
+	>"foo bar" &&
+	>foo &&
+	>bar &&
+	git add foo* &&
+	git stash push -- "foo b*" &&
+	test_path_is_missing "foo bar" &&
+	test_path_is_file foo &&
+	test_path_is_file bar &&
+	git stash pop --no-index &&
 	test_path_is_file "foo bar" &&
 	test_path_is_file foo &&
 	test_path_is_file bar
@@ -1307,6 +1446,22 @@ test_expect_success 'stash without verb with pathspec' '
 	test_path_is_file foo &&
 	test_path_is_file bar &&
 	git stash pop &&
+	test_path_is_file "foo bar" &&
+	test_path_is_file foo &&
+	test_path_is_file bar
+'
+
+test_expect_success 'stash without verb with pathspec with stash.index' '
+	test_config stash.index true &&
+	>"foo bar" &&
+	>foo &&
+	>bar &&
+	git add foo* &&
+	git stash -- "foo b*" &&
+	test_path_is_missing "foo bar" &&
+	test_path_is_file foo &&
+	test_path_is_file bar &&
+	git stash pop --no-index &&
 	test_path_is_file "foo bar" &&
 	test_path_is_file foo &&
 	test_path_is_file bar
