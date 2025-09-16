@@ -107,11 +107,9 @@ Git defaults to using the upstream branch for remote operations, for example:
 The upstream is stored in `.git/config`, in the "remote" and "merge"
 fields. For example, if `main`'s upstream is `origin/main`:
 
-```
-[branch "main"]
-   remote = origin
-   merge = refs/heads/main
-```
+	[branch "main"]
+	   remote = origin
+	   merge = refs/heads/main
 
 You can set an upstream branch explicitly with
 `git push --set-upstream <remote> <branch>` or `git branch --track`,
