@@ -113,7 +113,7 @@ void test_reftable_basics__parse_names_drop_empty_string(void)
 	char in[] = "a\n\nb\n";
 	int err = 0;
 	char **out = parse_names(in, strlen(in), &err);
-	cl_assert(err ==  0);
+	cl_assert(err == 0);
 	cl_assert(out != NULL);
 	cl_assert_equal_s(out[0], "a");
 	/* simply '\n' should be dropped as empty string */
