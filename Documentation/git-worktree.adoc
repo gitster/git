@@ -79,6 +79,9 @@ with a matching name, treat as equivalent to:
 $ git worktree add --track -b <branch> <path> <remote>/<branch>
 ------------
 +
+For best results it is advised to specify <path> outside of the repository and
+existing worktrees - see <<EXAMPLES>>
++
 If the branch exists in multiple remotes and one of them is named by
 the `checkout.defaultRemote` configuration variable, we'll use that
 one for the purposes of disambiguation, even if the `<branch>` isn't
@@ -498,8 +501,8 @@ locked "reason\nwhy is locked"
 ...
 ------------
 
-EXAMPLES
---------
+[[EXAMPLES]]EXAMPLES
+--------------------
 You are in the middle of a refactoring session and your boss comes in and
 demands that you fix something immediately. You might typically use
 linkgit:git-stash[1] to store your changes away temporarily, however, your
