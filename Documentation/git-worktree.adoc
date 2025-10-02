@@ -522,14 +522,15 @@ $ popd
 $ git worktree remove ../temp
 ------------
 
-Side by side branch checkouts for a repository using multiple worktrees
+Side by side branch checkouts for a repository using multiple worktrees;
+let's imagine we participate in a project "bunny".
 
 ------------
-mkdir some-repository
-cd some-repository
-git clone --bare gitforge@someforge.example.com:some-org/some-repository .git
-git --git-dir=.git worktree add some-branch
-git --git-dir=.git worktree add another-branch
+mkdir
+cd bunny
+git clone --bare gitforge@someforge.example.com:some-org/bunny bunny.git
+git --git-dir=bunny.git worktree add some-branch
+git --git-dir=bunny.git worktree add another-branch
 ------------
 
 BUGS
