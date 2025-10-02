@@ -501,8 +501,9 @@ locked "reason\nwhy is locked"
 ...
 ------------
 
-[[EXAMPLES]]EXAMPLES
---------------------
+[[EXAMPLES]]
+EXAMPLES
+--------
 You are in the middle of a refactoring session and your boss comes in and
 demands that you fix something immediately. You might typically use
 linkgit:git-stash[1] to store your changes away temporarily, however, your
