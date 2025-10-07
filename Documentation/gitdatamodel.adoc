@@ -5,6 +5,10 @@ NAME
 ----
 gitdatamodel - Git's core data model
 
+SYNOPSIS
+--------
+Git data model
+
 DESCRIPTION
 -----------
 
