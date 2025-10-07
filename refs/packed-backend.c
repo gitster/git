@@ -959,11 +959,14 @@ static int next_record(struct packed_ref_iterator *iter)
 		if ((iter->base.ref.flags & REF_ISBROKEN)) {
 			oidclr(&iter->peeled, iter->repo->hash_algo);
 			iter->base.ref.flags &= ~REF_KNOWS_PEELED;
+			iter->base.ref.peeled_oid = NULL;
 		} else {
 			iter->base.ref.flags |= REF_KNOWS_PEELED;
+			iter->base.ref.peeled_oid = &iter->peeled;
 		}
 	} else {
 		oidclr(&iter->peeled, iter->repo->hash_algo);
+		iter->base.ref.peeled_oid = NULL;
 	}
 
 	return ITER_OK;

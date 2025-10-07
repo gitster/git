@@ -428,6 +428,7 @@ static int cache_ref_iterator_advance(struct ref_iterator *ref_iterator)
 			iter->base.ref.name = entry->name;
 			iter->base.ref.target = entry->u.value.referent;
 			iter->base.ref.oid = &entry->u.value.oid;
+			iter->base.ref.peeled_oid = NULL;
 			iter->base.ref.flags = entry->flag;
 			return ITER_OK;
 		}
