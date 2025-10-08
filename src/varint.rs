@@ -1,3 +1,6 @@
+/// # Safety
+///
+/// Callers must provide a NUL-terminated array to ensure safety.
 #[no_mangle]
 pub unsafe extern "C" fn decode_varint(bufp: *mut *const u8) -> u64 {
     let mut buf = *bufp;
@@ -22,6 +25,11 @@ pub unsafe extern "C" fn decode_varint(bufp: *mut *const u8) -> u64 {
     val
 }
 
+/// # Safety
+///
+/// The provided buffer must be large enough to store the encoded varint. Callers may either provide
+/// a `[u8; 16]` here, which is guaranteed to satisfy all encodable numbers. Or they can call this
+/// function with a `NULL` pointer first to figure out array size.
 #[no_mangle]
 pub unsafe extern "C" fn encode_varint(value: u64, buf: *mut u8) -> u8 {
     let mut varint: [u8; 16] = [0; 16];
