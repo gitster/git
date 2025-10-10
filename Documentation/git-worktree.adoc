@@ -522,6 +522,16 @@ $ popd
 $ git worktree remove ../temp
 ------------
 
+Side by side branch checkouts for a repository using multiple worktrees
+
+------------
+mkdir some-repository
+cd some-repository
+git clone --bare gitforge@someforge.example.com:some-org/some-repository some-repository.git
+git --git-dir=some-repository.git worktree add some-branch
+git --git-dir=some-repository.git worktree add another-branch
+------------
+
 BUGS
 ----
 Multiple checkout in general is still experimental, and the support
