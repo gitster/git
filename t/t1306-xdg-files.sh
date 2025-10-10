@@ -71,7 +71,7 @@ test_expect_success 'read with --list: xdg file exists and ~/.gitconfig exists' 
 	echo user.name=read_config >expected &&
 	echo user.name=read_gitconfig >>expected &&
 	git config --global --list >actual &&
-	! test_cmp expected actual
+	test_cmp expected actual
 '
 
 
