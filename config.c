@@ -1512,8 +1512,8 @@ int git_config_system(void)
 }
 
 static int do_git_config_sequence(const struct config_options *opts,
-				  const struct repository *repo,
-				  config_fn_t fn, void *data)
+				  const struct repository *repo, config_fn_t fn,
+				  void *data, enum config_scope scope)
 {
 	int ret = 0;
 	char *system_config = git_system_config();
@@ -1546,15 +1546,34 @@ static int do_git_config_sequence(const struct config_options *opts,
 							 NULL);
 
 	if (!opts->ignore_global) {
+		int global_config_success_count = 0;
+		int nonzero_ret_on_global_config_error = scope == CONFIG_SCOPE_GLOBAL;
+
 		git_global_config_paths(&user_config, &xdg_config);
 
-		if (xdg_config && !access_or_die(xdg_config, R_OK, ACCESS_EACCES_OK))
-			ret += git_config_from_file_with_options(fn, xdg_config, data,
-						CONFIG_SCOPE_GLOBAL, NULL);
+		if (xdg_config &&
+		    !access_or_die(xdg_config, R_OK, ACCESS_EACCES_OK)) {
+			ret += git_config_from_file_with_options(fn, xdg_config,
+								 data,
+								 CONFIG_SCOPE_GLOBAL,
+								 NULL);
+			if (!ret)
+				global_config_success_count++;
+		}
 
-		if (user_config && !access_or_die(user_config, R_OK, ACCESS_EACCES_OK))
-			ret += git_config_from_file_with_options(fn, user_config, data,
-						CONFIG_SCOPE_GLOBAL, NULL);
+		if (user_config &&
+		    !access_or_die(user_config, R_OK, ACCESS_EACCES_OK)) {
+			ret += git_config_from_file_with_options(fn, user_config,
+								 data,
+								 CONFIG_SCOPE_GLOBAL,
+								 NULL);
+			if (!ret)
+				global_config_success_count++;
+		}
+
+		if (nonzero_ret_on_global_config_error &&
+		    !global_config_success_count)
+			--ret;
 
 		free(xdg_config);
 		free(user_config);
@@ -1615,7 +1634,10 @@ int config_with_options(config_fn_t fn, void *data,
 		ret = git_config_from_blob_ref(fn, repo, config_source->blob,
 					       data, config_source->scope);
 	} else {
-		ret = do_git_config_sequence(opts, repo, fn, data);
+		ret = do_git_config_sequence(opts, repo, fn, data,
+					     config_source ?
+						     config_source->scope :
+						     CONFIG_SCOPE_UNKNOWN);
 	}
 
 	if (inc.remote_urls) {

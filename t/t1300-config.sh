@@ -2367,7 +2367,7 @@ test_expect_success 'list with nonexistent global config' '
 	git config ${mode_prefix}list --show-scope
 '
 
-test_expect_failure 'list --global with nonexistent global config' '
+test_expect_success 'list --global with nonexistent global config' '
 	rm -rf "$HOME"/.gitconfig "$HOME"/.config/git/config &&
 	test_must_fail git config ${mode_prefix}list --global --show-scope
 '
@@ -2478,7 +2478,7 @@ test_expect_success 'override global and system config' '
 	test_cmp expect output
 '
 
-test_expect_failure 'override global and system config with missing file' '
+test_expect_success 'override global and system config with missing file' '
 	test_must_fail env GIT_CONFIG_GLOBAL=does-not-exist GIT_CONFIG_SYSTEM=/dev/null git config ${mode_prefix}list --global &&
 	test_must_fail env GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=does-not-exist git config ${mode_prefix}list --system &&
 	GIT_CONFIG_GLOBAL=does-not-exist GIT_CONFIG_SYSTEM=does-not-exist git version
