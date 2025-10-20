@@ -83,8 +83,10 @@ trees::
     A tree is how Git represents a directory. It lists, for each item in
     the tree:
 +
+1. The *file mode*, for example `100644`.
++
 [[file-mode]]
-1. The *file mode*, for example `100644`. The format is inspired by Unix
+The format is inspired by Unix
    permissions, but Git's modes are much more limited. Git only supports these file modes:
 +
   - `100644`: regular file (with type `blob`)
