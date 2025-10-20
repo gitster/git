@@ -77,6 +77,24 @@ static get_value_fn *get_value_fn_for_key(const char *key)
 	return found ? found->get_value : NULL;
 }
 
+static void print_field(enum output_format format, const char *key,
+			struct strbuf *valbuf, struct strbuf *quotbuf)
+{
+	strbuf_reset(quotbuf);
+
+	switch (format) {
+	case FORMAT_KEYVALUE:
+		quote_c_style(valbuf->buf, quotbuf, NULL, 0);
+		printf("%s=%s\n", key, quotbuf->buf);
+		break;
+	case FORMAT_NUL_TERMINATED:
+		printf("%s\n%s%c", key, valbuf->buf, '\0');
+		break;
+	default:
+		BUG("not a valid output format: %d", format);
+	}
+}
+
 static int print_fields(int argc, const char **argv,
 			struct repository *repo,
 			enum output_format format)
@@ -97,21 +115,8 @@ static int print_fields(int argc, const char **argv,
 		}
 
 		strbuf_reset(&valbuf);
-		strbuf_reset(&quotbuf);
-
 		get_value(repo, &valbuf);
-
-		switch (format) {
-		case FORMAT_KEYVALUE:
-			quote_c_style(valbuf.buf, &quotbuf, NULL, 0);
-			printf("%s=%s\n", key, quotbuf.buf);
-			break;
-		case FORMAT_NUL_TERMINATED:
-			printf("%s\n%s%c", key, valbuf.buf, '\0');
-			break;
-		default:
-			BUG("not a valid output format: %d", format);
-		}
+		print_field(format, key, &valbuf, &quotbuf);
 	}
 
 	strbuf_release(&valbuf);
