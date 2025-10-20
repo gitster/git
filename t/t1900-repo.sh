@@ -4,6 +4,15 @@ test_description='test git repo-info'
 
 . ./test-lib.sh
 
+# git-repo-info keys. It must contain the same keys listed in the const
+# repo_info_fields, in lexicographical order.
+REPO_INFO_KEYS='
+	layout.bare
+	layout.shallow
+	object.format
+	references.format
+'
+
 # Test whether a key-value pair is correctly returned
 #
 # Usage: test_repo_info <label> <init command> <repo_name> <key> <expected value>
@@ -108,6 +117,26 @@ test_expect_success 'git repo info uses the last requested format' '
 	echo "layout.bare=false" >expected &&
 	git repo info --format=nul -z --format=keyvalue layout.bare >actual &&
 	test_cmp expected actual
+'
+
+test_expect_success 'git repo info --all returns all key-value pairs' '
+	git repo info $REPO_INFO_KEYS >expect &&
+	git repo info --all >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success 'git repo info --all <key> duplicates <key>' '
+	git repo info $REPO_INFO_KEYS object.format >expect &&
+	git repo info --all object.format >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success 'git repo info --all <invalid key> warns about invalid key' '
+	git repo info $REPO_INFO_KEYS >expect &&
+	echo "error: key ${SQ}no.key${SQ} not found" >expect_err &&
+	test_must_fail git repo info --all no.key >actual 2>actual_err &&
+	test_cmp expect actual &&
+	test_cmp expect_err actual_err
 '
 
 test_done

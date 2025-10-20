@@ -9,7 +9,7 @@
 #include "shallow.h"
 
 static const char *const repo_usage[] = {
-	"git repo info [--format=(keyvalue|nul)] [-z] [<key>...]",
+	"git repo info [--format=(keyvalue|nul)] [-z] [--all | <key>...]",
 	NULL
 };
 
@@ -124,6 +124,26 @@ static int print_fields(int argc, const char **argv,
 	return ret;
 }
 
+static void print_all_fields(struct repository *repo,
+			     enum output_format format)
+{
+	struct strbuf valbuf = STRBUF_INIT;
+	struct strbuf quotbuf = STRBUF_INIT;
+
+	for (unsigned long i = 0; i < ARRAY_SIZE(repo_info_fields); i++) {
+		struct field field = repo_info_fields[i];
+		get_value_fn *get_value = field.get_value;
+		const char *key = field.key;
+
+		strbuf_reset(&valbuf);
+		get_value(repo, &valbuf);
+		print_field(format, key, &valbuf, &quotbuf);
+	}
+
+	strbuf_release(&valbuf);
+	strbuf_release(&quotbuf);
+}
+
 static int parse_format_cb(const struct option *opt,
 			   const char *arg, int unset UNUSED)
 {
@@ -145,6 +165,7 @@ static int repo_info(int argc, const char **argv, const char *prefix,
 		     struct repository *repo)
 {
 	enum output_format format = FORMAT_KEYVALUE;
+	int all_keys = 0;
 	struct option options[] = {
 		OPT_CALLBACK_F(0, "format", &format, N_("format"),
 			       N_("output format"),
@@ -153,10 +174,14 @@ static int repo_info(int argc, const char **argv, const char *prefix,
 			       N_("synonym for --format=nul"),
 			       PARSE_OPT_NONEG | PARSE_OPT_NOARG,
 			       parse_format_cb),
+		OPT_BOOL(0, "all", &all_keys, N_("return all keys")),
 		OPT_END()
 	};
 
 	argc = parse_options(argc, argv, prefix, options, repo_usage, 0);
+
+	if (all_keys)
+		print_all_fields(repo, format);
 
 	return print_fields(argc, argv, repo, format);
 }
