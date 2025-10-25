@@ -1388,6 +1388,13 @@ int match_pathname(const char *pathname, int pathlen,
 
 		if (fspathncmp(pattern, name, prefix))
 			return 0;
+
+		/*
+		 * Retain one character of the prefix to
+		 * pass to fnmatch, which lets it distinguish
+		 * the start of a directory component correctly.
+		 */
+		prefix--;
 		pattern += prefix;
 		patternlen -= prefix;
 		name    += prefix;
@@ -1398,7 +1405,7 @@ int match_pathname(const char *pathname, int pathlen,
 		 * then our prefix match is all we need; we
 		 * do not need to call fnmatch at all.
 		 */
-		if (!patternlen && !namelen)
+		if (patternlen == 1 && namelen == 1)
 			return 1;
 	}
 
