@@ -43,6 +43,45 @@ do
 	'
 done
 
+test_expect_success NOTYET "incomplete line in both pre- and post-image context" '
+	(echo foo && echo baz | tr -d "\012") >x &&
+	git add x &&
+	(echo bar && echo baz | tr -d "\012") >x &&
+	git diff x &&
+	git -c core.whitespace=incomplete diff --check x &&
+	git -c core.whitespace=incomplete diff --reverse --check x
+'
+
+test_expect_success NOTYET "incomplete lines on both pre- and post-image" '
+	# The interpretation taken here is "since you are toucing
+	# the line anyway, you would better fix the incomplete line
+	# while you are at it."  but this is debatable.
+	echo foo | tr -d "\012" >x &&
+	git add x &&
+	echo bar | tr -d "\012" >x &&
+	git diff x &&
+	test_must_fail git -c core.whitespace=incomplete diff --check x &&
+	test_must_fail git -c core.whitespace=incomplete diff --reverse --check x
+'
+
+test_expect_success NOTYET "fix incomplete line in pre-image" '
+	echo foo | tr -d "\012" >x &&
+	git add x &&
+	echo bar >x &&
+	git diff x &&
+	git -c core.whitespace=incomplete diff --check x &&
+	test_must_fail git -c core.whitespace=incomplete diff --reverse --check x
+'
+
+test_expect_success NOTYET "new incomplete line in post-image" '
+	echo foo >x &&
+	git add x &&
+	echo bar | tr -d "\012" >x &&
+	git diff x &&
+	test_must_fail git -c core.whitespace=incomplete diff --check x &&
+	git -c core.whitespace=incomplete diff --reverse --check x
+'
+
 test_expect_success "Ray Lehtiniemi's example" '
 	cat <<-\EOF >x &&
 	do {
