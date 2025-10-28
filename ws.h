@@ -21,7 +21,7 @@ struct strbuf;
 #define WS_TAB_WIDTH_MASK       ((1<<6)-1)
 
 /* All WS_* -- when extended, adapt constants defined after diff.c:diff_symbol */
-#define WS_RULE_MASK            ((1<<12)-1)
+#define WS_RULE_MASK            ((1<<16)-1)
 
 extern unsigned whitespace_rule_cfg;
 unsigned whitespace_rule(struct index_state *, const char *);
