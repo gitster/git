@@ -2219,6 +2219,8 @@ static int exclude_matches_pathspec(const char *path, int pathlen,
 				    const struct pathspec *pathspec)
 {
 	int i;
+	int matches_exclude_magic = 0;
+	int matches_pathspec_elem = 0;
 
 	if (!pathspec || !pathspec->nr)
 		return 0;
@@ -2235,15 +2237,23 @@ static int exclude_matches_pathspec(const char *path, int pathlen,
 	for (i = 0; i < pathspec->nr; i++) {
 		const struct pathspec_item *item = &pathspec->items[i];
 		int len = item->nowildcard_len;
+		int *matches;
+
+		if (item->magic & PATHSPEC_EXCLUDE)
+			matches = &matches_exclude_magic;
+		else
+			matches = &matches_pathspec_elem;
 
 		if (len == pathlen &&
 		    !ps_strncmp(item, item->match, path, pathlen))
-			return 1;
+			*matches = 1;
 		if (len > pathlen &&
 		    item->match[pathlen] == '/' &&
 		    !ps_strncmp(item, item->match, path, pathlen))
-			return 1;
+			*matches = 1;
 	}
+	if (matches_pathspec_elem && !matches_exclude_magic)
+		return 1;
 	return 0;
 }
 
