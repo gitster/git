@@ -10,7 +10,6 @@
 #include "gettext.h"
 #include "parse-options.h"
 #include "string-list.h"
-#include "tempfile.h"
 #include "trailer.h"
 #include "config.h"
 
@@ -93,37 +92,6 @@ static int parse_opt_parse(const struct option *opt, const char *arg,
 	return 0;
 }
 
-static struct tempfile *trailers_tempfile;
-
-static FILE *create_in_place_tempfile(const char *file)
-{
-	struct stat st;
-	struct strbuf filename_template = STRBUF_INIT;
-	const char *tail;
-	FILE *outfile;
-
-	if (stat(file, &st))
-		die_errno(_("could not stat %s"), file);
-	if (!S_ISREG(st.st_mode))
-		die(_("file %s is not a regular file"), file);
-	if (!(st.st_mode & S_IWUSR))
-		die(_("file %s is not writable by user"), file);
-
-	/* Create temporary file in the same directory as the original */
-	tail = strrchr(file, '/');
-	if (tail)
-		strbuf_add(&filename_template, file, tail - file + 1);
-	strbuf_addstr(&filename_template, "git-interpret-trailers-XXXXXX");
-
-	trailers_tempfile = xmks_tempfile_m(filename_template.buf, st.st_mode);
-	strbuf_release(&filename_template);
-	outfile = fdopen_tempfile(trailers_tempfile, "w");
-	if (!outfile)
-		die_errno(_("could not open temporary file"));
-
-	return outfile;
-}
-
 static void read_input_file(struct strbuf *sb, const char *file)
 {
 	if (file) {
@@ -142,21 +110,15 @@ static void interpret_trailers(const struct process_trailer_options *opts,
 {
 	struct strbuf sb = STRBUF_INIT;
 	struct strbuf out = STRBUF_INIT;
-	FILE *outfile = stdout;
-
-	trailer_config_init();
 
 	read_input_file(&sb, file);
 
-	if (opts->in_place)
-		outfile = create_in_place_tempfile(file);
-
 	process_trailers(opts, new_trailer_head, &sb, &out);
 
-	fwrite(out.buf, out.len, 1, outfile);
 	if (opts->in_place)
-		if (rename_tempfile(&trailers_tempfile, file))
-			die_errno(_("could not rename temporary file to %s"), file);
+		write_file_buf(file, out.buf, out.len);
+	else
+		strbuf_write(&out, stdout);
 
 	strbuf_release(&sb);
 	strbuf_release(&out);
@@ -202,6 +164,8 @@ int cmd_interpret_trailers(int argc,
 			_("--trailer with --only-input does not make sense"),
 			git_interpret_trailers_usage,
 			options);
+
+	trailer_config_init();
 
 	if (argc) {
 		int i;

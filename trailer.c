@@ -9,6 +9,8 @@
 #include "commit.h"
 #include "trailer.h"
 #include "list.h"
+#include "wrapper.h"
+
 /*
  * Copyright (c) 2013, 2014 Christian Couder <chriscool@tuxfamily.org>
  */
@@ -1224,17 +1226,65 @@ void trailer_iterator_release(struct trailer_iterator *iter)
 	strbuf_release(&iter->key);
 }
 
-int amend_file_with_trailers(const char *path, const struct strvec *trailer_args)
+static int amend_strbuf_with_trailers(struct strbuf *buf,
+				      const struct strvec *trailer_args)
 {
-	struct child_process run_trailer = CHILD_PROCESS_INIT;
+	struct process_trailer_options opts = PROCESS_TRAILER_OPTIONS_INIT;
+	LIST_HEAD(new_trailer_head);
+	struct strbuf out = STRBUF_INIT;
+	size_t i;
 
-	run_trailer.git_cmd = 1;
-	strvec_pushl(&run_trailer.args, "interpret-trailers",
-		     "--in-place", "--no-divider",
-		     path, NULL);
-	strvec_pushv(&run_trailer.args, trailer_args->v);
-	return run_command(&run_trailer);
+	opts.no_divider = 1;
+
+	for (i = 0; i < trailer_args->nr; i++) {
+		const char *text = trailer_args->v[i];
+		struct new_trailer_item *item;
+
+		if (!*text)
+			continue;
+		item = xcalloc(1, sizeof(*item));
+		INIT_LIST_HEAD(&item->list);
+		item->text = text;
+		list_add_tail(&item->list, &new_trailer_head);
+	}
+
+	process_trailers(&opts, &new_trailer_head, buf, &out);
+
+	strbuf_swap(buf, &out);
+	strbuf_release(&out);
+	while (!list_empty(&new_trailer_head)) {
+		struct new_trailer_item *item =
+			list_first_entry(&new_trailer_head, struct new_trailer_item, list);
+		list_del(&item->list);
+		free(item);
+	}
+	return 0;
 }
+
+int amend_file_with_trailers(const char *path,
+			     const struct strvec *trailer_args)
+{
+	struct strbuf buf = STRBUF_INIT;
+
+	if (!trailer_args || !trailer_args->nr)
+		return 0;
+
+	if (strbuf_read_file(&buf, path, 0) < 0)
+		return error_errno("could not read '%s'", path);
+
+	if (amend_strbuf_with_trailers(&buf, trailer_args)) {
+		strbuf_release(&buf);
+		return error("failed to append trailers");
+	}
+
+	if (write_file_buf_gently(path, buf.buf, buf.len)) {
+		strbuf_release(&buf);
+		return -1;
+	}
+
+	strbuf_release(&buf);
+	return 0;
+ }
 
 void process_trailers(const struct process_trailer_options *opts,
 		      struct list_head *new_trailer_head,
