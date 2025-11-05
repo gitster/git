@@ -68,6 +68,8 @@ void parse_trailers_from_config(struct list_head *config_head);
 void parse_trailers_from_command_line_args(struct list_head *arg_head,
 					   struct list_head *new_trailer_head);
 
+void validate_trailer_args_after_config(const struct strvec *cli_args);
+
 void process_trailers_lists(struct list_head *head,
 			    struct list_head *arg_head);
 
@@ -194,6 +196,9 @@ int trailer_iterator_advance(struct trailer_iterator *iter);
  * Release all resources associated with the trailer iteration.
  */
 void trailer_iterator_release(struct trailer_iterator *iter);
+
+int amend_strbuf_with_trailers(struct strbuf *buf,
+			       const struct strvec *trailer_args);
 
 /*
  * Augment a file to add trailers to it (similar to 'git interpret-trailers').
