@@ -1379,6 +1379,10 @@ static void emit_diff_symbol_from_struct(struct diff_options *o,
 		emit_line(o, "", "", line, len);
 		break;
 	case DIFF_SYMBOL_CONTEXT_INCOMPLETE:
+		set = diff_get_color_opt(o, DIFF_CONTEXT);
+		reset = diff_get_color_opt(o, DIFF_RESET);
+		emit_line(o, set, reset, line, len);
+		break;
 	case DIFF_SYMBOL_CONTEXT_MARKER:
 		context = diff_get_color_opt(o, DIFF_CONTEXT);
 		reset = diff_get_color_opt(o, DIFF_RESET);
@@ -1666,6 +1670,13 @@ static void emit_context_line(struct emit_callback *ecbdata,
 {
 	unsigned flags = WSEH_CONTEXT | ecbdata->ws_rule;
 	emit_diff_symbol(ecbdata->opt, DIFF_SYMBOL_CONTEXT, line, len, flags);
+}
+
+static void emit_incomplete_line(struct emit_callback *ecbdata,
+				 const char *line, int len)
+{
+	emit_diff_symbol(ecbdata->opt, DIFF_SYMBOL_CONTEXT_INCOMPLETE,
+			 line, len, 0);
 }
 
 static void emit_hunk_header(struct emit_callback *ecbdata,
@@ -2442,8 +2453,7 @@ static int fn_out_consume(void *priv, char *line, unsigned long len)
 			BUG("fn_out_consume: '\\No newline' after unknown line (%c)",
 			    ecbdata->last_line_kind);
 		}
-		emit_diff_symbol(o, DIFF_SYMBOL_CONTEXT_INCOMPLETE,
-				 line, len, 0);
+		emit_incomplete_line(ecbdata, line, len);
 		break;
 	default:
 		BUG("fn_out_consume: unknown line '%s'", line);
