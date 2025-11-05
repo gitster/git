@@ -601,6 +601,7 @@ struct emit_callback {
 	int blank_at_eof_in_postimage;
 	int lno_in_preimage;
 	int lno_in_postimage;
+	int last_line_kind;
 	const char **label_path;
 	struct diff_words_data *diff_words;
 	struct diff_options *opt;
@@ -2426,13 +2427,28 @@ static int fn_out_consume(void *priv, char *line, unsigned long len)
 		break;
 	case '\\':
 		/* incomplete line at the end */
-		ecbdata->lno_in_preimage++;
+		switch (ecbdata->last_line_kind) {
+		case '+':
+			ecbdata->lno_in_postimage++;
+			break;
+		case '-':
+			ecbdata->lno_in_preimage++;
+			break;
+		case ' ':
+			ecbdata->lno_in_preimage++;
+			ecbdata->lno_in_postimage++;
+			break;
+		default:
+			BUG("fn_out_consume: '\\No newline' after unknown line (%c)",
+			    ecbdata->last_line_kind);
+		}
 		emit_diff_symbol(o, DIFF_SYMBOL_CONTEXT_INCOMPLETE,
 				 line, len, 0);
 		break;
 	default:
 		BUG("fn_out_consume: unknown line '%s'", line);
 	}
+	ecbdata->last_line_kind = line[0];
 	return 0;
 }
 
