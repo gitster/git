@@ -43,7 +43,7 @@ OPTIONS
 	abort the operation.
 
 -u::
-	After a successful merge, update the files in the work
+	After a successful merge, update the files in the working
 	tree with the result of the merge.
 
 -i::

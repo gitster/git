@@ -173,7 +173,7 @@ for `git add --no-all <pathspec>...`, i.e. ignored removed files.
 `--ignore-missing`::
 	This option can only be used together with `--dry-run`. By using
 	this option the user can check if any of the given files would
-	be ignored, no matter if they are already present in the work
+	be ignored, no matter if they are already present in the working
 	tree or not.
 
 `--no-warn-embedded-repo`::
