@@ -282,9 +282,9 @@ NOTES MERGE STRATEGIES
 ----------------------
 
 The default notes merge strategy is `manual`, which checks out
-conflicting notes in a special work tree for resolving notes conflicts
+conflicting notes in a special worktree for resolving notes conflicts
 (`.git/NOTES_MERGE_WORKTREE`), and instructs the user to resolve the
-conflicts in that work tree.
+conflicts in that worktree.
 When done, the user can either finalize the merge with
 `git notes merge --commit`, or abort the merge with
 `git notes merge --abort`.
