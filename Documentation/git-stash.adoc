@@ -365,7 +365,7 @@ $ git stash pop
 Testing partial commits::
 
 You can use `git stash push --keep-index` when you want to make two or
-more commits out of the changes in the work tree, and you want to test
+more commits out of the changes in the working tree, and you want to test
 each change before committing:
 +
 ----------------------------------------------------------------

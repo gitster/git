@@ -93,7 +93,7 @@ submodules, and show their status as well.
 If you are only interested in changes of the currently initialized
 submodules with respect to the commit recorded in the index or the HEAD,
 linkgit:git-status[1] and linkgit:git-diff[1] will provide that information
-too (and can also report changes to a submodule's work tree).
+too (and can also report changes to a submodule's working tree).
 
 init [--] [<path>...]::
 	Initialize the submodules recorded in the index (which were

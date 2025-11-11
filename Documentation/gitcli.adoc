@@ -37,13 +37,13 @@ arguments.  Here are the rules:
    they can be disambiguated by placing `--` between them.
    E.g. `git diff -- HEAD` is, "I have a file called HEAD in my work
    tree.  Please show changes between the version I staged in the index
-   and what I have in the work tree for that file", not "show the difference
-   between the HEAD commit and the work tree as a whole".  You can say
+   and what I have in the working tree for that file", not "show the difference
+   between the HEAD commit and the working tree as a whole".  You can say
    `git diff HEAD --` to ask for the latter.
 
  * Without disambiguating `--`, Git makes a reasonable guess, but errors
    out and asks you to disambiguate when ambiguous.  E.g. if you have a
-   file called HEAD in your work tree, `git diff HEAD` is ambiguous, and
+   file called HEAD in your working tree, `git diff HEAD` is ambiguous, and
    you have to say either `git diff HEAD --` or `git diff -- HEAD` to
    disambiguate.
 
@@ -100,9 +100,9 @@ scripting Git:
    them do.
 
  * When you give a revision parameter to a command, make sure the parameter is
-   not ambiguous with a name of a file in the work tree.  E.g. do not write
+   not ambiguous with a name of a file in the working tree.  E.g. do not write
    `git log -1 HEAD` but write `git log -1 HEAD --`; the former will not work
-   if you happen to have a file called `HEAD` in the work tree.
+   if you happen to have a file called `HEAD` in the working tree.
 
  * Many commands allow a long option `--option` to be abbreviated
    only to their unique prefix (e.g. if there is no other option

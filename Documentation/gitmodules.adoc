@@ -72,7 +72,7 @@ submodule.<name>.ignore::
 	    nonetheless show up in the output of status and commit when it has
 	    been staged).
 
-	dirty;; All changes to the submodule's work tree will be ignored, only
+	dirty;; All changes to the submodule's working tree will be ignored, only
 	    committed differences between the `HEAD` of the submodule and its
 	    recorded state in the superproject are taken into account.
 

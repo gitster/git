@@ -43,7 +43,7 @@ That is, from the left to the right:
 . a space.
 . sha1 for "src"; 0\{40\} if creation or unmerged.
 . a space.
-. sha1 for "dst"; 0\{40\} if deletion, unmerged or "work tree out of sync with the index".
+. sha1 for "dst"; 0\{40\} if deletion, unmerged or "working tree file out of sync with the index".
 . a space.
 . status, followed by optional "score" number.
 . a tab or a NUL when `-z` option is used.

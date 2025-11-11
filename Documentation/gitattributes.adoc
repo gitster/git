@@ -71,12 +71,12 @@ When deciding what attributes are assigned to a path, Git
 consults `$GIT_DIR/info/attributes` file (which has the highest
 precedence), `.gitattributes` file in the same directory as the
 path in question, and its parent directories up to the toplevel of the
-work tree (the further the directory that contains `.gitattributes`
+working tree (the further the directory that contains `.gitattributes`
 is from the path in question, the lower its precedence). Finally
 global and system-wide files are considered (they have the lowest
 precedence).
 
-When the `.gitattributes` file is missing from the work tree, the
+When the `.gitattributes` file is missing from the working tree, the
 path in the index is used as a fall-back.  During checkout process,
 `.gitattributes` in the index is used and then the file in the
 working tree is used as a fall-back.
@@ -286,18 +286,18 @@ the conversion is reversible for the current setting of
 `core.autocrlf`.  For "true", Git rejects irreversible
 conversions; for "warn", Git only prints a warning but accepts
 an irreversible conversion.  The safety triggers to prevent such
-a conversion done to the files in the work tree, but there are a
+a conversion done to the files in the working tree, but there are a
 few exceptions.  Even though...
 
-- 'git add' itself does not touch the files in the work tree, the
+- 'git add' itself does not touch the files in the working tree, the
   next checkout would, so the safety triggers;
 
 - 'git apply' to update a text file with a patch does touch the files
-  in the work tree, but the operation is about text files and CRLF
+  in the working tree, but the operation is about text files and CRLF
   conversion is about fixing the line ending inconsistencies, so the
   safety does not trigger;
 
-- 'git diff' itself does not touch the files in the work tree, it is
+- 'git diff' itself does not touch the files in the working tree, it is
   often run to inspect the changes you intend to next 'git add'.  To
   catch potential problems early, safety triggers.
 
@@ -1115,7 +1115,7 @@ text::
 
 binary::
 
-	Keep the version from your branch in the work tree, but
+	Keep the version from your branch in the working tree, but
 	leave the path in the conflicted state for the user to
 	sort out.
 
@@ -1180,7 +1180,7 @@ using `%S`, `%X` and `%Y` respectively.
 ^^^^^^^^^^^^^^^^^^^^^^
 
 This attribute controls the length of conflict markers left in
-the work tree file during a conflicted merge.  Only a positive
+the working tree file during a conflicted merge.  Only a positive
 integer has a meaningful effect.
 
 For example, this line in `.gitattributes` can be used to tell the merge

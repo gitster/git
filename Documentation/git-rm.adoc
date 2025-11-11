@@ -163,12 +163,12 @@ will be staged (unless `--cached` or `-n` are used).
 
 A submodule is considered up to date when the `HEAD` is the same as
 recorded in the index, no tracked files are modified and no untracked
-files that aren't ignored are present in the submodule's work tree.
+files that aren't ignored are present in the submodule's working tree.
 Ignored files are deemed expendable and won't stop a submodule's work
 tree from being removed.
 
 If you only want to remove the local checkout of a submodule from your
-work tree without committing the removal, use linkgit:git-submodule[1] `deinit`
+working tree without committing the removal, use linkgit:git-submodule[1] `deinit`
 instead. Also see linkgit:gitsubmodules[7] for details on submodule removal.
 
 EXAMPLES

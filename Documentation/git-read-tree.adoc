@@ -23,7 +23,7 @@ linkgit:git-checkout-index[1])
 Optionally, it can merge a tree into the index, perform a
 fast-forward (i.e. 2-way) merge, or a 3-way merge, with the `-m`
 flag.  When used with `-m`, the `-u` flag causes it to also update
-the files in the work tree with the result of the merge.
+the files in the working tree with the result of the merge.
 
 Only trivial merges are done by 'git read-tree' itself.  Only conflicting paths
 will be in an unmerged state when 'git read-tree' returns.
@@ -158,7 +158,7 @@ fast-forward situation).
 When two trees are specified, the user is telling 'git read-tree'
 the following:
 
-     1. The current index and work tree is derived from $H, but
+     1. The current index and working tree is derived from $H, but
 	the user may have local changes in them since $H.
 
      2. The user wants to fast-forward to $M.
@@ -166,7 +166,7 @@ the following:
 In this case, the `git read-tree -m $H $M` command makes sure
 that no local change is lost as the result of this "merge".
 Here are the "carry forward" rules, where "I" denotes the index,
-"clean" means that index and work tree coincide, and "exists"/"nothing"
+"clean" means that index and working tree coincide, and "exists"/"nothing"
 refer to the presence of a path in the specified commit:
 
 ....
@@ -212,7 +212,7 @@ refer to the presence of a path in the specified commit:
 
 In all "keep index" cases, the index entry stays as in the
 original index file.  If the entry is not up to date,
-'git read-tree' keeps the copy in the work tree intact when
+'git read-tree' keeps the copy in the working tree intact when
 operating under the -u flag.
 
 When this form of 'git read-tree' returns successfully, you can
@@ -317,7 +317,7 @@ end of a successful merge.
 
 When you start a 3-way merge with an index file that is already
 populated, it is assumed that it represents the state of the
-files in your work tree, and you can even have files with
+files in your working tree, and you can even have files with
 changes unrecorded in the index file.  It is further assumed
 that this state is "derived" from the stage 2 tree.  The 3-way
 merge refuses to run if it finds an entry in the original index
@@ -342,7 +342,7 @@ $ git fetch git://.... linus
 $ LT=`git rev-parse FETCH_HEAD`
 ----------------
 
-Your work tree is still based on your HEAD ($JC), but you have
+Your working tree is still based on your HEAD ($JC), but you have
 some edits since.  Three-way merge makes sure that you have not
 added or modified index entries since $JC, and if you haven't,
 then does the right thing.  So with the following sequence:
@@ -355,7 +355,7 @@ $ echo "Merge with Linus" | \
 ----------------
 
 what you would commit is a pure merge between $JC and $LT without
-your work-in-progress changes, and your work tree would be
+your work-in-progress changes, and your working tree would be
 updated to the result of the merge.
 
 However, if you have local changes in the working tree that

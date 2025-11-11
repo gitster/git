@@ -1188,7 +1188,7 @@ branch.
 
 A merge is made by combining the changes made in `branchname` and the
 changes made up to the latest commit in your current branch since
-their histories forked. The work tree is overwritten by the result of
+their histories forked. The working tree is overwritten by the result of
 the merge when this combining is done cleanly, or overwritten by a
 half-merged results when this combining results in conflicts.
 Therefore, if you have uncommitted changes touching the same files as
@@ -1299,7 +1299,7 @@ $ git show :3:file.txt	# the version from MERGE_HEAD.
 -------------------------------------------------
 
 When you ask linkgit:git-diff[1] to show the conflicts, it runs a
-three-way diff between the conflicted merge results in the work tree with
+three-way diff between the conflicted merge results in the working tree with
 stages 2 and 3 to show only hunks whose contents come from both sides,
 mixed (in other words, when a hunk's merge results come only from stage 2,
 that part is not conflicting and is not shown.  Same for stage 3).
@@ -2149,7 +2149,7 @@ He uses two public branches:
 He also uses a set of temporary branches ("topic branches"), each
 containing a logical grouping of patches.
 
-To set this up, first create your work tree by cloning Linus's public
+To set this up, first create your working tree by cloning Linus's public
 tree:
 
 -------------------------------------------------
@@ -3667,7 +3667,7 @@ files in a submodule, which silently leads to similar problems as not pushing
 the submodule changes. Starting with Git 1.7.0 both `git status` and `git diff`
 in the superproject show submodules as modified when they contain new or
 modified files to protect against accidentally committing such a state. `git
-diff` will also add a `-dirty` to the work tree side when generating patch
+diff` will also add a `-dirty` to the working tree side when generating patch
 output or used with the `--submodule` option:
 
 -------------------------------------------------
