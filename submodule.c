@@ -2238,15 +2238,58 @@ out:
 	return ret;
 }
 
+static int check_casefolding_conflict(const char *git_dir,
+				      const char *submodule_name,
+				      const bool suffixes_match)
+{
+	char *p, *modules_dir = xstrdup(git_dir);
+	struct dirent *de;
+	DIR *dir = NULL;
+	int ret = 0;
+
+	if ((p = find_last_dir_sep(modules_dir)))
+		*p = '\0';
+
+	/* No conflict is possible if modules_dir doesn't exist (first clone) */
+	if (!is_directory(modules_dir))
+		goto cleanup;
+
+	dir = opendir(modules_dir);
+	if (!dir) {
+		ret = -1;
+		goto cleanup;
+	}
+
+	/* Check for another directory under .git/modules that differs only in case. */
+	while ((de = readdir(dir))) {
+		if (!strcmp(de->d_name, ".") || !strcmp(de->d_name, ".."))
+			continue;
+
+		if ((suffixes_match || is_git_directory(git_dir)) &&
+		    !strcasecmp(de->d_name, submodule_name) &&
+		    strcmp(de->d_name, submodule_name)) {
+			ret = -1; /* collision found */
+			break;
+		}
+	}
+
+cleanup:
+	if (dir)
+		closedir(dir);
+	FREE_AND_NULL(modules_dir);
+	return ret;
+}
+
 /*
  * Encoded gitdir validation function used when extensions.submoduleEncoding is enabled.
  * This does not print errors like the non-encoded version, because encoding is supposed
  * to mitigate / fix all these.
  */
-static int validate_submodule_encoded_git_dir(char *git_dir, const char *submodule_name UNUSED)
+static int validate_submodule_encoded_git_dir(char *git_dir, const char *submodule_name)
 {
 	const char *modules_marker = "/modules/";
 	char *p = git_dir, *last_submodule_name = NULL;
+	int config_ignorecase = 0;
 
 	if (!the_repository->repository_format_submodule_encoding)
 		BUG("validate_submodule_encoded_git_dir() must be called with "
@@ -2261,6 +2304,14 @@ static int validate_submodule_encoded_git_dir(char *git_dir, const char *submodu
 	/* Prevent the use of '/' in encoded names */
 	if (!last_submodule_name || strchr(last_submodule_name, '/'))
 		return -1;
+
+	/* Prevent conflicts on case-folding filesystems */
+	repo_config_get_bool(the_repository, "core.ignorecase", &config_ignorecase);
+	if (ignore_case || config_ignorecase) {
+		bool suffixes_match = !strcmp(last_submodule_name, submodule_name);
+		return check_casefolding_conflict(git_dir, submodule_name,
+						  suffixes_match);
+	}
 
 	return 0;
 }
@@ -2650,12 +2701,36 @@ void submodule_name_to_gitdir(struct strbuf *buf, struct repository *r,
 	if (!validate_and_set_submodule_gitdir(buf, submodule_name))
 		return;
 
-	/* Case 2: Try URI-safe (RFC3986) encoding first, this fixes nested gitdirs */
+	/* Case 2.1: Try URI-safe (RFC3986) encoding first, this fixes nested gitdirs */
 	strbuf_reset(buf);
 	repo_git_path_append(r, buf, "modules/");
 	strbuf_addstr_urlencode(buf, submodule_name, is_rfc3986_unreserved);
 	if (!validate_and_set_submodule_gitdir(buf, submodule_name))
 		return;
+
+	/* Case 2.2: Try extended uppercase URI (RFC3986) encoding, to fix case-folding */
+	strbuf_reset(buf);
+	repo_git_path_append(r, buf, "modules/");
+	strbuf_addstr_urlencode(buf, submodule_name, is_casefolding_rfc3986_unreserved);
+	if (!validate_and_set_submodule_gitdir(buf, submodule_name))
+		return;
+
+	/* Case 2.3: Try some derived gitdir names, see if one sticks */
+	for (char c = '0'; c <= '9'; c++) {
+		strbuf_reset(buf);
+		repo_git_path_append(r, buf, "modules/");
+		strbuf_addstr_urlencode(buf, submodule_name, is_rfc3986_unreserved);
+		strbuf_addch(buf, c);
+		if (!validate_and_set_submodule_gitdir(buf, submodule_name))
+			return;
+
+		strbuf_reset(buf);
+		repo_git_path_append(r, buf, "modules/");
+		strbuf_addstr_urlencode(buf, submodule_name, is_casefolding_rfc3986_unreserved);
+		strbuf_addch(buf, c);
+		if (!validate_and_set_submodule_gitdir(buf, submodule_name))
+			return;
+	}
 
 	/* Case 3: Nothing worked: error out */
 	die(_("Cannot construct a valid gitdir path for submodule '%s': "
