@@ -2660,8 +2660,12 @@ static int validate_and_set_submodule_gitdir(struct strbuf *gitdir_path,
 void submodule_name_to_gitdir(struct strbuf *buf, struct repository *r,
 			      const char *submodule_name)
 {
+	unsigned char raw_name_hash[GIT_MAX_RAWSZ];
+	char hex_name_hash[GIT_MAX_HEXSZ + 1];
+	struct git_hash_ctx ctx;
 	const char *gitdir;
-	char *key;
+	char *key, header[128];
+	int header_len;
 
 	repo_git_path_append(r, buf, "modules/");
 	strbuf_addstr(buf, submodule_name);
@@ -2731,6 +2735,20 @@ void submodule_name_to_gitdir(struct strbuf *buf, struct repository *r,
 		if (!validate_and_set_submodule_gitdir(buf, submodule_name))
 			return;
 	}
+
+	/* Case 2.4: If all the above failed, try a hash of the name as a last resort */
+	header_len = snprintf(header, sizeof(header), "blob %zu", strlen(submodule_name));
+	the_hash_algo->init_fn(&ctx);
+	the_hash_algo->update_fn(&ctx, header, header_len);
+	the_hash_algo->update_fn(&ctx, "\0", 1);
+	the_hash_algo->update_fn(&ctx, submodule_name, strlen(submodule_name));
+	the_hash_algo->final_fn(raw_name_hash, &ctx);
+	hash_to_hex_algop_r(hex_name_hash, raw_name_hash, the_hash_algo);
+	strbuf_reset(buf);
+	repo_git_path_append(r, buf, "modules/");
+	strbuf_addstr(buf, hex_name_hash);
+	if (!validate_and_set_submodule_gitdir(buf, submodule_name))
+		return;
 
 	/* Case 3: Nothing worked: error out */
 	die(_("Cannot construct a valid gitdir path for submodule '%s': "
