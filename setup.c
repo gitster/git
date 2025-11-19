@@ -1748,6 +1748,14 @@ const char *setup_git_directory_gently(int *nongit_ok)
 	repo_config_clear(the_repository);
 
 	/*
+	 * Set build-time default for submodule encoding.
+	 * This can be overridden by the repository's config.
+	 */
+#ifdef SUBMODULE_ENCODING_BY_DEFAULT
+	repo_fmt.submodule_encoding = SUBMODULE_ENCODING_BY_DEFAULT;
+#endif
+
+	/*
 	 * Let's assume that we are in a git repository.
 	 * If it turns out later that we are somewhere else, the value will be
 	 * updated accordingly.
