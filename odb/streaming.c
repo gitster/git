@@ -214,8 +214,6 @@ ssize_t odb_read_stream_read(struct odb_read_stream *st, void *buf, size_t sz)
 
 struct odb_read_stream *odb_read_object_stream(struct object_database *odb,
 					       const struct object_id *oid,
-					       enum object_type *type,
-					       unsigned long *size,
 					       struct stream_filter *filter)
 {
 	struct odb_read_stream *st;
@@ -236,8 +234,6 @@ struct odb_read_stream *odb_read_object_stream(struct object_database *odb,
 		st = nst;
 	}
 
-	*size = st->size;
-	*type = st->type;
 	return st;
 }
 
@@ -248,18 +244,16 @@ int odb_stream_blob_to_fd(struct object_database *odb,
 			  int can_seek)
 {
 	struct odb_read_stream *st;
-	enum object_type type;
-	unsigned long sz;
 	ssize_t kept = 0;
 	int result = -1;
 
-	st = odb_read_object_stream(odb, oid, &type, &sz, filter);
+	st = odb_read_object_stream(odb, oid, filter);
 	if (!st) {
 		if (filter)
 			free_stream_filter(filter);
 		return result;
 	}
-	if (type != OBJ_BLOB)
+	if (st->type != OBJ_BLOB)
 		goto close_and_exit;
 	for (;;) {
 		char buf[1024 * 16];
