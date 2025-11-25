@@ -17,6 +17,7 @@
 #include "parse-options.h"
 #include "refs.h"
 #include "revision.h"
+#include "sequencer.h"
 #include "strmap.h"
 #include <oidset.h>
 #include <tree.h>
@@ -57,10 +58,25 @@ static char *get_author(const char *message)
 	return NULL;
 }
 
+/*
+ * Generates a revert commit message using the shared sequencer function.
+ * We use oid_to_hex() directly instead of refer_to_commit() since git replay
+ * is designed for simpler server-side operations without interactive features.
+ */
+static void generate_revert_message(struct strbuf *msg,
+				    const char *orig_message,
+				    const struct object_id *oid)
+{
+	sequencer_format_revert_header(msg, orig_message);
+	strbuf_addstr(msg, oid_to_hex(oid));
+	strbuf_addstr(msg, ".\n");
+}
+
 static struct commit *create_commit(struct repository *repo,
 				    struct tree *tree,
 				    struct commit *based_on,
-				    struct commit *parent)
+				    struct commit *parent,
+				    int is_revert)
 {
 	struct object_id ret;
 	struct object *obj = NULL;
@@ -78,8 +94,17 @@ static struct commit *create_commit(struct repository *repo,
 	commit_list_insert(parent, &parents);
 	extra = read_commit_extra_headers(based_on, exclude_gpgsig);
 	find_commit_subject(message, &orig_message);
-	strbuf_addstr(&msg, orig_message);
-	author = get_author(message);
+
+	if (is_revert) {
+		generate_revert_message(&msg, orig_message, &based_on->object.oid);
+		/* For revert, use current user as author */
+		author = NULL;
+	} else {
+		/* Cherry-pick mode: use original commit message and author */
+		strbuf_addstr(&msg, orig_message);
+		author = get_author(message);
+	}
+
 	reset_ident_date();
 	if (commit_tree_extended(msg.buf, msg.len, &tree->object.oid, parents,
 				 &ret, author, NULL, sign_commit, extra)) {
@@ -261,7 +286,8 @@ static struct commit *pick_regular_commit(struct repository *repo,
 					  kh_oid_map_t *replayed_commits,
 					  struct commit *onto,
 					  struct merge_options *merge_opt,
-					  struct merge_result *result)
+					  struct merge_result *result,
+					  int is_revert)
 {
 	struct commit *base, *replayed_base;
 	struct tree *pickme_tree, *base_tree;
@@ -273,21 +299,41 @@ static struct commit *pick_regular_commit(struct repository *repo,
 	pickme_tree = repo_get_commit_tree(repo, pickme);
 	base_tree = repo_get_commit_tree(repo, base);
 
-	merge_opt->branch1 = short_commit_name(repo, replayed_base);
-	merge_opt->branch2 = short_commit_name(repo, pickme);
-	merge_opt->ancestor = xstrfmt("parent of %s", merge_opt->branch2);
+	if (is_revert) {
+		/* For revert: swap base and pickme to reverse the diff */
+		merge_opt->branch1 = short_commit_name(repo, replayed_base);
+		merge_opt->branch2 = xstrfmt("parent of %s", short_commit_name(repo, pickme));
+		merge_opt->ancestor = short_commit_name(repo, pickme);
 
-	merge_incore_nonrecursive(merge_opt,
-				  base_tree,
-				  result->tree,
-				  pickme_tree,
-				  result);
+		merge_incore_nonrecursive(merge_opt,
+					  pickme_tree,
+					  result->tree,
+					  base_tree,
+					  result);
 
-	free((char*)merge_opt->ancestor);
+		/* branch2 was allocated with xstrfmt, needs freeing */
+		free((char *)merge_opt->branch2);
+	} else {
+		/* For cherry-pick: normal order */
+		merge_opt->branch1 = short_commit_name(repo, replayed_base);
+		merge_opt->branch2 = short_commit_name(repo, pickme);
+		merge_opt->ancestor = xstrfmt("parent of %s", merge_opt->branch2);
+
+		merge_incore_nonrecursive(merge_opt,
+					  base_tree,
+					  result->tree,
+					  pickme_tree,
+					  result);
+
+		/* ancestor was allocated with xstrfmt, needs freeing */
+		free((char *)merge_opt->ancestor);
+	}
+
 	merge_opt->ancestor = NULL;
+	merge_opt->branch2 = NULL;
 	if (!result->clean)
 		return NULL;
-	return create_commit(repo, result->tree, pickme, replayed_base);
+	return create_commit(repo, result->tree, pickme, replayed_base, is_revert);
 }
 
 static enum ref_action_mode parse_ref_action_mode(const char *ref_action, const char *source)
@@ -350,6 +396,7 @@ int cmd_replay(int argc,
 	int contained = 0;
 	const char *ref_action = NULL;
 	enum ref_action_mode ref_mode;
+	int is_revert = 0;
 
 	struct rev_info revs;
 	struct commit *last_commit = NULL;
@@ -366,7 +413,7 @@ int cmd_replay(int argc,
 	const char *const replay_usage[] = {
 		N_("(EXPERIMENTAL!) git replay "
 		   "([--contained] --onto <newbase> | --advance <branch>) "
-		   "[--ref-action[=<mode>]] <revision-range>..."),
+		   "[--ref-action[=<mode>]] [--revert] <revision-range>..."),
 		NULL
 	};
 	struct option replay_options[] = {
@@ -381,6 +428,8 @@ int cmd_replay(int argc,
 		OPT_STRING(0, "ref-action", &ref_action,
 			   N_("mode"),
 			   N_("control ref update behavior (update|print)")),
+		OPT_BOOL(0, "revert", &is_revert,
+			 N_("revert commits instead of cherry-picking them")),
 		OPT_END()
 	};
 
@@ -393,6 +442,10 @@ int cmd_replay(int argc,
 	}
 
 	die_for_incompatible_opt2(!!advance_name_opt, "--advance",
+				  contained, "--contained");
+
+	/* --revert is incompatible with --contained */
+	die_for_incompatible_opt2(is_revert, "--revert",
 				  contained, "--contained");
 
 	/* Parse ref action mode from command line or config */
@@ -496,7 +549,8 @@ int cmd_replay(int argc,
 			die(_("replaying merge commits is not supported yet!"));
 
 		last_commit = pick_regular_commit(repo, commit, replayed_commits,
-						  onto, &merge_opt, &result);
+						  onto, &merge_opt, &result,
+						  is_revert);
 		if (!last_commit)
 			break;
 

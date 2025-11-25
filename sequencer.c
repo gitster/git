@@ -5572,6 +5572,29 @@ out:
 	return res;
 }
 
+void sequencer_format_revert_header(struct strbuf *out, const char *orig_subject)
+{
+	const char *revert_subject;
+
+	if (skip_prefix(orig_subject, "Revert \"", &revert_subject) &&
+	    /*
+	     * We don't touch pre-existing repeated reverts, because
+	     * theoretically these can be nested arbitrarily deeply,
+	     * thus requiring excessive complexity to deal with.
+	     */
+	    !starts_with(revert_subject, "Revert \"")) {
+		strbuf_addstr(out, "Reapply \"");
+		strbuf_addstr(out, revert_subject);
+		strbuf_addch(out, '\n');
+	} else {
+		strbuf_addstr(out, "Revert \"");
+		strbuf_addstr(out, orig_subject);
+		strbuf_addstr(out, "\"\n");
+	}
+
+	strbuf_addstr(out, "\nThis reverts commit ");
+}
+
 void append_signoff(struct strbuf *msgbuf, size_t ignore_footer, unsigned flag)
 {
 	unsigned no_dup_sob = flag & APPEND_SIGNOFF_DEDUP;

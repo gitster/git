@@ -9,7 +9,7 @@ git-replay - EXPERIMENTAL: Replay commits on a new base, works with bare repos t
 SYNOPSIS
 --------
 [verse]
-(EXPERIMENTAL!) 'git replay' ([--contained] --onto <newbase> | --advance <branch>) [--ref-action[=<mode>]] <revision-range>...
+(EXPERIMENTAL!) 'git replay' ([--contained] --onto <newbase> | --advance <branch>) [--ref-action[=<mode>]] [--revert] <revision-range>...
 
 DESCRIPTION
 -----------
@@ -53,6 +53,18 @@ which uses the target only as a starting point without updating it.
 --
 +
 The default mode can be configured via the `replay.refAction` configuration variable.
+
+--revert::
+	Revert the changes introduced by the commits in the revision range
+	instead of applying them. This reverses the diff direction and creates
+	new commits that undo the changes, similar to `git revert`.
++
+The commit messages are prefixed with "Revert" and include the original
+commit SHA. If reverting a commit whose message starts with "Revert", the new
+message will start with "Reapply" instead. The author of the new commits
+will be the current user, not the original commit author.
++
+This option is incompatible with `--contained`.
 
 <revision-range>::
 	Range of commits to replay. More than one <revision-range> can
@@ -140,6 +152,27 @@ This will simultaneously rebase `branch1`, `branch2`, and `branch3`,
 all commits they have since `base`, playing them on top of
 `origin/main`. These three branches may have commits on top of `base`
 that they have in common, but that does not need to be the case.
+
+To revert a range of commits:
+
+------------
+$ git replay --revert --onto main feature~3..feature
+------------
+
+This creates new commits on top of 'main' that reverse the changes introduced
+by the last three commits on 'feature'. The 'feature' branch is updated to
+point at the last of these revert commits. The 'main' branch is not updated
+in this case.
+
+To revert commits and advance a branch:
+
+------------
+$ git replay --revert --advance main feature~2..feature
+------------
+
+This reverts the last two commits from 'feature', applies those reverts
+on top of 'main', and updates 'main' to point at the result. The 'feature'
+branch is not updated in this case.
 
 GIT
 ---

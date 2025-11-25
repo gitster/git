@@ -205,6 +205,14 @@ int todo_list_rearrange_squash(struct todo_list *todo_list);
  */
 void append_signoff(struct strbuf *msgbuf, size_t ignore_footer, unsigned flag);
 
+/*
+ * Formats a revert commit message header following standard Git conventions.
+ * Handles both regular reverts ("Revert \"<subject>\"") and revert of revert
+ * cases ("Reapply \"<subject>\""). Adds "This reverts commit " at the end.
+ * The caller should append the commit OID after calling this function.
+ */
+void sequencer_format_revert_header(struct strbuf *out, const char *orig_subject);
+
 void append_conflicts_hint(struct index_state *istate,
 		struct strbuf *msgbuf, enum commit_msg_cleanup_mode cleanup_mode);
 enum commit_msg_cleanup_mode get_cleanup_mode(const char *cleanup_arg,

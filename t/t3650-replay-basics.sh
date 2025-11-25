@@ -314,4 +314,164 @@ test_expect_success 'invalid replay.refAction value' '
 	test_grep "invalid.*replay.refAction.*value" error
 '
 
+test_expect_success 'using replay with --revert to revert a commit' '
+	# Revert commits D and E from topic2
+	git replay --revert --onto topic1 topic1..topic2 >result &&
+
+	test_line_count = 1 result &&
+	NEW_TOPIC2=$(cut -f 3 -d " " result) &&
+
+	# Verify the result updates the topic2 branch
+	printf "update refs/heads/topic2 " >expect &&
+	printf "%s " $NEW_TOPIC2 >>expect &&
+	git rev-parse topic2 >>expect &&
+
+	test_cmp expect result &&
+
+	# Verify the commit messages contain "Revert"
+	# topic1..topic2 contains D and E, so we get 2 reverts on top of topic1 (which has F, C, B, A)
+	git log --format=%s $NEW_TOPIC2 >actual &&
+	test_line_count = 6 actual &&
+	head -n 1 actual >first-line &&
+	test_grep "^Revert" first-line
+'
+
+test_expect_success 'using replay with --revert on bare repo' '
+	git -C bare replay --revert --onto topic1 topic1..topic2 >result-bare &&
+
+	test_line_count = 1 result-bare &&
+	NEW_COMMIT=$(cut -f 3 -d " " result-bare) &&
+
+	# Verify the commit message contains "Revert"
+	git -C bare log --format=%s $NEW_COMMIT >actual-bare &&
+	test_line_count = 6 actual-bare &&
+	head -n 1 actual-bare >first-line-bare &&
+	test_grep "^Revert" first-line-bare
+'
+
+test_expect_success 'using replay with --revert and --advance' '
+	# Revert commits from topic2 and advance main
+	git replay --revert --advance main topic1..topic2 >result &&
+
+	test_line_count = 1 result &&
+	NEW_MAIN=$(cut -f 3 -d " " result) &&
+
+	# Verify the result updates the main branch
+	printf "update refs/heads/main " >expect &&
+	printf "%s " $NEW_MAIN >>expect &&
+	git rev-parse main >>expect &&
+
+	test_cmp expect result &&
+
+	# Verify the commit message contains "Revert"
+	git log --format=%s $NEW_MAIN >actual &&
+	head -n 1 actual >first-line &&
+	test_grep "^Revert" first-line
+'
+
+test_expect_success 'replay with --revert fails with --contained' '
+	test_must_fail git replay --revert --contained --onto main main..topic3 2>error &&
+	test_grep "revert.*contained.*cannot be used together" error
+'
+
+test_expect_success 'verify revert actually reverses changes' '
+	# Create a branch with a simple change
+	git switch -c revert-test main &&
+	echo "new content" >test-file.txt &&
+	git add test-file.txt &&
+	git commit -m "Add test file" &&
+
+	# Revert the commit
+	git replay --revert --advance revert-test HEAD^..HEAD >result &&
+	REVERTED=$(cut -f 3 -d " " result) &&
+
+	# The file should no longer exist (reverted)
+	test_must_fail git show $REVERTED:test-file.txt
+'
+
+test_expect_success 'revert of a revert creates reapply message' '
+	# Create a commit
+	git switch -c revert-revert main &&
+	echo "content" >revert-test-2.txt &&
+	git add revert-test-2.txt &&
+	git commit -m "Add revert test file" &&
+
+	ORIGINAL=$(git rev-parse HEAD) &&
+
+	# First revert
+	git replay --revert --advance revert-revert HEAD^..HEAD >result1 &&
+	FIRST_REVERT=$(cut -f 3 -d " " result1) &&
+
+	# Check first revert message starts with "Revert"
+	git log --format=%s -1 $FIRST_REVERT >msg1 &&
+	test_grep "^Revert" msg1 &&
+
+	# Now revert the revert
+	git replay --revert --advance revert-revert $ORIGINAL..$FIRST_REVERT >result2 &&
+	REAPPLY=$(cut -f 3 -d " " result2) &&
+
+	# Check second revert message starts with "Reapply"
+	git log --format=%s -1 $REAPPLY >msg2 &&
+	test_grep "^Reapply" msg2 &&
+
+	# The file should exist again (reapplied)
+	git show $REAPPLY:revert-test-2.txt >actual &&
+	echo "content" >expected &&
+	test_cmp expected actual
+'
+
+test_expect_success 'replay --revert includes commit SHA in message' '
+	git switch -c revert-sha-test main &&
+	echo "test" >sha-test.txt &&
+	git add sha-test.txt &&
+	git commit -m "Test commit for SHA" &&
+
+	COMMIT_SHA=$(git rev-parse HEAD) &&
+	git replay --revert --advance revert-sha-test HEAD^..HEAD >result &&
+	REVERT_COMMIT=$(cut -f 3 -d " " result) &&
+
+	# Check that the commit message includes the original SHA
+	git log --format=%B -1 $REVERT_COMMIT >msg &&
+	test_grep "$COMMIT_SHA" msg
+'
+
+test_expect_success 'replay --revert with conflict' '
+	# Create a conflicting situation
+	git switch -c revert-conflict main &&
+	echo "line1" >conflict-file.txt &&
+	git add conflict-file.txt &&
+	git commit -m "Add conflict file" &&
+
+	git switch -c revert-conflict-branch HEAD^ &&
+	echo "different" >conflict-file.txt &&
+	git add conflict-file.txt &&
+	git commit -m "Different content" &&
+
+	# Try to revert the first commit onto the conflicting branch
+	test_expect_code 1 git replay --revert --onto revert-conflict-branch revert-conflict^..revert-conflict
+'
+
+test_expect_success 'replay --revert handles multiple commits' '
+	# Verify that reverting multiple commits works correctly
+	# The output should show both revert commits in the history
+	git log --format=%s topic2 >topic2-log &&
+	test_write_lines E D C B A >expected-topic2 &&
+	test_cmp expected-topic2 topic2-log &&
+
+	# Revert D and E from topic2, applying the reverts onto topic1
+	git replay --revert --onto topic1 topic1..topic2 >result &&
+
+	test_line_count = 1 result &&
+	FINAL=$(cut -f 3 -d " " result) &&
+
+	# Verify both revert commits appear in the log
+	git log --format=%s $FINAL >log &&
+	head -n 2 log >first-two &&
+	test_grep "^Revert" first-two &&
+
+	# Verify we have both "Revert D" and "Revert E"
+	test_grep "Revert.*E" log &&
+	test_grep "Revert.*D" log
+'
+
 test_done
