@@ -25,6 +25,7 @@
 
 #define LAST_MODIFIED_INIT { \
 	.line_termination = '\n', \
+	.max_depth = -1, \
 }
 
 struct last_modified_entry {
@@ -60,6 +61,7 @@ struct last_modified {
 	bool recursive;
 	bool show_trees;
 	int line_termination;
+	int max_depth;
 
 	const char **all_paths;
 	size_t all_paths_nr;
@@ -487,6 +489,12 @@ static int last_modified_init(struct last_modified *lm, struct repository *r,
 	lm->rev.diffopt.flags.recursive = lm->recursive;
 	lm->rev.diffopt.flags.tree_in_recursive = lm->show_trees;
 
+	if (lm->max_depth >= 0) {
+		lm->rev.diffopt.flags.recursive = 1;
+		lm->rev.diffopt.max_depth = lm->max_depth;
+		lm->rev.diffopt.max_depth_valid = 1;
+	}
+
 	argc = setup_revisions(argc, argv, &lm->rev, NULL);
 	if (argc > 1) {
 		error(_("unknown last-modified argument: %s"), argv[1]);
@@ -515,7 +523,7 @@ int cmd_last_modified(int argc, const char **argv, const char *prefix,
 	struct last_modified lm = LAST_MODIFIED_INIT;
 
 	const char * const last_modified_usage[] = {
-		N_("git last-modified [--recursive] [--show-trees] [-z] "
+		N_("git last-modified [--recursive] [--show-trees] [--max-depth=<depth>] [-z] "
 		   "[<revision-range>] [[--] <path>...]"),
 		NULL
 	};
@@ -525,6 +533,8 @@ int cmd_last_modified(int argc, const char **argv, const char *prefix,
 			 N_("recurse into subtrees")),
 		OPT_BOOL('t', "show-trees", &lm.show_trees,
 			 N_("show tree entries when recursing into subtrees")),
+		OPT_INTEGER_F(0, "max-depth", &lm.max_depth,
+			N_("maximum tree depth to recurse"), PARSE_OPT_NONEG),
 		OPT_SET_INT('z', NULL, &lm.line_termination,
 			N_("lines are separated with NUL character"), '\0'),
 		OPT_END()

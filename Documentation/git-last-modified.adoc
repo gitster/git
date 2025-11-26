@@ -9,7 +9,8 @@ git-last-modified - EXPERIMENTAL: Show when files were last modified
 SYNOPSIS
 --------
 [synopsis]
-git last-modified [--recursive] [--show-trees] [-z] [<revision-range>] [[--] <path>...]
+git last-modified [--recursive] [--show-trees] [--max-depth=<depth>] [-z]
+	[<revision-range>] [[--] <path>...]
 
 DESCRIPTION
 -----------
@@ -31,6 +32,12 @@ OPTIONS
 `--show-trees`::
 	Show tree entries even when recursing into them. It has no effect
 	without `--recursive`.
+
+`--max-depth=<depth>`::
+	For each pathspec given on the command line, descend at most `<depth>`
+	levels of directories. A negative value means no limit.
+	Setting a positive value implies `--recursive`.
+	Cannot be combined with wildcards in the pathspec.
 
 `-z`::
 	Terminate each line with a _NUL_ rather than a newline.
