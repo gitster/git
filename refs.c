@@ -2177,6 +2177,15 @@ void ref_store_release(struct ref_store *ref_store)
 	free(ref_store->gitdir);
 }
 
+static struct ref_store *get_ref_store_for_dir(struct repository *r,
+					       char *dir,
+					       enum ref_storage_format format)
+{
+	struct ref_store *ref_store = ref_store_init(r, format, dir,
+						     REF_STORE_ALL_CAPS);
+	return maybe_debug_wrap_ref_store(dir, ref_store);
+}
+
 struct ref_store *get_main_ref_store(struct repository *r)
 {
 	if (r->refs_private)
@@ -2185,9 +2194,7 @@ struct ref_store *get_main_ref_store(struct repository *r)
 	if (!r->gitdir)
 		BUG("attempting to get main_ref_store outside of repository");
 
-	r->refs_private = ref_store_init(r, r->ref_storage_format,
-					 r->gitdir, REF_STORE_ALL_CAPS);
-	r->refs_private = maybe_debug_wrap_ref_store(r->gitdir, r->refs_private);
+	r->refs_private = get_ref_store_for_dir(r, r->gitdir, r->ref_storage_format);
 	return r->refs_private;
 }
 
