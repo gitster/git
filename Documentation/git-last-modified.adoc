@@ -9,7 +9,7 @@ git-last-modified - EXPERIMENTAL: Show when files were last modified
 SYNOPSIS
 --------
 [synopsis]
-git last-modified [--recursive] [--show-trees] [<revision-range>] [[--] <path>...]
+git last-modified [--recursive] [--show-trees] [-z] [<revision-range>] [[--] <path>...]
 
 DESCRIPTION
 -----------
@@ -32,6 +32,9 @@ OPTIONS
 	Show tree entries even when recursing into them. It has no effect
 	without `--recursive`.
 
+`-z`::
+	Terminate each line with a _NUL_ rather than a newline.
+
 `<revision-range>`::
 	Only traverse commits in the specified revision range. When no
 	`<revision-range>` is specified, it defaults to `HEAD` (i.e. the whole
@@ -43,6 +46,22 @@ OPTIONS
 	For each _<path>_ given, the commit which last modified it is returned.
 	Without an optional path parameter, all files and subdirectories
 	in path traversal the are included in the output.
+
+OUTPUT
+------
+
+The output is in the format:
+
+------------
+ <oid> TAB <path> LF
+------------
+
+If a path contains any special characters, the path is C-style quoted. To
+avoid quoting, pass option `-z` to terminate each line with a NUL.
+
+------------
+ <oid> TAB <path> NUL
+------------
 
 SEE ALSO
 --------
