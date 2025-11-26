@@ -27,6 +27,7 @@ OPTIONS
 `--recursive`::
 	Instead of showing tree entries, step into subtrees and show all entries
 	inside them recursively.
+	See the section "NOTES ABOUT DEPTH" below for more details.
 
 `-t`::
 `--show-trees`::
@@ -38,6 +39,7 @@ OPTIONS
 	levels of directories. A negative value means no limit.
 	Setting a positive value implies `--recursive`.
 	Cannot be combined with wildcards in the pathspec.
+	See the section "NOTES ABOUT DEPTH" below for more details.
 
 `-z`::
 	Terminate each line with a _NUL_ rather than a newline.
@@ -68,6 +70,47 @@ avoid quoting, pass option `-z` to terminate each line with a NUL.
 
 ------------
  <oid> TAB <path> NUL
+------------
+
+NOTES ABOUT DEPTH
+-----------------
+
+By default this command only shows information about paths at the root level.
+When a path that lives in a subtree is provided, information about the top-level
+subtree is printed. For example:
+
+------------
+$ git last-modified -- sub/file
+
+abcd1234abcd1234abcd1234abcd1234abcd1234 sub
+------------
+
+To get details about the exact path in a subtree, add option `--recursive`:
+
+------------
+$ git last-modified --recursive -- sub/file
+
+5678abca5678abca5678abca5678abca5678abca sub/file
+------------
+
+This comes with a downside. When the path provided is a tree itself, with
+option `--recursive` all paths in that subtree are printed too:
+
+------------
+$ git last-modified --recursive -- sub/subsub
+
+1234cdef1234cdef1234cdef1234cdef1234cdef sub/subsub/a
+3456cdef3456cdef3456cdef3456cdef3456cdef sub/subsub/b
+5678abcd5678abcd5678abcd5678abcd5678abcd sub/subsub/c
+------------
+
+To stop this command from traversing deeper into trees, add option
+`--max-depth=0`:
+
+------------
+$ git last-modified --recursive --max-depth=0 -- sub/subsub
+
+3456def3456def3456def3456def3456def3456b sub/subsub
 ------------
 
 SEE ALSO
