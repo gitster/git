@@ -59,7 +59,9 @@ The default mode can be configured via the `replay.refAction` configuration vari
 	be passed, but in `--advance <branch>` mode, they should have
 	a single tip, so that it's clear where <branch> should point
 	to. See "Specifying Ranges" in linkgit:git-rev-parse[1] and the
-	"Commit Limiting" options below.
+	"Commit Limiting" options below. Any commits in the range whose
+	changes are already present in the branch the commits are being
+	replayed onto will be dropped.
 
 include::rev-list-options.adoc[]
 
