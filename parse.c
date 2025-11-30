@@ -209,3 +209,99 @@ unsigned long git_env_ulong(const char *k, unsigned long val)
 		die(_("failed to parse %s"), k);
 	return val;
 }
+
+/*
+ * Helper that handles both signed/unsigned cases. If "negate" is NULL,
+ * negative values are disallowed. If not NULL and the input is negative,
+ * the value is range-checked but the caller is responsible for actually doing
+ * the negatiion. You probably don't want to use this! Use one of
+ * parse_signed_from_buf() or parse_unsigned_from_buf() below.
+ */
+static bool parse_from_buf_internal(const char *buf, size_t len,
+				    const char **ep, bool *negate,
+				    uintmax_t *ret, uintmax_t max)
+{
+	const char *end = buf + len;
+	uintmax_t val = 0;
+
+	while (buf < end && isspace(*buf))
+		buf++;
+
+	if (negate)
+		*negate = false;
+	if (buf < end && *buf == '-') {
+		if (!negate) {
+			errno = EINVAL;
+			return false;
+		}
+		buf++;
+		*negate = true;
+		/* Assume negative range is always one larger than positive. */
+		max = max + 1;
+	} else if (buf < end && *buf == '+') {
+		buf++;
+	}
+
+	if (buf == end || !isdigit(*buf)) {
+		errno = EINVAL;
+		return false;
+	}
+
+	while (buf < end && isdigit(*buf)) {
+		int digit = *buf - '0';
+
+		if (val > max / 10) {
+			errno = ERANGE;
+			return false;
+		}
+		val *= 10;
+		if (val > max - digit) {
+			errno = ERANGE;
+			return false;
+		}
+		val += digit;
+
+		buf++;
+	}
+
+	*ep = buf;
+	*ret = val;
+	return true;
+}
+
+bool parse_unsigned_from_buf(const char *buf, size_t len, const char **ep,
+			     uintmax_t *ret, uintmax_t max)
+{
+	return parse_from_buf_internal(buf, len, ep, NULL, ret, max);
+}
+
+bool parse_signed_from_buf(const char *buf, size_t len, const char **ep,
+			   intmax_t *ret, intmax_t max)
+{
+	uintmax_t u_ret;
+	bool negate;
+
+	if (!parse_from_buf_internal(buf, len, ep, &negate, &u_ret, max))
+		return false;
+	/*
+	 * Range already checked internally, but we must apply negation
+	 * ourselves since only we have the signed integer type.
+	 */
+	if (negate) {
+		*ret = u_ret;
+		*ret = -*ret;
+	} else {
+		*ret = u_ret;
+	}
+	return true;
+}
+
+bool parse_int_from_buf(const char *buf, size_t len, const char **ep, int *ret)
+{
+	intmax_t tmp;
+	if (!parse_signed_from_buf(buf, len, ep, &tmp,
+				   maximum_signed_value_of_type(int)))
+		return false;
+	*ret = tmp;
+	return true;
+}
