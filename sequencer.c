@@ -2365,22 +2365,10 @@ static int do_pick_commit(struct repository *r,
 		if (opts->commit_use_reference) {
 			strbuf_commented_addf(&ctx->message, comment_line_str,
 				"*** SAY WHY WE ARE REVERTING ON THE TITLE LINE ***");
-		} else if (skip_prefix(msg.subject, "Revert \"", &orig_subject) &&
-			   /*
-			    * We don't touch pre-existing repeated reverts, because
-			    * theoretically these can be nested arbitrarily deeply,
-			    * thus requiring excessive complexity to deal with.
-			    */
-			   !starts_with(orig_subject, "Revert \"")) {
-			strbuf_addstr(&ctx->message, "Reapply \"");
-			strbuf_addstr(&ctx->message, orig_subject);
-			strbuf_addstr(&ctx->message, "\n");
+			strbuf_addstr(&ctx->message, "\nThis reverts commit ");
 		} else {
-			strbuf_addstr(&ctx->message, "Revert \"");
-			strbuf_addstr(&ctx->message, msg.subject);
-			strbuf_addstr(&ctx->message, "\"\n");
+			sequencer_format_revert_header(&ctx->message, msg.subject);
 		}
-		strbuf_addstr(&ctx->message, "\nThis reverts commit ");
 		refer_to_commit(opts, &ctx->message, commit);
 
 		if (commit->parents && commit->parents->next) {
@@ -5570,6 +5558,29 @@ int sequencer_pick_revisions(struct repository *r,
 out:
 	todo_list_release(&todo_list);
 	return res;
+}
+
+void sequencer_format_revert_header(struct strbuf *out, const char *orig_subject)
+{
+	const char *revert_subject;
+
+	if (skip_prefix(orig_subject, "Revert \"", &revert_subject) &&
+	    /*
+	     * We don't touch pre-existing repeated reverts, because
+	     * theoretically these can be nested arbitrarily deeply,
+	     * thus requiring excessive complexity to deal with.
+	     */
+	    !starts_with(revert_subject, "Revert \"")) {
+		strbuf_addstr(out, "Reapply \"");
+		strbuf_addstr(out, revert_subject);
+		strbuf_addch(out, '\n');
+	} else {
+		strbuf_addstr(out, "Revert \"");
+		strbuf_addstr(out, orig_subject);
+		strbuf_addstr(out, "\"\n");
+	}
+
+	strbuf_addstr(out, "\nThis reverts commit ");
 }
 
 void append_signoff(struct strbuf *msgbuf, size_t ignore_footer, unsigned flag)

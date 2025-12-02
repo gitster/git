@@ -271,4 +271,12 @@ int sequencer_determine_whence(struct repository *r, enum commit_whence *whence)
  */
 int sequencer_get_update_refs_state(const char *wt_dir, struct string_list *refs);
 
+/*
+ * Formats a revert commit message header following standard Git conventions.
+ * Handles both regular reverts ("Revert \"<subject>\"") and revert of revert
+ * cases ("Reapply \"<subject>\""). Adds "This reverts commit " at the end.
+ * The caller should append the commit OID after calling this function.
+ */
+void sequencer_format_revert_header(struct strbuf *out, const char *orig_subject);
+
 #endif /* SEQUENCER_H */
