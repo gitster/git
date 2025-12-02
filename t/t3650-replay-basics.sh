@@ -314,4 +314,115 @@ test_expect_success 'invalid replay.refAction value' '
 	test_grep "invalid.*replay.refAction.*value" error
 '
 
+test_expect_success 'setup for revert tests' '
+	git switch -c revert-test main &&
+	test_commit R1 &&
+	test_commit R2 &&
+	test_commit R3 &&
+	git switch main
+'
+
+test_expect_success 'git replay --revert reverts commits' '
+	# Store original state
+	START=$(git rev-parse revert-test) &&
+	test_when_finished "git branch -f revert-test $START" &&
+
+	git replay --revert revert-test revert-test~2..revert-test >output &&
+	test_must_be_empty output &&
+
+	# Verify revert-test was updated with revert commits
+	git log --format=%s -n 5 revert-test >actual &&
+	cat >expect <<-\EOF &&
+	Revert "R3"
+	Revert "R2"
+	R3
+	R2
+	R1
+	EOF
+	test_cmp expect actual &&
+
+	# Verify commit message format
+	test_commit_message revert-test -m "Revert \"R3\"
+
+This reverts commit $(git rev-parse R3)."
+'
+
+test_expect_success 'git replay --revert with --ref-action=print' '
+	# Store original state
+	START=$(git rev-parse revert-test) &&
+	test_when_finished "git branch -f revert-test $START" &&
+
+	git replay --ref-action=print --revert revert-test revert-test~2..revert-test >result &&
+	test_line_count = 1 result &&
+
+	# Verify output format: update refs/heads/revert-test <new> <old>
+	cut -f 3 -d " " result >new-tip &&
+	printf "update refs/heads/revert-test " >expect &&
+	printf "%s " $(cat new-tip) >>expect &&
+	printf "%s\n" $START >>expect &&
+	test_cmp expect result
+'
+
+test_expect_success 'git replay --revert reapply behavior' '
+	# Store original state
+	START=$(git rev-parse revert-test) &&
+	test_when_finished "git branch -f revert-test $START" &&
+
+	# First revert R3
+	git replay --revert revert-test revert-test~1..revert-test &&
+	REVERT_R3=$(git rev-parse revert-test) &&
+
+	# Now revert the revert (should create "Reapply" message)
+	git replay --revert revert-test revert-test~1..revert-test >output &&
+	test_must_be_empty output &&
+
+	# Verify Reapply message
+	test_commit_message revert-test -m "Reapply \"R3\"
+
+This reverts commit $(git rev-parse $REVERT_R3)."
+'
+
+test_expect_success 'git replay --revert with conflict' '
+	# Create a conflicting scenario
+	git switch -c revert-conflict main &&
+	test_commit C1 &&
+	echo conflict >C1.t &&
+	test_commit C2 C1.t &&
+	git switch main &&
+	echo different >C1.t &&
+	test_commit C3 C1.t &&
+
+	# Try to revert C2 onto main (which has conflicting C3)
+	test_expect_code 1 git replay --revert main revert-conflict~1..revert-conflict
+'
+
+test_expect_success 'git replay --revert reflog message' '
+	# Store original state
+	START=$(git rev-parse revert-test) &&
+	test_when_finished "git branch -f revert-test $START" &&
+
+	git replay --revert revert-test revert-test~1..revert-test >output &&
+	test_must_be_empty output &&
+
+	# Verify reflog message includes --revert and branch name
+	git reflog revert-test -1 --format=%gs >reflog-msg &&
+	echo "replay --revert revert-test" >expect-reflog &&
+	test_cmp expect-reflog reflog-msg
+'
+
+test_expect_success 'git replay --revert incompatible with --contained' '
+	test_must_fail git replay --revert revert-test --contained revert-test~1..revert-test 2>error &&
+	test_grep "requires --onto" error
+'
+
+test_expect_success 'git replay --revert incompatible with --onto' '
+	test_must_fail git replay --revert revert-test --onto main revert-test~1..revert-test 2>error &&
+	test_grep "cannot be used together" error
+'
+
+test_expect_success 'git replay --revert incompatible with --advance' '
+	test_must_fail git replay --revert revert-test --advance main revert-test~1..revert-test 2>error &&
+	test_grep "cannot be used together" error
+'
+
 test_done

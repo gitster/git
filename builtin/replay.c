@@ -17,6 +17,7 @@
 #include "parse-options.h"
 #include "refs.h"
 #include "revision.h"
+#include "sequencer.h"
 #include "strmap.h"
 #include <oidset.h>
 #include <tree.h>
@@ -24,6 +25,11 @@
 enum ref_action_mode {
 	REF_ACTION_UPDATE,
 	REF_ACTION_PRINT,
+};
+
+enum replay_action {
+	REPLAY_PICK,
+	REPLAY_REVERT,
 };
 
 static const char *short_commit_name(struct repository *repo,
@@ -57,10 +63,32 @@ static char *get_author(const char *message)
 	return NULL;
 }
 
+static void generate_revert_message(struct strbuf *msg,
+				    struct commit *commit,
+				    struct repository *repo)
+{
+	const char *out_enc = get_commit_output_encoding();
+	const char *message = repo_logmsg_reencode(repo, commit, NULL, out_enc);
+	const char *subject_start;
+	int subject_len;
+	char *subject;
+
+	subject_len = find_commit_subject(message, &subject_start);
+	subject = xmemdupz(subject_start, subject_len);
+
+	sequencer_format_revert_header(msg, subject);
+	strbuf_addstr(msg, oid_to_hex(&commit->object.oid));
+	strbuf_addstr(msg, ".\n");
+
+	free(subject);
+	repo_unuse_commit_buffer(repo, commit, message);
+}
+
 static struct commit *create_commit(struct repository *repo,
 				    struct tree *tree,
 				    struct commit *based_on,
-				    struct commit *parent)
+				    struct commit *parent,
+				    enum replay_action action)
 {
 	struct object_id ret;
 	struct object *obj = NULL;
@@ -77,9 +105,14 @@ static struct commit *create_commit(struct repository *repo,
 
 	commit_list_insert(parent, &parents);
 	extra = read_commit_extra_headers(based_on, exclude_gpgsig);
-	find_commit_subject(message, &orig_message);
-	strbuf_addstr(&msg, orig_message);
-	author = get_author(message);
+	if (action == REPLAY_REVERT) {
+		generate_revert_message(&msg, based_on, repo);
+		author = xstrdup(git_author_info(IDENT_STRICT));
+	} else {
+		find_commit_subject(message, &orig_message);
+		strbuf_addstr(&msg, orig_message);
+		author = get_author(message);
+	}
 	reset_ident_date();
 	if (commit_tree_extended(msg.buf, msg.len, &tree->object.oid, parents,
 				 &ret, author, NULL, sign_commit, extra)) {
@@ -90,7 +123,7 @@ static struct commit *create_commit(struct repository *repo,
 	obj = parse_object(repo, &ret);
 
 out:
-	repo_unuse_commit_buffer(the_repository, based_on, message);
+	repo_unuse_commit_buffer(repo, based_on, message);
 	free_commit_extra_headers(extra);
 	free_commit_list(parents);
 	strbuf_release(&msg);
@@ -166,6 +199,7 @@ static void determine_replay_mode(struct repository *repo,
 				  struct rev_cmdline_info *cmd_info,
 				  const char *onto_name,
 				  char **advance_name,
+				  char **revert_name,
 				  struct commit **onto,
 				  struct strset **update_refs)
 {
@@ -196,6 +230,20 @@ static void determine_replay_mode(struct repository *repo,
 		}
 		if (rinfo.positive_refexprs > 1)
 			die(_("cannot advance target with multiple sources because ordering would be ill-defined"));
+	} else if (*revert_name) {
+		struct object_id oid;
+		char *fullname = NULL;
+
+		*onto = peel_committish(repo, *revert_name);
+		if (repo_dwim_ref(repo, *revert_name, strlen(*revert_name),
+				  &oid, &fullname, 0) == 1) {
+			free(*revert_name);
+			*revert_name = fullname;
+		} else {
+			die(_("argument to --revert must be a reference"));
+		}
+		if (rinfo.positive_refexprs > 1)
+			die(_("cannot revert with multiple sources because ordering would be ill-defined"));
 	} else {
 		int positive_refs_complete = (
 			rinfo.positive_refexprs ==
@@ -261,7 +309,8 @@ static struct commit *pick_regular_commit(struct repository *repo,
 					  kh_oid_map_t *replayed_commits,
 					  struct commit *onto,
 					  struct merge_options *merge_opt,
-					  struct merge_result *result)
+					  struct merge_result *result,
+					  enum replay_action action)
 {
 	struct commit *base, *replayed_base;
 	struct tree *pickme_tree, *base_tree;
@@ -273,21 +322,39 @@ static struct commit *pick_regular_commit(struct repository *repo,
 	pickme_tree = repo_get_commit_tree(repo, pickme);
 	base_tree = repo_get_commit_tree(repo, base);
 
-	merge_opt->branch1 = short_commit_name(repo, replayed_base);
-	merge_opt->branch2 = short_commit_name(repo, pickme);
-	merge_opt->ancestor = xstrfmt("parent of %s", merge_opt->branch2);
+	if (action == REPLAY_PICK) {
+		/* Cherry-pick: normal order */
+		merge_opt->branch1 = short_commit_name(repo, replayed_base);
+		merge_opt->branch2 = short_commit_name(repo, pickme);
+		merge_opt->ancestor = xstrfmt("parent of %s", merge_opt->branch2);
 
-	merge_incore_nonrecursive(merge_opt,
-				  base_tree,
-				  result->tree,
-				  pickme_tree,
-				  result);
+		merge_incore_nonrecursive(merge_opt,
+					  base_tree,
+					  result->tree,
+					  pickme_tree,
+					  result);
 
-	free((char*)merge_opt->ancestor);
+		free((char *)merge_opt->ancestor);
+	} else {
+		/* Revert: swap base and pickme to reverse the diff */
+		const char *pickme_name = short_commit_name(repo, pickme);
+		merge_opt->branch1 = short_commit_name(repo, replayed_base);
+		merge_opt->branch2 = xstrfmt("parent of %s", pickme_name);
+		merge_opt->ancestor = pickme_name;
+
+		merge_incore_nonrecursive(merge_opt,
+					  pickme_tree,
+					  result->tree,
+					  base_tree,
+					  result);
+
+		free((char *)merge_opt->branch2);
+	}
 	merge_opt->ancestor = NULL;
+	merge_opt->branch2 = NULL;
 	if (!result->clean)
 		return NULL;
-	return create_commit(repo, result->tree, pickme, replayed_base);
+	return create_commit(repo, result->tree, pickme, replayed_base, action);
 }
 
 static enum ref_action_mode parse_ref_action_mode(const char *ref_action, const char *source)
@@ -345,6 +412,9 @@ int cmd_replay(int argc,
 {
 	const char *advance_name_opt = NULL;
 	char *advance_name = NULL;
+	const char *revert_name_opt = NULL;
+	char *revert_name = NULL;
+	enum replay_action action = REPLAY_PICK;
 	struct commit *onto = NULL;
 	const char *onto_name = NULL;
 	int contained = 0;
@@ -365,7 +435,7 @@ int cmd_replay(int argc,
 
 	const char *const replay_usage[] = {
 		N_("(EXPERIMENTAL!) git replay "
-		   "([--contained] --onto <newbase> | --advance <branch>) "
+		   "([--contained] --onto <newbase> | --advance <branch> | --revert <branch>) "
 		   "[--ref-action[=<mode>]] <revision-range>..."),
 		NULL
 	};
@@ -378,6 +448,9 @@ int cmd_replay(int argc,
 			   N_("replay onto given commit")),
 		OPT_BOOL(0, "contained", &contained,
 			 N_("advance all branches contained in revision-range")),
+		OPT_STRING(0, "revert", &revert_name_opt,
+			   N_("branch"),
+			   N_("revert commits onto given branch")),
 		OPT_STRING(0, "ref-action", &ref_action,
 			   N_("mode"),
 			   N_("control ref update behavior (update|print)")),
@@ -387,18 +460,28 @@ int cmd_replay(int argc,
 	argc = parse_options(argc, argv, prefix, replay_options, replay_usage,
 			     PARSE_OPT_KEEP_ARGV0 | PARSE_OPT_KEEP_UNKNOWN_OPT);
 
-	if (!onto_name && !advance_name_opt) {
-		error(_("option --onto or --advance is mandatory"));
+	/* Exactly one mode must be specified */
+	if (!onto_name && !advance_name_opt && !revert_name_opt) {
+		error(_("exactly one of --onto, --advance, or --revert is required"));
 		usage_with_options(replay_usage, replay_options);
 	}
 
 	die_for_incompatible_opt2(!!advance_name_opt, "--advance",
-				  contained, "--contained");
+				  !!onto_name, "--onto");
+	die_for_incompatible_opt2(!!revert_name_opt, "--revert",
+				  !!onto_name, "--onto");
+	die_for_incompatible_opt2(!!revert_name_opt, "--revert",
+				  !!advance_name_opt, "--advance");
+	die_for_incompatible_opt2(contained, "--contained",
+				  !onto_name, "requires --onto");
 
 	/* Parse ref action mode from command line or config */
 	ref_mode = get_ref_action_mode(repo, ref_action);
 
 	advance_name = xstrdup_or_null(advance_name_opt);
+	revert_name = xstrdup_or_null(revert_name_opt);
+	if (revert_name)
+		action = REPLAY_REVERT;
 
 	repo_init_revisions(repo, &revs, prefix);
 
@@ -452,10 +535,13 @@ int cmd_replay(int argc,
 	}
 
 	determine_replay_mode(repo, &revs.cmdline, onto_name, &advance_name,
+			      &revert_name,
 			      &onto, &update_refs);
 
 	/* Build reflog message */
-	if (advance_name_opt)
+	if (revert_name_opt)
+		strbuf_addf(&reflog_msg, "replay --revert %s", revert_name_opt);
+	else if (advance_name_opt)
 		strbuf_addf(&reflog_msg, "replay --advance %s", advance_name_opt);
 	else
 		strbuf_addf(&reflog_msg, "replay --onto %s",
@@ -496,7 +582,7 @@ int cmd_replay(int argc,
 			die(_("replaying merge commits is not supported yet!"));
 
 		last_commit = pick_regular_commit(repo, commit, replayed_commits,
-						  onto, &merge_opt, &result);
+						  onto, &merge_opt, &result, action);
 		if (!last_commit)
 			break;
 
@@ -508,7 +594,7 @@ int cmd_replay(int argc,
 		kh_value(replayed_commits, pos) = last_commit;
 
 		/* Update any necessary branches */
-		if (advance_name)
+		if (advance_name || revert_name)
 			continue;
 		decoration = get_name_decoration(&commit->object);
 		if (!decoration)
@@ -532,7 +618,7 @@ int cmd_replay(int argc,
 		}
 	}
 
-	/* In --advance mode, advance the target ref */
+	/* In --advance or --revert mode, update the target ref */
 	if (result.clean == 1 && advance_name) {
 		if (handle_ref_update(ref_mode, transaction, advance_name,
 				      &last_commit->object.oid,
@@ -541,6 +627,17 @@ int cmd_replay(int argc,
 				      &transaction_err) < 0) {
 			ret = error(_("failed to update ref '%s': %s"),
 				    advance_name, transaction_err.buf);
+			goto cleanup;
+		}
+	}
+	if (result.clean == 1 && revert_name) {
+		if (handle_ref_update(ref_mode, transaction, revert_name,
+				      &last_commit->object.oid,
+				      &onto->object.oid,
+				      reflog_msg.buf,
+				      &transaction_err) < 0) {
+			ret = error(_("failed to update ref '%s': %s"),
+				    revert_name, transaction_err.buf);
 			goto cleanup;
 		}
 	}
