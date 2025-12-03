@@ -470,6 +470,7 @@ libgit_sources = [
   'repack-midx.c',
   'repack-promisor.c',
   'replace-object.c',
+  'replay.c',
   'repo-settings.c',
   'repository.c',
   'rerere.c',
