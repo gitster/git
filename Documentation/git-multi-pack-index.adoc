@@ -13,7 +13,7 @@ SYNOPSIS
 		         [--[no-]bitmap] [--[no-]incremental] [--[no-]stdin-packs]
 		         [--refs-snapshot=<path>]
 'git multi-pack-index' [<options>] compact [--[no-]incremental]
-		         <from> <to>
+		         [--[no-]bitmap] <from> <to>
 'git multi-pack-index' [<options>] verify
 'git multi-pack-index' [<options>] expire
 'git multi-pack-index' [<options>] repack [--batch-size=<size>]
