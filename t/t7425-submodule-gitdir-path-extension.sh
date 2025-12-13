@@ -181,4 +181,38 @@ test_expect_success 'runtime config extensions.submodulePathConfig on existing r
 	)
 '
 
+test_expect_success 'submodule--helper migrates legacy modules' '
+	git init sm-repo-1 &&
+	test_commit -C sm-repo-1 initial-1 &&
+	git init sm-repo-2 &&
+	test_commit -C sm-repo-2 initial-2 &&
+
+	# ensure the global config is disabled so we can actually test migration
+	git config --global extensions.submodulePathConfig false &&
+
+	git init -b main migrate-test &&
+	(
+		cd migrate-test &&
+
+		git submodule add ../sm-repo-1 sub1 &&
+		git submodule add ../sm-repo-2 sub2 &&
+		test_commit add-submodules &&
+
+		# gitdir configs should not exist
+		test_must_fail git config submodule.sub1.gitdir &&
+		test_must_fail git config submodule.sub2.gitdir &&
+
+		git submodule--helper migrate-gitdir-configs &&
+
+		# gitdir configs must exist after migration
+		git config submodule.sub1.gitdir >actual &&
+		echo ".git/modules/sub1" >expect &&
+		test_cmp expect actual &&
+
+		git config submodule.sub2.gitdir >actual &&
+		echo ".git/modules/sub2" >expect &&
+		test_cmp expect actual
+	)
+'
+
 test_done

@@ -80,8 +80,10 @@ submodulePathConfig:::
 	This extension can also be enabled as a global runtime config, with
 	the local repository config having precedence (overwrites it).
 	Existing pre-extension submodules need to be migrated by adding the
-	missing config entries. This is done manually for now, e.g. for each
-	submodule: "git config submodule.<name>.gitdir .git/modules/<name>".
+	missing config entries. This can be done manually, e.g. for each
+	submodule: "git config submodule.<name>.gitdir .git/modules/<name>",
+	or via the "git submodule--helper migrate-gitdir-configs" command
+	which iterates over all submodules and attempts to migrate them.
 
 worktreeConfig:::
 	If enabled, then worktrees will load config settings from the
