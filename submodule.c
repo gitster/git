@@ -32,6 +32,8 @@
 #include "read-cache-ll.h"
 #include "setup.h"
 
+int submodule_path_config_enabled;
+
 static int config_update_recurse_submodules = RECURSE_SUBMODULES_OFF;
 static int initialized_fetch_ref_tips;
 static struct oid_array ref_tips_before_fetch;
@@ -2581,7 +2583,7 @@ void submodule_name_to_gitdir(struct strbuf *buf, struct repository *r,
 	int ret;
 
 	/* If extensions.submodulePathConfig is disabled, continue to use the plain path */
-	if (!r->repository_format_submodule_path_cfg) {
+	if (!r->repository_format_submodule_path_cfg && !submodule_path_config_enabled) {
 		repo_git_path_append(r, buf, "modules/%s", submodule_name);
 		if (validate_submodule_git_dir(buf->buf, submodule_name) < 0)
 			die(_("refusing to create/use '%s' in another submodule's "

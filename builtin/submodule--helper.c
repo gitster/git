@@ -466,7 +466,8 @@ static void create_default_gitdir_config(const char *submodule_name)
 	struct strbuf gitdir_path = STRBUF_INIT;
 
 	/* The config is set only when extensions.submodulePathConfig is enabled */
-	if (!the_repository->repository_format_submodule_path_cfg)
+	if (!the_repository->repository_format_submodule_path_cfg &&
+	    !submodule_path_config_enabled)
 		return;
 
 	repo_git_path_append(the_repository, &gitdir_path, "modules/%s", submodule_name);
@@ -3487,7 +3488,7 @@ static void die_on_repo_without_commits(const char *path)
 static int module_add(int argc, const char **argv, const char *prefix,
 		      struct repository *repo UNUSED)
 {
-	int force = 0, quiet = 0, progress = 0, dissociate = 0;
+	int force = 0, quiet = 0, progress = 0, dissociate = 0, path_cfg_ext = 0;
 	struct add_data add_data = ADD_DATA_INIT;
 	const char *ref_storage_format = NULL;
 	char *to_free = NULL;
@@ -3520,6 +3521,9 @@ static int module_add(int argc, const char **argv, const char *prefix,
 	int ret = 1;
 
 	argc = parse_options(argc, argv, prefix, options, usage, 0);
+
+	if (!repo_config_get_bool(the_repository, "extensions.submodulepathconfig", &path_cfg_ext))
+		submodule_path_config_enabled = path_cfg_ext;
 
 	if (!is_writing_gitmodules_ok())
 		die(_("please make sure that the .gitmodules file is in the working tree"));

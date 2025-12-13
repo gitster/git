@@ -135,4 +135,50 @@ test_expect_success 'fetch mixed submodule changes and verify updates' '
 	)
 '
 
+test_expect_success 'runtime config extensions.submodulePathConfig on new repo' '
+	git config --global extensions.submodulePathConfig true &&
+	git init -b main runtime-test-new-repo &&
+	(
+		cd runtime-test-new-repo &&
+
+		git init -b main sub &&
+		test_commit -C sub sub-initial &&
+
+		git submodule add ./sub sub &&
+
+		# Verify that the gitdir config was created correctly
+		git config submodule.sub.gitdir > actual &&
+		echo ".git/modules/sub" > expect &&
+		test_cmp expect actual
+	)
+'
+
+test_expect_success 'runtime config extensions.submodulePathConfig on existing repo' '
+	# create a repo with the extension disabled then enable it
+	git config --global extensions.submodulePathConfig false &&
+	git init -b main runtime-test-existing-repo &&
+	(
+		cd runtime-test-existing-repo &&
+
+		git init -b main sub &&
+		test_commit -C sub sub-initial &&
+
+		git submodule add ./sub sub &&
+
+		# gitdir should not exist for this repo: it must be migrated
+		test_must_fail git config submodule.sub.gitdir
+	) &&
+	git config --global extensions.submodulePathConfig true &&
+	(
+		cd runtime-test-existing-repo &&
+
+		git submodule add ./sub sub2 &&
+
+		# gitdir should exist after enabling the global config
+		git config submodule.sub2.gitdir > actual &&
+		echo ".git/modules/sub2" > expect &&
+		test_cmp expect actual
+	)
+'
+
 test_done
