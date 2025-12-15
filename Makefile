@@ -1672,27 +1672,6 @@ ifneq (,$(SOCKLEN_T))
 	BASIC_CFLAGS += -Dsocklen_t=$(SOCKLEN_T)
 endif
 
-ifeq ($(uname_S),Darwin)
-        ifndef NO_FINK
-                ifeq ($(shell test -d /sw/lib && echo y),y)
-			BASIC_CFLAGS += -I/sw/include
-			BASIC_LDFLAGS += -L/sw/lib
-                endif
-        endif
-        ifndef NO_DARWIN_PORTS
-                ifeq ($(shell test -d /opt/local/lib && echo y),y)
-			BASIC_CFLAGS += -I/opt/local/include
-			BASIC_LDFLAGS += -L/opt/local/lib
-                endif
-        endif
-        ifndef NO_APPLE_COMMON_CRYPTO
-		NO_OPENSSL = YesPlease
-		APPLE_COMMON_CRYPTO = YesPlease
-		COMPAT_CFLAGS += -DAPPLE_COMMON_CRYPTO
-        endif
-	PTHREAD_LIBS =
-endif
-
 ifndef NO_HOMEBREW
 	ifdef HOMEBREW_PREFIX
 		BASIC_CFLAGS += -I$(HOMEBREW_PREFIX)/include

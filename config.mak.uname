@@ -189,6 +189,24 @@ ifeq ($(uname_S),Darwin)
         endif
 
 	BASIC_LDFLAGS += -framework CoreServices
+	ifndef NO_FINK
+		ifeq ($(shell test -d /sw/lib && echo y),y)
+			BASIC_CFLAGS += -I/sw/include
+			BASIC_LDFLAGS += -L/sw/lib
+		endif
+	endif
+	ifndef NO_DARWIN_PORTS
+		ifeq ($(shell test -d /opt/local/lib && echo y),y)
+			BASIC_CFLAGS += -I/opt/local/include
+			BASIC_LDFLAGS += -L/opt/local/lib
+		endif
+	endif
+	ifndef NO_APPLE_COMMON_CRYPTO
+		NO_OPENSSL = YesPlease
+		APPLE_COMMON_CRYPTO = YesPlease
+		COMPAT_CFLAGS += -DAPPLE_COMMON_CRYPTO
+	endif
+	PTHREAD_LIBS =
 endif
 ifeq ($(uname_S),SunOS)
 	NEEDS_SOCKET = YesPlease
