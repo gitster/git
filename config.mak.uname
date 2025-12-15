@@ -174,9 +174,11 @@ ifeq ($(uname_S),Darwin)
 
         ifeq ($(shell test -d /usr/local/opt/libiconv/ && echo y),y)
 		HOMEBREW_ICONVDIR = /usr/local/opt/libiconv
+		HAS_GOOD_ICONV = Yes
         endif
         ifeq ($(shell test -d /opt/homebrew/opt/libiconv/ && echo y),y)
 		HOMEBREW_ICONVDIR = /opt/homebrew/opt/libiconv
+		HAS_GOOD_ICONV = Yes
         endif
 
 	# The builtin FSMonitor on MacOS builds upon Simple-IPC.  Both require
@@ -193,18 +195,26 @@ ifeq ($(uname_S),Darwin)
 		ifeq ($(shell test -d /sw/lib && echo y),y)
 			BASIC_CFLAGS += -I/sw/include
 			BASIC_LDFLAGS += -L/sw/lib
+			HAS_GOOD_ICONV = Yes
 		endif
 	endif
 	ifndef NO_DARWIN_PORTS
 		ifeq ($(shell test -d /opt/local/lib && echo y),y)
 			BASIC_CFLAGS += -I/opt/local/include
 			BASIC_LDFLAGS += -L/opt/local/lib
+			HAS_GOOD_ICONV = Yes
 		endif
 	endif
 	ifndef NO_APPLE_COMMON_CRYPTO
 		NO_OPENSSL = YesPlease
 		APPLE_COMMON_CRYPTO = YesPlease
 		COMPAT_CFLAGS += -DAPPLE_COMMON_CRYPTO
+	endif
+	ifndef HAS_GOOD_ICONV
+		ifeq ($(shell test "`expr "$(uname_R)" : '\([0-9][0-9]*\)\.'`" -ge 20 && echo 1),1)
+		# utf8.c needs a tweak when using iconv from os
+			BASIC_CFLAGS += -DICONV_RESTART_RESET
+		endif
 	endif
 	PTHREAD_LIBS =
 endif
