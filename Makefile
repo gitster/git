@@ -112,6 +112,9 @@ include shared.mak
 # Define USE_HOMEBREW_MSGFMT to use the msgfmt command installed by
 # Homebrew to compile message catalogs during build, if present.
 #
+# Define USE_HOMEBREW_LIBICONV to link against libiconv installed by
+# Homebrew, if present.
+#
 # Define NO_APPLE_COMMON_CRYPTO if you are building on Darwin/Mac OS X
 # and do not want to use Apple's CommonCrypto library.  This allows you
 # to provide your own OpenSSL library, for example from MacPorts.
@@ -1713,6 +1716,11 @@ endif
 ifdef USE_HOMEBREW_MSGFMT
 ifeq ($(shell test -x $(HOMEBREW_PREFIX)/opt/gettext/msgfmt && echo y),y)
 	MSGFMT = $(HOMEBREW_PREFIX)/opt/gettext/msgfmt
+endif
+endif
+ifdef USE_HOMEBREW_LIBICONV
+ifeq ($(shell test -d $(HOMEBREW_PREFIX)/opt/libiconv && echo y),y)
+	ICONVDIR ?= $(HOMEBREW_PREFIX)/opt/libiconv
 endif
 endif
 endif

@@ -156,6 +156,7 @@ ifeq ($(uname_S),Darwin)
         endif
 	USE_HOMEBREW_GETTEXT = YesPlease
 	USE_HOMEBREW_MSGFMT = YesPlease
+	USE_HOMEBREW_LIBICONV = YesPlease
 
 	# The builtin FSMonitor on MacOS builds upon Simple-IPC.  Both require
 	# Unix domain sockets and PThreads.
