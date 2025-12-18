@@ -73,6 +73,18 @@ relativeWorktrees:::
 	repaired with either the `--relative-paths` option or with the
 	`worktree.useRelativePaths` config set to `true`.
 
+submodulePathConfig:::
+	If enabled, the submodule.<name>.gitdir config is the single source of
+	truth for submodule gitdir paths and is always set for new submodules.
+	Git will error if a module does not have submodule.<name>.gitdir set.
+	This extension can also be enabled as a global runtime config, with
+	the local repository config having precedence (overwrites it).
+	Existing pre-extension submodules need to be migrated by adding the
+	missing config entries. This can be done manually, e.g. for each
+	submodule: "git config submodule.<name>.gitdir .git/modules/<name>",
+	or via the "git submodule--helper migrate-gitdir-configs" command
+	which iterates over all submodules and attempts to migrate them.
+
 worktreeConfig:::
 	If enabled, then worktrees will load config settings from the
 	`$GIT_DIR/config.worktree` file in addition to the

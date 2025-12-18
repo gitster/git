@@ -52,6 +52,13 @@ submodule.<name>.active::
 	submodule.active config option. See linkgit:gitsubmodules[7] for
 	details.
 
+submodule.<name>.gitdir::
+	This sets the gitdir path for submodule <name>. It only works when
+	`extensions.submodulePathConfig` is enabled, otherwise it does nothing.
+	When the extension is enabled, this config is the single source of truth
+	for submodule gitdir paths and git will throw an error if it is missing.
+	See linkgit:git-config[1] for details.
+
 submodule.active::
 	A repeated field which contains a pathspec used to match against a
 	submodule's path to determine if the submodule is of interest to git

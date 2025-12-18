@@ -172,4 +172,6 @@ void absorb_git_dir_into_superproject(const char *path,
  */
 int get_superproject_working_tree(struct strbuf *buf);
 
+extern int submodule_path_config_enabled;
+
 #endif
