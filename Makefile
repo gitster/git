@@ -101,6 +101,21 @@ include shared.mak
 # specify your own (or DarwinPort's) include directories and
 # library directories by defining CFLAGS and LDFLAGS appropriately.
 #
+# Define NO_HOMEBREW if you don't want to use libraries and commands
+# installed by Homebrew.
+#
+# Define HOMEBREW_PREFIX if you have Homebrew installed in a non-default
+# location on macOS or on Linux and want to use it.
+#
+# Define USE_HOMEBREW_GETTEXT to link against the gettext library
+# installed by Homebrew, if present.
+#
+# Define USE_HOMEBREW_MSGFMT to use the msgfmt command installed by
+# Homebrew to compile message catalogs during build, if present.
+#
+# Define USE_HOMEBREW_LIBICONV to link against libiconv installed by
+# Homebrew, if present.
+#
 # Define NO_APPLE_COMMON_CRYPTO if you are building on Darwin/Mac OS X
 # and do not want to use Apple's CommonCrypto library.  This allows you
 # to provide your own OpenSSL library, for example from MacPorts.
@@ -1691,6 +1706,27 @@ ifeq ($(uname_S),Darwin)
 		COMPAT_CFLAGS += -DAPPLE_COMMON_CRYPTO
         endif
 	PTHREAD_LIBS =
+endif
+
+ifndef NO_HOMEBREW
+ifdef HOMEBREW_PREFIX
+ifdef USE_HOMEBREW_GETTEXT
+ifeq ($(shell test -d $(HOMEBREW_PREFIX)/opt/gettext && echo y),y)
+	BASIC_CFLAGS += -I$(HOMEBREW_PREFIX)/opt/gettext/include
+	BASIC_LDFLAGS += -L$(HOMEBREW_PREFIX)/opt/gettext/lib
+endif
+endif
+ifdef USE_HOMEBREW_MSGFMT
+ifeq ($(shell test -x $(HOMEBREW_PREFIX)/opt/gettext/msgfmt && echo y),y)
+	MSGFMT = $(HOMEBREW_PREFIX)/opt/gettext/msgfmt
+endif
+endif
+ifdef USE_HOMEBREW_LIBICONV
+ifeq ($(shell test -d $(HOMEBREW_PREFIX)/opt/libiconv && echo y),y)
+	ICONVDIR ?= $(HOMEBREW_PREFIX)/opt/libiconv
+endif
+endif
+endif
 endif
 
 ifdef NO_LIBGEN_H
