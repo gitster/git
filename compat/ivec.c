@@ -15,8 +15,7 @@ static void _set_capacity(void *self_, size_t new_capacity)
 		return;
 	}
 	if (new_capacity == 0) {
-		free(self->ptr);
-		self->ptr = NULL;
+		FREE_AND_NULL(self->ptr);
 	} else {
 		self->ptr = realloc(self->ptr, new_capacity * self->element_size);
 	}
@@ -88,8 +87,7 @@ void ivec_free(void *self_)
 {
 	struct IVec_c_void *self = self_;
 
-	free(self->ptr);
-	self->ptr = NULL;
+	FREE_AND_NULL(self->ptr);
 	self->length = 0;
 	self->capacity = 0;
 	// DO NOT MODIFY element_size!!!
