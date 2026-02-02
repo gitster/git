@@ -1838,6 +1838,7 @@ const char *setup_git_directory_gently(int *nongit_ok)
 	static struct strbuf cwd = STRBUF_INIT;
 	struct strbuf dir = STRBUF_INIT, gitdir = STRBUF_INIT, report = STRBUF_INIT;
 	const char *prefix = NULL;
+	const char *ref_backend_uri;
 	struct repository_format repo_fmt = REPOSITORY_FORMAT_INIT;
 
 	/*
@@ -1993,6 +1994,25 @@ const char *setup_git_directory_gently(int *nongit_ok)
 	} else {
 		startup_info->prefix = NULL;
 		setenv(GIT_PREFIX_ENVIRONMENT, "", 1);
+	}
+
+	/*
+	 * The env variable should override the repository config
+	 * for 'extensions.refStorage'.
+	 */
+	ref_backend_uri = getenv(GIT_REFERENCE_BACKEND_ENVIRONMENT);
+	if (ref_backend_uri) {
+		char *backend, *location;
+		enum ref_storage_format format;
+
+		parse_reference_uri(ref_backend_uri, &backend, &location);
+		format = ref_storage_format_by_name(backend);
+		if (format == REF_STORAGE_FORMAT_UNKNOWN)
+			die(_("unknown ref storage format: '%s'"), backend);
+		repo_set_ref_storage_format(the_repository, format, location);
+
+		free(backend);
+		free(location);
 	}
 
 	setup_original_cwd();
