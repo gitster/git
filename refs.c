@@ -5,6 +5,7 @@
 #define USE_THE_REPOSITORY_VARIABLE
 
 #include "git-compat-util.h"
+#include "abspath.h"
 #include "advice.h"
 #include "config.h"
 #include "environment.h"
@@ -2224,7 +2225,11 @@ static struct ref_store *ref_store_init(struct repository *repo,
 	if (!be)
 		BUG("reference backend is unknown");
 
-	refs = be->init(repo, gitdir, flags);
+	/*
+	 * TODO Send in a 'struct worktree' instead of a 'gitdir', and
+	 * allow the backend to handle how it wants to deal with worktrees.
+	 */
+	refs = be->init(repo, repo->ref_storage_payload, gitdir, flags);
 	return refs;
 }
 
@@ -3425,4 +3430,34 @@ void refs_create_refdir_stubs(struct repository *repo, const char *refdir,
 	}
 
 	strbuf_release(&path);
+}
+
+void refs_compute_filesystem_location(const char *gitdir, const char *payload,
+				      bool *is_worktree, struct strbuf *refdir,
+				      struct strbuf *ref_common_dir)
+{
+	struct strbuf sb = STRBUF_INIT;
+
+	strbuf_addstr(refdir, gitdir);
+	*is_worktree = get_common_dir_noenv(ref_common_dir, gitdir);
+
+	if (!payload)
+		return;
+
+	if (!is_absolute_path(payload)) {
+		strbuf_addf(&sb, "%s/%s", ref_common_dir->buf, payload);
+		strbuf_realpath(ref_common_dir, sb.buf, 1);
+	} else {
+		strbuf_realpath(ref_common_dir, payload, 1);
+	}
+
+	strbuf_reset(refdir);
+	strbuf_addbuf(refdir, ref_common_dir);
+
+	if (*is_worktree) {
+		char *wt_id = strrchr(gitdir, '/') + 1;
+		strbuf_addf(refdir, "/worktrees/%s", wt_id);
+	}
+
+	strbuf_release(&sb);
 }

@@ -212,6 +212,7 @@ static size_t snapshot_hexsz(const struct snapshot *snapshot)
 }
 
 struct ref_store *packed_ref_store_init(struct repository *repo,
+					const char *payload UNUSED,
 					const char *gitdir,
 					unsigned int store_flags)
 {
