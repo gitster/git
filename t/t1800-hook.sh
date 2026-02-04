@@ -481,6 +481,48 @@ test_expect_success 'client hooks: pre-push expects separate stdout and stderr' 
 	check_stdout_separate_from_stderr pre-push
 '
 
+test_expect_success 'client hooks: extension makes pre-push merge stdout to stderr' '
+	test_when_finished "rm -f stdout.actual stderr.actual" &&
+	git init --bare remote2 &&
+	git remote add origin2 remote2 &&
+	test_commit B &&
+	# repositoryformatversion=1 might be already set (eg default sha256)
+	# so check before using test_config to set it
+	{ test "$(git config core.repositoryformatversion)" = 1 ||
+	  test_config core.repositoryformatversion 1; } &&
+	git config set core.repositoryformatversion 1 &&
+	test_config extensions.hookStdoutToStderr true &&
+	setup_hooks pre-push &&
+	git push origin2 HEAD:main >stdout.actual 2>stderr.actual &&
+	check_stdout_merged_to_stderr pre-push
+'
+
+test_expect_success 'client hooks: pre-push defaults to serial execution' '
+	test_when_finished "rm -rf repo-serial" &&
+	git init --bare remote-serial &&
+	git init repo-serial &&
+	git -C repo-serial remote add origin ../remote-serial &&
+	test_commit -C repo-serial A &&
+
+	# Setup 2 pre-push hooks
+	write_script repo-serial/.git/hooks/pre-push <<-EOF &&
+	sleep 2
+	echo "Hook 1" >&2
+	EOF
+	git -C repo-serial config hook.hook-2.event pre-push &&
+	git -C repo-serial config hook.hook-2.command "sleep 2; echo Hook 2 >&2" &&
+
+	git -C repo-serial config hook.jobs 2 &&
+
+	start=$(date +%s) &&
+	git -C repo-serial push origin HEAD >out 2>err &&
+	end=$(date +%s) &&
+
+	duration=$((end - start)) &&
+	# Serial >= 4s, parallel < 4s.
+	test $duration -ge 4
+'
+
 test_expect_success 'client hooks: commit hooks expect stdout redirected to stderr' '
 	hooks="pre-commit prepare-commit-msg \
 		commit-msg post-commit \

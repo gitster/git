@@ -27,3 +27,6 @@ hook.jobs::
 	Specifies how many hooks can be run simultaneously during parallelized
 	hook execution. If unspecified, defaults to the number of processors on
 	the current system.
++
+This has no effect for hooks requiring separate output streams (like `pre-push`)
+unless `extensions.hookStdoutToStderr` is enabled.
