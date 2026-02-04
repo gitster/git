@@ -2531,7 +2531,7 @@ static void transaction_feed_cb_data_free(void *data)
 static int run_transaction_hook(struct ref_transaction *transaction,
 				const char *state)
 {
-	struct run_hooks_opt opt = RUN_HOOKS_OPT_INIT;
+	struct run_hooks_opt opt = RUN_HOOKS_OPT_INIT_PARALLEL;
 	int ret = 0;
 
 	strvec_push(&opt.args, state);
