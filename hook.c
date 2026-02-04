@@ -479,6 +479,16 @@ static unsigned int get_hook_jobs(struct repository *r, struct run_hooks_opt *op
 	unsigned int jobs = options->jobs;
 
 	/*
+	 * Allow hook.forceStdoutToStderr to enable extensions.hookStdoutToStderr
+	 * for existing repositories (runtime override).
+	 */
+	if (!options->stdout_to_stderr) {
+		int v = 0;
+		repo_config_get_bool(r, "hook.forceStdoutToStderr", &v);
+		options->stdout_to_stderr = v;
+	}
+
+	/*
 	 * Hooks which configure stdout_to_stderr=0 (like pre-push), expect separate
 	 * output streams. Unless extensions.StdoutToStderr is enabled (which forces
 	 * stdout_to_stderr=1), the hook must run sequentially to guarantee output is
