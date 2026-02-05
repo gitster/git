@@ -377,10 +377,10 @@ jobs:
       matrix:
         vector:
         - jobname: linux-sha256
-          image: ubuntu:rolling
+          image: ubuntu:latest
           cc: clang
         - jobname: linux-reftable
-          image: ubuntu:rolling
+          image: ubuntu:latest
           cc: clang
         - jobname: linux-TEST-vars
           image: ubuntu:20.04
@@ -388,20 +388,20 @@ jobs:
           cc_package: gcc-8
         - jobname: linux-breaking-changes
           cc: gcc
-          image: ubuntu:rolling
+          image: ubuntu:latest
         - jobname: fedora-breaking-changes-meson
           image: fedora:latest
         - jobname: linux-leaks
-          image: ubuntu:rolling
+          image: ubuntu:latest
           cc: gcc
         - jobname: linux-reftable-leaks
-          image: ubuntu:rolling
+          image: ubuntu:latest
           cc: gcc
         - jobname: linux-asan-ubsan
-          image: ubuntu:rolling
+          image: ubuntu:latest
           cc: clang
         - jobname: linux-meson
-          image: ubuntu:rolling
+          image: ubuntu:latest
           cc: gcc
         - jobname: linux-musl-meson
           image: alpine:latest
