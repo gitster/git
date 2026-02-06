@@ -1418,6 +1418,8 @@ N_("j - go to the next undecided hunk, roll over at the bottom\n"
    "e - manually edit the current hunk\n"
    "p - print the current hunk\n"
    "P - print the current hunk using the pager\n"
+   "> - go to the next file\n"
+   "< - go to the previous file\n"
    "? - print help\n");
 
 static size_t dec_mod(size_t a, size_t m)
@@ -1430,6 +1432,12 @@ static size_t inc_mod(size_t a, size_t m)
 	return a < m - 1 ? a + 1 : 0;
 }
 
+enum patch_update_response {
+	NEXT_FILE = 0,
+	QUIT,
+	PREVIOUS_FILE,
+};
+
 static bool get_first_undecided(const struct file_diff *file_diff, size_t *idx)
 {
 	for (size_t i = 0; i < file_diff->hunk_nr; i++) {
@@ -1441,7 +1449,7 @@ static bool get_first_undecided(const struct file_diff *file_diff, size_t *idx)
 	return false;
 }
 
-static int patch_update_file(struct add_p_state *s,
+static enum patch_update_response patch_update_file(struct add_p_state *s,
 			     struct file_diff *file_diff)
 {
 	size_t hunk_index = 0;
@@ -1449,12 +1457,14 @@ static int patch_update_file(struct add_p_state *s,
 	struct hunk *hunk;
 	char ch;
 	struct child_process cp = CHILD_PROCESS_INIT;
-	int colored = !!s->colored.len, quit = 0, use_pager = 0;
+	int colored = !!s->colored.len, use_pager = 0;
 	enum prompt_mode_type prompt_mode_type;
+	int all_decided = 0;
+	enum patch_update_response ret = NEXT_FILE;
 
 	/* Empty added files have no hunks */
 	if (!file_diff->hunk_nr && !file_diff->added)
-		return 0;
+		return NEXT_FILE;
 
 	strbuf_reset(&s->buf);
 	render_diff_header(s, file_diff, colored, &s->buf);
@@ -1467,7 +1477,9 @@ static int patch_update_file(struct add_p_state *s,
 			ALLOW_GOTO_NEXT_UNDECIDED_HUNK = 1 << 3,
 			ALLOW_SEARCH_AND_GOTO = 1 << 4,
 			ALLOW_SPLIT = 1 << 5,
-			ALLOW_EDIT = 1 << 6
+			ALLOW_EDIT = 1 << 6,
+			ALLOW_GOTO_PREVIOUS_FILE = 1 << 7,
+			ALLOW_GOTO_NEXT_FILE = 1 << 8
 		} permitted = 0;
 
 		if (hunk_index >= file_diff->hunk_nr)
@@ -1498,9 +1510,12 @@ static int patch_update_file(struct add_p_state *s,
 
 		/* Everything decided? */
 		if (undecided_previous < 0 && undecided_next < 0 &&
-		    hunk->use != UNDECIDED_HUNK)
-			break;
-
+		    hunk->use != UNDECIDED_HUNK) {
+				if (s->s.no_auto_advance)
+					all_decided = 1;
+				else
+					break;
+			}
 		strbuf_reset(&s->buf);
 		if (file_diff->hunk_nr) {
 			if (rendered_hunk_index != hunk_index) {
@@ -1548,6 +1563,14 @@ static int patch_update_file(struct add_p_state *s,
 				permitted |= ALLOW_EDIT;
 				strbuf_addstr(&s->buf, ",e");
 			}
+			if (s->s.no_auto_advance && s->file_diff_nr > 1) {
+				permitted |= ALLOW_GOTO_NEXT_FILE;
+				strbuf_addstr(&s->buf, ",>");
+			}
+			if (s->s.no_auto_advance && s->file_diff_nr > 1) {
+				permitted |= ALLOW_GOTO_PREVIOUS_FILE;
+				strbuf_addstr(&s->buf, ",<");
+			}
 			strbuf_addstr(&s->buf, ",p,P");
 		}
 		if (file_diff->deleted)
@@ -1566,11 +1589,14 @@ static int patch_update_file(struct add_p_state *s,
 						: 1));
 		printf(_(s->mode->prompt_mode[prompt_mode_type]),
 		       s->buf.buf);
+		if (s->s.no_auto_advance && all_decided)
+			printf(_("\n%s All hunks decided. What now? "),
+				s->s.prompt_color);
 		if (*s->s.reset_color_interactive)
 			fputs(s->s.reset_color_interactive, stdout);
 		fflush(stdout);
 		if (read_single_character(s) == EOF) {
-			quit = 1;
+			ret = QUIT;
 			break;
 		}
 
@@ -1616,9 +1642,26 @@ soft_increment:
 				hunk->use = SKIP_HUNK;
 			}
 		} else if (ch == 'q') {
-			quit = 1;
+			ret = QUIT;
 			break;
-		} else if (s->answer.buf[0] == 'K') {
+		} else if (s->s.no_auto_advance && s->answer.buf[0] == '>') {
+			if (permitted & ALLOW_GOTO_NEXT_FILE) {
+				ret = NEXT_FILE;
+				break;
+			} else {
+				err(s, _("No next file"));
+				continue;
+			}
+		} else if (s->s.no_auto_advance && s->answer.buf[0] == '<') {
+			if (permitted & ALLOW_GOTO_PREVIOUS_FILE) {
+				ret = PREVIOUS_FILE;
+				break;
+			} else {
+				err(s, _("No previous file"));
+				continue;
+			}
+		}
+		else if (s->answer.buf[0] == 'K') {
 			if (permitted & ALLOW_GOTO_PREVIOUS_HUNK)
 				hunk_index = dec_mod(hunk_index,
 						     file_diff->hunk_nr);
@@ -1803,7 +1846,7 @@ soft_increment:
 	}
 
 	putchar('\n');
-	return quit;
+	return ret;
 }
 
 int run_add_p(struct repository *r, enum add_p_mode mode,
@@ -1814,6 +1857,7 @@ int run_add_p(struct repository *r, enum add_p_mode mode,
 		{ r }, STRBUF_INIT, STRBUF_INIT, STRBUF_INIT, STRBUF_INIT
 	};
 	size_t i, binary_count = 0;
+	enum patch_update_response ret;
 
 	init_add_i_state(&s.s, r, o);
 
@@ -1852,11 +1896,32 @@ int run_add_p(struct repository *r, enum add_p_mode mode,
 		return -1;
 	}
 
-	for (i = 0; i < s.file_diff_nr; i++)
-		if (s.file_diff[i].binary && !s.file_diff[i].hunk_nr)
+	for (i = 0; i < s.file_diff_nr;) {
+		if (s.file_diff[i].binary && !s.file_diff[i].hunk_nr) {
 			binary_count++;
-		else if (patch_update_file(&s, s.file_diff + i))
-			break;
+			i++;
+			continue;
+		}
+		else {
+			ret = patch_update_file(&s, s.file_diff + i);
+			if (ret == NEXT_FILE) {
+				if (s.s.no_auto_advance && i == s.file_diff_nr - 1)
+					i = 0;
+				else
+					i++;
+				continue;
+			}
+			if (ret == QUIT)
+				break;
+			if (s.s.no_auto_advance && ret == PREVIOUS_FILE) {
+				if (i == 0)
+					i = s.file_diff_nr - 1;
+				else
+					i--;
+				continue;
+			}
+		}
+    }
 
 	if (s.file_diff_nr == 0)
 		err(&s, _("No changes."));
