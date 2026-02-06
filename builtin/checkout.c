@@ -63,6 +63,7 @@ struct checkout_opts {
 	int patch_mode;
 	int patch_context;
 	int patch_interhunk_context;
+	int no_auto_advance;
 	int quiet;
 	int merge;
 	int force;
@@ -549,6 +550,7 @@ static int checkout_paths(const struct checkout_opts *opts,
 		struct add_p_opt add_p_opt = {
 			.context = opts->patch_context,
 			.interhunkcontext = opts->patch_interhunk_context,
+			.no_auto_advance = opts->no_auto_advance
 		};
 		const char *rev = new_branch_info->name;
 		char rev_oid[GIT_MAX_HEXSZ + 1];
@@ -1747,6 +1749,8 @@ static struct option *add_checkout_path_options(struct checkout_opts *opts,
 			      N_("checkout their version for unmerged files"),
 			      3, PARSE_OPT_NONEG),
 		OPT_BOOL('p', "patch", &opts->patch_mode, N_("select hunks interactively")),
+		OPT_BOOL(0, "rework-with-file", &opts->no_auto_advance,
+			 N_("rework with files when selecting hunks interactively")),
 		OPT_DIFF_UNIFIED(&opts->patch_context),
 		OPT_DIFF_INTERHUNK_CONTEXT(&opts->patch_interhunk_context),
 		OPT_BOOL(0, "ignore-skip-worktree-bits", &opts->ignore_skipworktree,
@@ -1801,6 +1805,8 @@ static int checkout_main(int argc, const char **argv, const char *prefix,
 			die(_("the option '%s' requires '%s'"), "--unified", "--patch");
 		if (opts->patch_interhunk_context != -1)
 			die(_("the option '%s' requires '%s'"), "--inter-hunk-context", "--patch");
+		if (opts->no_auto_advance)
+			die(_("the option '%s' requires '%s'"), "--rework-with-file", "--patch");
 	}
 
 	if (opts->show_progress < 0) {
