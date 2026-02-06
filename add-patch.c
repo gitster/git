@@ -1422,6 +1422,40 @@ N_("j - go to the next undecided hunk, roll over at the bottom\n"
    "< - go to the previous file\n"
    "? - print help\n");
 
+static void apply_patch(struct add_p_state *s, struct file_diff *file_diff)
+{
+	struct child_process cp = CHILD_PROCESS_INIT;
+	size_t j;
+
+		/* Any hunk to be used? */
+	for (j = 0; j < file_diff->hunk_nr; j++)
+		if (file_diff->hunk[j].use == USE_HUNK)
+			break;
+
+	if (j < file_diff->hunk_nr ||
+		(!file_diff->hunk_nr && file_diff->head.use == USE_HUNK)) {
+		/* At least one hunk selected: apply */
+		strbuf_reset(&s->buf);
+		reassemble_patch(s, file_diff, 0, &s->buf);
+
+		discard_index(s->s.r->index);
+		if (s->mode->apply_for_checkout)
+			apply_for_checkout(s, &s->buf,
+					s->mode->is_reverse);
+		else {
+			setup_child_process(s, &cp, "apply", NULL);
+			strvec_pushv(&cp.args, s->mode->apply_args);
+			if (pipe_command(&cp, s->buf.buf, s->buf.len,
+					NULL, 0, NULL, 0))
+				error(_("'git apply' failed"));
+		}
+		if (repo_read_index(s->s.r) >= 0)
+			repo_refresh_and_write_index(s->s.r, REFRESH_QUIET, 0,
+							1, NULL, NULL, NULL);
+	}
+
+}
+
 static size_t dec_mod(size_t a, size_t m)
 {
 	return a > 0 ? a - 1 : m - 1;
@@ -1456,7 +1490,6 @@ static enum patch_update_response patch_update_file(struct add_p_state *s,
 	ssize_t i, undecided_previous, undecided_next, rendered_hunk_index = -1;
 	struct hunk *hunk;
 	char ch;
-	struct child_process cp = CHILD_PROCESS_INIT;
 	int colored = !!s->colored.len, use_pager = 0;
 	enum prompt_mode_type prompt_mode_type;
 	int all_decided = 0;
@@ -1818,32 +1851,8 @@ soft_increment:
 		}
 	}
 
-	/* Any hunk to be used? */
-	for (i = 0; i < file_diff->hunk_nr; i++)
-		if (file_diff->hunk[i].use == USE_HUNK)
-			break;
-
-	if (i < file_diff->hunk_nr ||
-	    (!file_diff->hunk_nr && file_diff->head.use == USE_HUNK)) {
-		/* At least one hunk selected: apply */
-		strbuf_reset(&s->buf);
-		reassemble_patch(s, file_diff, 0, &s->buf);
-
-		discard_index(s->s.r->index);
-		if (s->mode->apply_for_checkout)
-			apply_for_checkout(s, &s->buf,
-					   s->mode->is_reverse);
-		else {
-			setup_child_process(s, &cp, "apply", NULL);
-			strvec_pushv(&cp.args, s->mode->apply_args);
-			if (pipe_command(&cp, s->buf.buf, s->buf.len,
-					 NULL, 0, NULL, 0))
-				error(_("'git apply' failed"));
-		}
-		if (repo_read_index(s->s.r) >= 0)
-			repo_refresh_and_write_index(s->s.r, REFRESH_QUIET, 0,
-						     1, NULL, NULL, NULL);
-	}
+	if (!s->s.no_auto_advance)
+		apply_patch(s, file_diff);
 
 	putchar('\n');
 	return ret;
@@ -1922,6 +1931,9 @@ int run_add_p(struct repository *r, enum add_p_mode mode,
 			}
 		}
     }
+	for (i = 0; i < s.file_diff_nr; i++)
+		if (s.s.no_auto_advance)
+			apply_patch(&s, s.file_diff + i);
 
 	if (s.file_diff_nr == 0)
 		err(&s, _("No changes."));
