@@ -39,9 +39,16 @@ comment_re="$(
 		}'
 )"
 line="$(sed -n -e "/^${comment_re} -\{8,\} >8 -\{8,\}\$/q
+		   /^${comment_re}.*/d
+		   /^---\$/{p;q;}
 		   /^diff -/{p;q;}
 		   /^Index: /{p;q;}" "$1")"
-if test -n "$line"
+if test "$line" = "---"
+then
+	echo >&2 "Message contains a '---' separator line that will confuse"
+	echo >&2 "'git am'. To fix this indent the '---' line."
+	ret=1
+elif test -n "$line"
 then
 	echo >&2 "Message contains a diff that will confuse 'git am'."
 	echo >&2 "To fix this indent the diff."
