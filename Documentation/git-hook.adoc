@@ -8,7 +8,8 @@ git-hook - Run git hooks
 SYNOPSIS
 --------
 [verse]
-'git hook' run [--ignore-missing] [--to-stdin=<path>] <hook-name> [-- <hook-args>]
+'git hook' run [--ignore-missing] [--to-stdin=<path>] [(-j|--jobs) <n>]
+	<hook-name> [-- <hook-args>]
 'git hook' list <hook-name>
 
 DESCRIPTION
@@ -128,6 +129,16 @@ OPTIONS
 	tools that want to do a blind one-shot run of a hook that may
 	or may not be present.
 
+-j::
+--jobs::
+	Only valid for `run`.
++
+Specify how many hooks to run simultaneously. If this flag is not specified,
+the value of the `hook.jobs` config is used, see linkgit:git-config[1]. If the
+config is not specified, the number of CPUs on the current system is used. Some
+hooks may be ineligible for parallelization: for example, 'commit-msg' hooks
+typically modify the commit message body and cannot be parallelized.
+
 WRAPPERS
 --------
 
@@ -151,6 +162,7 @@ git hook run mywrapper-start-tests \
   # providing something to stdin
   --stdin some-tempfile-123 \
   # execute hooks in serial
+  --jobs 1 \
   # plus some arguments of your own...
   -- \
   --testname bar \

@@ -22,6 +22,8 @@ struct run_hooks_opt
 	 *
 	 * If > 1, output will be buffered and de-interleaved (ungroup=0).
 	 * If == 1, output will be real-time (ungroup=1).
+	 * If == 0, the 'hook.jobs' config is used or, if the config is unset,
+	 * the number of online cpus on the system.
 	 */
 	unsigned int jobs;
 
@@ -111,11 +113,27 @@ struct run_hooks_opt
 	void (*free_feed_pipe_cb_data)(void *data);
 };
 
-#define RUN_HOOKS_OPT_INIT { \
+/**
+ * Initializer for hooks capable of running only sequentially.
+ * .jobs = 1 forces serial execution.
+ */
+#define RUN_HOOKS_OPT_INIT_SERIAL { \
 	.env = STRVEC_INIT, \
 	.args = STRVEC_INIT, \
 	.stdout_to_stderr = 1, \
 	.jobs = 1, \
+}
+
+/**
+ * Initializer for hooks capable of running in parallel.
+ * .jobs = 0 means online_cpus() will be called to get the number of jobs, if
+ * users did not specify a 'hook.jobs' config which has precedence.
+ */
+#define RUN_HOOKS_OPT_INIT_PARALLEL { \
+	.env = STRVEC_INIT, \
+	.args = STRVEC_INIT, \
+	.stdout_to_stderr = 1, \
+	.jobs = 0, \
 }
 
 struct hook_cb_data {

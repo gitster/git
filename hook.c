@@ -250,6 +250,45 @@ static void run_hooks_opt_clear(struct run_hooks_opt *options)
 	strvec_clear(&options->args);
 }
 
+/*
+ * Determines how many jobs to use for hook execution.
+ * The priority is as follows:
+ *   1. Hooks setting jobs=1, either via RUN_HOOKS_OPT_INIT_SERIAL or stdout_to_stderr=0
+ *      are known to be unsafe to parallelize, so their jobs=1 has precedence.
+ *   3. The 'hook.jobs' configuration is used if set.
+ *   4. The number of online CPUs is used as a final fallback.
+ * Returns:
+ *   The number of jobs to use for parallel execution, or 1 for serial.
+ */
+static unsigned int get_hook_jobs(struct repository *r, struct run_hooks_opt *options)
+{
+	unsigned int jobs = options->jobs;
+
+	/*
+	 * Allow hook.forceStdoutToStderr to enable extensions.hookStdoutToStderr
+	 * for existing repositories (runtime override).
+	 */
+	if (!options->stdout_to_stderr) {
+		int v = 0;
+		repo_config_get_bool(r, "hook.forceStdoutToStderr", &v);
+		options->stdout_to_stderr = v;
+	}
+
+	/*
+	 * Hooks which configure stdout_to_stderr=0 (like pre-push), expect separate
+	 * output streams. Unless extensions.StdoutToStderr is enabled (which forces
+	 * stdout_to_stderr=1), the hook must run sequentially to guarantee output is
+	 * non-interleaved.
+	 */
+	if (!options->stdout_to_stderr)
+		jobs = 1;
+
+	if (!jobs && repo_config_get_uint(r, "hook.jobs", &jobs))
+		jobs = online_cpus(); /* fallback if config is unset */
+
+	return jobs;
+}
+
 int run_hooks_opt(struct repository *r, const char *hook_name,
 		  struct run_hooks_opt *options)
 {
@@ -262,12 +301,13 @@ int run_hooks_opt(struct repository *r, const char *hook_name,
 		.repository = r,
 	};
 	int ret = 0;
+	unsigned int jobs = get_hook_jobs(r, options);
 	const struct run_process_parallel_opts opts = {
 		.tr2_category = "hook",
 		.tr2_label = hook_name,
 
-		.processes = options->jobs,
-		.ungroup = options->jobs == 1,
+		.processes = jobs,
+		.ungroup = jobs == 1,
 
 		.get_next_task = pick_next_hook,
 		.start_failure = notify_start_failure,
@@ -282,9 +322,6 @@ int run_hooks_opt(struct repository *r, const char *hook_name,
 
 	if (options->path_to_stdin && options->feed_pipe)
 		BUG("options path_to_stdin and feed_pipe are mutually exclusive");
-
-	if (!options->jobs)
-		BUG("run_hooks_opt must be called with options.jobs >= 1");
 
 	/*
 	 * Ensure cb_data copy and free functions are either provided together,
@@ -337,14 +374,14 @@ cleanup:
 
 int run_hooks(struct repository *r, const char *hook_name)
 {
-	struct run_hooks_opt opt = RUN_HOOKS_OPT_INIT;
+	struct run_hooks_opt opt = RUN_HOOKS_OPT_INIT_PARALLEL;
 
 	return run_hooks_opt(r, hook_name, &opt);
 }
 
 int run_hooks_l(struct repository *r, const char *hook_name, ...)
 {
-	struct run_hooks_opt opt = RUN_HOOKS_OPT_INIT;
+	struct run_hooks_opt opt = RUN_HOOKS_OPT_INIT_PARALLEL;
 	va_list ap;
 	const char *arg;
 
