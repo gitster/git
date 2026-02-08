@@ -2480,7 +2480,8 @@ static int transaction_hook_feed_stdin(int hook_stdin_fd, void *pp_cb, void *pp_
 {
 	struct hook_cb_data *hook_cb = pp_cb;
 	struct ref_transaction *transaction = hook_cb->options->feed_pipe_ctx;
-	struct transaction_feed_cb_data *feed_cb_data = pp_task_cb;
+	struct string_list_item *hook = pp_task_cb;
+	struct transaction_feed_cb_data *feed_cb_data = hook->util;
 	struct strbuf *buf = &feed_cb_data->buf;
 	struct ref_update *update;
 	size_t i = feed_cb_data->index++;
@@ -2519,6 +2520,24 @@ static int transaction_hook_feed_stdin(int hook_stdin_fd, void *pp_cb, void *pp_
 	return 0; /* no more input to feed */
 }
 
+static void *copy_transaction_feed_cb_data(const void *data)
+{
+	struct transaction_feed_cb_data *new_data = xmalloc(sizeof(struct transaction_feed_cb_data));
+	memcpy(new_data, data, sizeof(struct transaction_feed_cb_data));
+	strbuf_init(&new_data->buf, 0);
+	new_data->index = 0; /* a fresh iterator for each hook */
+	return new_data;
+}
+
+static void free_transaction_feed_cb_data(void *data)
+{
+	struct transaction_feed_cb_data *d = data;
+	if (!d)
+		return;
+	strbuf_release(&d->buf);
+	free(d);
+}
+
 static int run_transaction_hook(struct ref_transaction *transaction,
 				const char *state)
 {
@@ -2531,6 +2550,8 @@ static int run_transaction_hook(struct ref_transaction *transaction,
 	opt.feed_pipe = transaction_hook_feed_stdin;
 	opt.feed_pipe_ctx = transaction;
 	opt.feed_pipe_cb_data = &feed_ctx;
+	opt.copy_feed_pipe_cb_data = copy_transaction_feed_cb_data;
+	opt.free_feed_pipe_cb_data = free_transaction_feed_cb_data;
 
 	strbuf_init(&feed_ctx.buf, 0);
 

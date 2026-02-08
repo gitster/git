@@ -2,6 +2,7 @@
 #define HOOK_H
 #include "strvec.h"
 #include "run-command.h"
+#include "string-list.h"
 
 struct repository;
 
@@ -86,12 +87,28 @@ struct run_hooks_opt
 	 * Opaque data pointer used to keep internal state across callback calls.
 	 *
 	 * It can be accessed directly via the third callback arg 'pp_task_cb':
-	 * struct ... *state = pp_task_cb;
+	 * struct ... *state = ((struct string_list_item *)pp_task_cb)->util;
 	 *
 	 * The caller is responsible for managing the memory for this data.
 	 * Only useful when using `run_hooks_opt.feed_pipe`, otherwise ignore it.
 	 */
 	void *feed_pipe_cb_data;
+
+	/**
+	 * Some hooks need a copy of the initial `feed_pipe_cb_data` state, so
+	 * they can keep track of progress without affecting one another.
+	 *
+	 * If provided, this function will be called to copy `feed_pipe_cb_data`
+	 * for each hook.
+	 */
+	void *(*copy_feed_pipe_cb_data)(const void *data);
+
+	/**
+	 * Called to free the memory duplicated by `copy_feed_pipe_cb_data`.
+	 *
+	 * Must always be provided when `copy_feed_pipe_cb_data` is provided.
+	 */
+	void (*free_feed_pipe_cb_data)(void *data);
 };
 
 #define RUN_HOOKS_OPT_INIT { \
@@ -105,11 +122,43 @@ struct hook_cb_data {
 	/* rc reflects the cumulative failure state */
 	int rc;
 	const char *hook_name;
-	const char *hook_path;
+
+	/**
+	 * A list of hook commands/paths to run for the 'hook_name' event.
+	 *
+	 * The 'string' member of each item contains the executable path (e.g.
+	 * "/path/to/.git/hooks/pre-commit") or command.
+	 */
+	struct string_list *hook_command_list;
+
+	/**
+	 * Iterator/cursor for the above list, pointing to the next hook to run.
+	 *
+	 * The 'util' member of the string_list_item holds the per-hook state
+	 * data (feed_pipe_cb_data) which is passed to callbacks via 'pp_task_cb'.
+	 */
+	struct string_list_item *next_hook;
+
 	struct run_hooks_opt *options;
+	struct repository *repository;
 };
 
-/*
+/**
+ * Provides a list of hook commands to run for the 'hookname' event.
+ *
+ * This function consolidates hooks from two sources:
+ * 1. The config-based hooks (not yet implemented).
+ * 2. The "traditional" hook found in the repository hooks directory
+ *    (e.g., .git/hooks/pre-commit).
+ *
+ * The list is ordered by execution priority.
+ *
+ * The caller is responsible for freeing the memory of the returned list
+ * using string_list_clear() and free().
+ */
+struct string_list *list_hooks(struct repository *r, const char *hookname);
+
+/**
  * Returns the path to the hook file, or NULL if the hook is missing
  * or disabled. Note that this points to static storage that will be
  * overwritten by further calls to find_hook and run_hook_*.

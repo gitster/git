@@ -1,0 +1,17 @@
+hook.<name>.command::
+	A command to execute whenever `hook.<name>` is invoked. `<name>` should
+	be a unique "friendly" name which you can use to identify this hook
+	command. (You can specify when to invoke this command with
+	`hook.<name>.event`.) The value can be an executable on your device or a
+	oneliner for your shell. If more than one value is specified for the
+	same `<name>`, the last value parsed will be the only command executed.
+	See linkgit:git-hook[1].
+
+hook.<name>.event::
+	The hook events which should invoke `hook.<name>`. `<name>` should be a
+	unique "friendly" name which you can use to identify this hook. The
+	value should be the name of a hook event, like "pre-commit" or "update".
+	(See linkgit:githooks[5] for a complete list of hooks Git knows about.)
+	On the specified event, the associated `hook.<name>.command` will be
+	executed. More than one event can be specified if you wish for
+	`hook.<name>` to execute on multiple events. See linkgit:git-hook[1].
