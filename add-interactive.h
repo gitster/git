@@ -6,9 +6,10 @@
 struct add_p_opt {
 	int context;
 	int interhunkcontext;
+	int no_auto_advance;
 };
 
-#define ADD_P_OPT_INIT { .context = -1, .interhunkcontext = -1 }
+#define ADD_P_OPT_INIT { .context = -1, .interhunkcontext = -1, .no_auto_advance = 0 }
 
 struct add_i_state {
 	struct repository *r;
@@ -28,7 +29,7 @@ struct add_i_state {
 
 	int use_single_key;
 	char *interactive_diff_filter, *interactive_diff_algorithm;
-	int context, interhunkcontext;
+	int context, interhunkcontext, no_auto_advance;
 };
 
 void init_add_i_state(struct add_i_state *s, struct repository *r,
