@@ -261,6 +261,9 @@ message.  Any line that is of the form:
 is taken as the beginning of a patch, and the commit log message
 is terminated before the first occurrence of such a line.
 
+This means that the content of the commit message can inadverently
+interrupt the processing (see the <<caveats,CAVEATS>> section below).
+
 When initially invoking `git am`, you give it the names of the mailboxes
 to process.  Upon seeing the first patch that does not apply, it
 aborts in the middle.  You can recover from this in one of two ways:
@@ -282,6 +285,12 @@ current branch.  This is useful if you have problems with multiple
 commits, like running 'git am' on the wrong branch or an error in the
 commits that is more easily fixed by changing the mailbox (e.g.
 errors in the "From:" lines).
+
+[[caveats]]
+CAVEATS
+-------
+
+include::format-patch-caveats.adoc[]
 
 HOOKS
 -----
