@@ -142,7 +142,6 @@ test_expect_success 'diff succeeds even if prefetch triggered by break-rewrites'
 	git -C server add -A &&
 	git -C server commit -m x &&
 
-
 	echo xyzz >server/foo &&
 	rm server/bar/baz &&
 	test_seq -f "line %d" 90 190 >server/bar/baz &&
@@ -158,7 +157,7 @@ test_expect_success 'diff succeeds even if prefetch triggered by break-rewrites'
 	# Ensure baz has diff
 	git -C client reset --hard HEAD &&
 
-	# reset's break-rewrites detection will trigger prefetch
+	# break-rewrites detection in reset will trigger prefetch
 	git -C client reset HEAD~1
 '
 
