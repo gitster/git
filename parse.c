@@ -1,6 +1,7 @@
 #include "git-compat-util.h"
 #include "gettext.h"
 #include "parse.h"
+#include "path.h"
 
 static uintmax_t get_unit_factor(const char *end)
 {
@@ -208,4 +209,27 @@ unsigned long git_env_ulong(const char *k, unsigned long val)
 	if (v && !git_parse_ulong(v, &val))
 		die(_("failed to parse %s"), k);
 	return val;
+}
+
+int git_parse_maybe_pathname(const char *value, char **dest)
+{
+	bool is_optional;
+	char *path;
+
+	if (!value)
+		return -1;
+
+	is_optional = skip_prefix(value, ":(optional)", &value);
+	path = interpolate_path(value, 0);
+	if (!path)
+		return -1;
+
+	if (is_optional && is_missing_file(path)) {
+		free(path);
+		*dest = NULL;
+		return 0;
+	}
+
+	*dest = path;
+	return 0;
 }
