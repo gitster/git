@@ -2553,17 +2553,10 @@ test_expect_success 'list --type=color shows only canonicalizable color values' 
 	section.blue=<BLUE>
 	EOF
 
-	cat >expecterr <<-EOF &&
-	error: invalid color value: True
-	error: invalid color value: 1M
-	error: invalid color value: ~/dir
-	error: invalid color value: Fri Jun 4 15:46:55 2010
-	EOF
-
 	git config ${mode_prefix}list --type=color >actual.raw 2>err &&
 	test_decode_color <actual.raw >actual &&
 	test_cmp expect actual &&
-	test_cmp expecterr err
+	test_must_be_empty err
 '
 
 test_expect_success '--type rejects unknown specifiers' '
