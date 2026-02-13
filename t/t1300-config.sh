@@ -2514,7 +2514,9 @@ test_expect_success 'list --type=bool shows only canonicalizable bool values' '
 	section.big=true
 	EOF
 
-	test_must_fail git config ${mode_prefix}list --type=bool
+	git config ${mode_prefix}list --type=bool >actual 2>err &&
+	test_cmp expect actual &&
+	test_must_be_empty err
 '
 
 test_expect_success 'list --type=path shows only canonicalizable path values' '
