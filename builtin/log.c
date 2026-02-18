@@ -1096,7 +1096,18 @@ static int git_format_config(const char *var, const char *value,
 		return 0;
 	}
 	if (!strcmp(var, "format.noprefix")) {
-		format_no_prefix = 1;
+		format_no_prefix = git_parse_maybe_bool(value);
+		if (format_no_prefix < 0) {
+			int status = die_message(
+				_("bad boolean config value '%s' for '%s'"),
+				value, var);
+			fprintf(stderr,
+				_("hint: '%s' used to accept any value but "
+				  "now only\n"
+				  "hint: accepts boolean values, like '%s'\n"),
+				var, "diff.noprefix");
+			exit(status);
+		}
 		return 0;
 	}
 
