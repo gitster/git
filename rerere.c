@@ -1031,7 +1031,8 @@ static int handle_cache(struct index_state *istate,
 	else
 		io.io.output = NULL;
 	strbuf_init(&io.input, 0);
-	strbuf_attach(&io.input, result.ptr, result.size, result.size);
+	strbuf_add(&io.input, result.ptr, result.size);
+	free(result.ptr);
 
 	/*
 	 * Grab the conflict ID and optionally write the original

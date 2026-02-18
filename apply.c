@@ -3589,7 +3589,8 @@ static int three_way_merge(struct apply_state *state,
 		return -1;
 	}
 	image_clear(image);
-	strbuf_attach(&image->buf, result.ptr, result.size, result.size);
+	strbuf_add(&image->buf, result.ptr, result.size);
+	free(result.ptr);
 
 	return status;
 }
