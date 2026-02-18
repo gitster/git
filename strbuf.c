@@ -95,11 +95,12 @@ char *strbuf_detach(struct strbuf *sb, size_t *sz)
 
 void strbuf_attach(struct strbuf *sb, void *buf, size_t len, size_t alloc)
 {
+	if (alloc <= len)
+		BUG("alloc must be larger than len");
 	strbuf_release(sb);
 	sb->buf   = buf;
 	sb->len   = len;
 	sb->alloc = alloc;
-	strbuf_grow(sb, 0);
 	sb->buf[sb->len] = '\0';
 }
 
