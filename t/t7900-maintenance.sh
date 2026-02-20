@@ -43,7 +43,8 @@ test_expect_success 'help text' '
 	test_grep "usage: git maintenance" err
 '
 
-test_expect_success 'run [--auto|--quiet]' '
+test_expect_success 'run [--auto|--quiet] with gc strategy' '
+	test_config maintenance.strategy gc &&
 	GIT_TRACE2_EVENT="$(pwd)/run-no-auto.txt" \
 		git maintenance run 2>/dev/null &&
 	GIT_TRACE2_EVENT="$(pwd)/run-auto.txt" \
@@ -497,6 +498,7 @@ test_expect_success 'maintenance.incremental-repack.auto' '
 	(
 		cd incremental-repack-true &&
 		git config core.multiPackIndex true &&
+		git config maintenance.auto false &&
 		run_incremental_repack_and_verify
 	)
 '
@@ -507,6 +509,7 @@ test_expect_success 'maintenance.incremental-repack.auto (when config is unset)'
 	(
 		cd incremental-repack-unset &&
 		test_unconfig core.multiPackIndex &&
+		git config maintenance.auto false &&
 		run_incremental_repack_and_verify
 	)
 '
@@ -617,6 +620,7 @@ test_expect_success 'geometric repacking with --auto' '
 	git init repo &&
 	(
 		cd repo &&
+		git config set maintenance.auto false &&
 
 		# An empty repository does not need repacking, except when
 		# explicitly told to do it.
