@@ -1278,24 +1278,12 @@ int git_config_string(char **dest, const char *var, const char *value)
 
 int git_config_pathname(char **dest, const char *var, const char *value)
 {
-	bool is_optional;
-	char *path;
-
 	if (!value)
 		return config_error_nonbool(var);
 
-	is_optional = skip_prefix(value, ":(optional)", &value);
-	path = interpolate_path(value, 0);
-	if (!path)
+	if (git_parse_maybe_pathname(value, dest) < 0)
 		die(_("failed to expand user dir in: '%s'"), value);
 
-	if (is_optional && is_missing_file(path)) {
-		free(path);
-		*dest = NULL;
-		return 0;
-	}
-
-	*dest = path;
 	return 0;
 }
 

@@ -19,4 +19,6 @@ int git_parse_maybe_bool_text(const char *value);
 int git_env_bool(const char *, int);
 unsigned long git_env_ulong(const char *, unsigned long);
 
+int git_parse_maybe_pathname(const char *value, char **dest);
+
 #endif /* PARSE_H */
