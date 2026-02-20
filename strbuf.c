@@ -95,11 +95,12 @@ char *strbuf_detach(struct strbuf *sb, size_t *sz)
 
 void strbuf_attach(struct strbuf *sb, void *buf, size_t len, size_t alloc)
 {
+	if (alloc <= len)
+		BUG("alloc must be larger than len");
 	strbuf_release(sb);
 	sb->buf   = buf;
 	sb->len   = len;
 	sb->alloc = alloc;
-	strbuf_grow(sb, 0);
 	sb->buf[sb->len] = '\0';
 }
 
@@ -168,7 +169,7 @@ int strbuf_reencode(struct strbuf *sb, const char *from, const char *to)
 	if (!out)
 		return -1;
 
-	strbuf_attach(sb, out, len, len);
+	strbuf_attach(sb, out, len, len + 1);
 	return 0;
 }
 
