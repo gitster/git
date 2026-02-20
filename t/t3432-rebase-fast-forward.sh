@@ -11,6 +11,8 @@ export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
 . ./test-lib.sh
 
 test_expect_success setup '
+	git config set gc.reflogExpire never &&
+	git config set gc.reflogExpireUnreachable never &&
 	test_commit A &&
 	test_commit B &&
 	test_commit C &&

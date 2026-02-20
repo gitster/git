@@ -31,6 +31,8 @@ Initial setup:
 . "$TEST_DIRECTORY"/lib-rebase.sh
 
 test_expect_success 'setup' '
+	git config set gc.reflogExpire never &&
+	git config set gc.reflogExpireUnreachable never &&
 	git switch -C primary &&
 	test_commit A file1 &&
 	test_commit B file1 &&
