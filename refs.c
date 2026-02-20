@@ -590,40 +590,23 @@ void normalize_glob_ref(struct string_list_item *item, const char *prefix,
 	strbuf_release(&normalized_pattern);
 }
 
-int refs_for_each_glob_ref_in(struct ref_store *refs, refs_for_each_cb fn,
+int refs_for_each_glob_ref_in(struct ref_store *refs, refs_for_each_cb cb,
 			      const char *pattern, const char *prefix, void *cb_data)
 {
-	struct strbuf real_pattern = STRBUF_INIT;
-	struct for_each_ref_filter filter;
-	int ret;
-
-	if (!prefix && !starts_with(pattern, "refs/"))
-		strbuf_addstr(&real_pattern, "refs/");
-	else if (prefix)
-		strbuf_addstr(&real_pattern, prefix);
-	strbuf_addstr(&real_pattern, pattern);
-
-	if (!has_glob_specials(pattern)) {
-		/* Append implied '/' '*' if not present. */
-		strbuf_complete(&real_pattern, '/');
-		/* No need to check for '*', there is none. */
-		strbuf_addch(&real_pattern, '*');
-	}
-
-	filter.pattern = real_pattern.buf;
-	filter.prefix = prefix;
-	filter.fn = fn;
-	filter.cb_data = cb_data;
-	ret = refs_for_each_ref(refs, for_each_filter_refs, &filter);
-
-	strbuf_release(&real_pattern);
-	return ret;
+	struct refs_for_each_ref_options opts = {
+		.pattern = pattern,
+		.prefix = prefix,
+	};
+	return refs_for_each_ref_ext(refs, cb, cb_data, &opts);
 }
 
-int refs_for_each_glob_ref(struct ref_store *refs, refs_for_each_cb fn,
+int refs_for_each_glob_ref(struct ref_store *refs, refs_for_each_cb cb,
 			   const char *pattern, void *cb_data)
 {
-	return refs_for_each_glob_ref_in(refs, fn, pattern, NULL, cb_data);
+	struct refs_for_each_ref_options opts = {
+		.pattern = pattern,
+	};
+	return refs_for_each_ref_ext(refs, cb, cb_data, &opts);
 }
 
 const char *prettify_refname(const char *name)
@@ -1862,16 +1845,44 @@ int refs_for_each_ref_ext(struct ref_store *refs,
 			  refs_for_each_cb cb, void *cb_data,
 			  const struct refs_for_each_ref_options *opts)
 {
+	struct strbuf real_pattern = STRBUF_INIT;
+	struct for_each_ref_filter filter;
 	struct ref_iterator *iter;
+	int ret;
 
 	if (!refs)
 		return 0;
+
+	if (opts->pattern) {
+		if (!opts->prefix && !starts_with(opts->pattern, "refs/"))
+			strbuf_addstr(&real_pattern, "refs/");
+		else if (opts->prefix)
+			strbuf_addstr(&real_pattern, opts->prefix);
+		strbuf_addstr(&real_pattern, opts->pattern);
+
+		if (!has_glob_specials(opts->pattern)) {
+			/* Append implied '/' '*' if not present. */
+			strbuf_complete(&real_pattern, '/');
+			/* No need to check for '*', there is none. */
+			strbuf_addch(&real_pattern, '*');
+		}
+
+		filter.pattern = real_pattern.buf;
+		filter.prefix = opts->prefix;
+		filter.fn = cb;
+		filter.cb_data = cb_data;
+
+		cb = for_each_filter_refs;
+		cb_data = &filter;
+	}
 
 	iter = refs_ref_iterator_begin(refs, opts->prefix ? opts->prefix : "",
 				       opts->exclude_patterns,
 				       opts->trim_prefix, opts->flags);
 
-	return do_for_each_ref_iterator(iter, cb, cb_data);
+	ret = do_for_each_ref_iterator(iter, cb, cb_data);
+	strbuf_release(&real_pattern);
+	return ret;
 }
 
 int refs_for_each_ref(struct ref_store *refs, refs_for_each_cb cb, void *cb_data)
