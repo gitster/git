@@ -12,6 +12,12 @@
 #include "strmap.h"
 #include "tree.h"
 
+/*
+ * We technically need USE_THE_REPOSITORY_VARIABLE for DEFAULT_ABBREV, but
+ * do not want to use the_repository.
+ */
+#define the_repository DO_NOT_USE_THE_REPOSITORY
+
 enum replay_mode {
 	REPLAY_MODE_PICK,
 	REPLAY_MODE_REVERT,
