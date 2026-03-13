@@ -942,14 +942,39 @@ test_expect_success () {
 	test_finish_
 }
 
+# common helper for test_path_is_* functions
+test_path_is_not () {
+	local path="$1"
+	local a_type="$2"
+	local Type="$3"
+
+	if test -e "$path"
+	then
+		echo "$path exists but is not $a_type"
+	else
+		case "$Type" in
+		"")
+			Type=$(
+				set $a_type
+				shift
+				Type="$*"
+				ype=${T#?}
+				T=${T%$ype}
+				echo "$T" | tr '[a-z]' '[A-Z]'
+			)
+		esac
+		echo "$Type $path doesn't exist"
+	fi
+	false
+}
+
 # debugging-friendly alternatives to "test [-f|-d|-e]"
 # The commands test the existence or non-existence of $1
 test_path_is_file () {
 	test "$#" -ne 1 && BUG "1 param"
 	if ! test -f "$1"
 	then
-		echo "File $1 doesn't exist"
-		false
+		test_path_is_not "a file" "$1"
 	fi
 }
 
@@ -967,8 +992,7 @@ test_path_is_dir () {
 	test "$#" -ne 1 && BUG "1 param"
 	if ! test -d "$1"
 	then
-		echo "Directory $1 doesn't exist"
-		false
+		test_path_is_not "a directory" "$1"
 	fi
 }
 
@@ -995,8 +1019,7 @@ test_path_is_symlink () {
 	test "$#" -ne 1 && BUG "1 param"
 	if ! test -h "$1"
 	then
-		echo "Symbolic link $1 doesn't exist"
-		false
+		test_path_is_not "a symbolic link" "$1"
 	fi
 }
 
@@ -1004,6 +1027,7 @@ test_path_is_executable () {
 	test "$#" -ne 1 && BUG "1 param"
 	if ! test -x "$1"
 	then
+		test_path_is_not "an executable" "$1" "File"
 		echo "$1 is not executable"
 		false
 	fi
@@ -1026,7 +1050,7 @@ test_file_not_empty () {
 	test "$#" = 2 && BUG "2 param"
 	if ! test -s "$1"
 	then
-		echo "'$1' is not a non-empty file."
+		test_path_is_not "a non-empty file" "$1" "File"
 		false
 	fi
 }

@@ -21,6 +21,14 @@ modification *should* take notice and update the test vectors here.
 . ./test-lib.sh
 . "$TEST_DIRECTORY"/lib-subtest.sh
 
+test_expect_success 't' '
+	{ test_path_is_file no-such || rm -f no-such; } &&
+	{ mkdir is-dir && test_path_is_file is-dir || rmdir is-dir; } &&
+	{ test_path_is_dir no-such || rmdir no-such; } &&
+	{ >is-file test_path_is_dir is-file || rm is-file; } &&
+	false
+'
+
 try_local_xy () {
 	local x="local" y="alsolocal" &&
 	echo "$x $y"
