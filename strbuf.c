@@ -631,21 +631,21 @@ int strbuf_getcwd(struct strbuf *sb)
 #ifdef HAVE_GETDELIM
 int strbuf_getwholeline(struct strbuf *sb, FILE *fp, int term)
 {
+	size_t alloc = 0;
+	char *buf = NULL;
 	ssize_t r;
+
+	/* Empty the strbuf --- we won't reuse its allocation */
+	strbuf_release(sb);
 
 	if (feof(fp))
 		return EOF;
 
-	strbuf_reset(sb);
-
-	/* Translate slopbuf to NULL, as we cannot call realloc on it */
-	if (!sb->alloc)
-		sb->buf = NULL;
 	errno = 0;
-	r = getdelim(&sb->buf, &sb->alloc, term, fp);
+	r = getdelim(&buf, &alloc, term, fp);
 
 	if (r > 0) {
-		sb->len = r;
+		strbuf_attach(sb, buf, (size_t) r, alloc);
 		return 0;
 	}
 	assert(r == -1);
@@ -665,14 +665,11 @@ int strbuf_getwholeline(struct strbuf *sb, FILE *fp, int term)
 		die("Out of memory, getdelim failed");
 
 	/*
-	 * Restore strbuf invariants; if getdelim left us with a NULL pointer,
-	 * we can just re-init, but otherwise we should make sure that our
-	 * length is empty, and that the result is NUL-terminated.
+	 * We got an EOF.  If getdelim() allocated any memory, we
+	 * return it to the system.
 	 */
-	if (!sb->buf)
-		strbuf_init(sb, 0);
-	else
-		strbuf_reset(sb);
+	free(buf);
+
 	return EOF;
 }
 #else
