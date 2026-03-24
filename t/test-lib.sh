@@ -17,6 +17,9 @@
 
 # Test the binaries we have just built.  The tests are kept in
 # t/ subdirectory and are run in 'trash directory' subdirectory.
+
+set -e
+
 if test -z "$TEST_DIRECTORY"
 then
 	# ensure that TEST_DIRECTORY is an absolute path so that it
@@ -143,8 +146,8 @@ export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
 ################################################################
 # It appears that people try to run tests without building...
 GIT_BINARY="${GIT_TEST_INSTALLED:-$GIT_BUILD_DIR}/git$X"
-"$GIT_BINARY" >/dev/null
-if test $? != 1
+status=0 && "$GIT_BINARY" >/dev/null || status=$?
+if test $status != 1
 then
 	if test -n "$GIT_TEST_INSTALLED"
 	then
