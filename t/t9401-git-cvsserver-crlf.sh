@@ -60,8 +60,8 @@ check_status_options() {
     return $stat
 }
 
-cvs >/dev/null 2>&1
-if test $? -ne 1
+status=0; cvs >/dev/null 2>&1 || status=$?
+if test $status -ne 1
 then
     skip_all='skipping git-cvsserver tests, cvs not found'
     test_done
