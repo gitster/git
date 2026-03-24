@@ -220,7 +220,7 @@ check_dotx_symlink () {
 		)
 	'
 
-	test -n "$refuse_index" &&
+	test -z "$refuse_index" ||
 	test_expect_success "refuse to load symlinked $name into index ($type)" '
 		test_must_fail \
 			git -C $dir \
