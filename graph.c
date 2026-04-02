@@ -18,6 +18,9 @@
  * next, it will simply output a line of vertical padding, extending the
  * branch lines downwards, but leaving them otherwise unchanged.
  */
+static struct commit root_placeholder_commit;
+#define ROOT_PLACEHOLDER (&root_placeholder_commit)
+
 static void graph_padding_line(struct git_graph *graph, struct strbuf *sb);
 
 /*
@@ -144,6 +147,8 @@ static inline void graph_line_addcolor(struct graph_line *line, unsigned short c
 static void graph_line_write_column(struct graph_line *line, const struct column *c,
 				    char col_char)
 {
+	if (c->commit == ROOT_PLACEHOLDER)
+		col_char = ' ';
 	if (c->color < column_colors_max)
 		graph_line_addcolor(line, c->color);
 	graph_line_addch(line, col_char);
@@ -534,6 +539,8 @@ static unsigned short graph_find_commit_color(const struct git_graph *graph,
 		if (graph->columns[i].commit == commit)
 			return graph->columns[i].color;
 	}
+	if (commit == ROOT_PLACEHOLDER)
+		return graph_find_commit_color(graph, graph->commit);
 	return graph_get_current_column_color(graph);
 }
 
@@ -608,6 +615,7 @@ static void graph_update_columns(struct git_graph *graph)
 	struct commit_list *parent;
 	int max_new_columns;
 	int i, seen_this, is_commit_in_columns;
+	int added_placeholder = 0;
 
 	/*
 	 * Swap graph->columns with graph->new_columns
@@ -689,12 +697,26 @@ static void graph_update_columns(struct git_graph *graph)
 			 * The current commit always takes up at least 2
 			 * spaces.
 			 */
-			if (graph->num_parents == 0)
+			if (graph->num_parents == 0) {
 				graph->width += 2;
+
+				if (!graph->commit->parents) {
+					int k = graph->num_new_columns++;
+					graph->new_columns[k].commit = ROOT_PLACEHOLDER;
+					graph->new_columns[k].color = graph_find_commit_color(graph, graph->commit);
+					graph->width += 2;
+					added_placeholder = 1;
+				}
+			}
+		} else if (col_commit == ROOT_PLACEHOLDER) {
+			graph->width += 2;
 		} else {
 			graph_insert_into_new_columns(graph, col_commit, -1);
 		}
 	}
+
+	if (added_placeholder)
+		graph->width -= 2;
 
 	/*
 	 * Shrink mapping_size to be the minimum necessary
