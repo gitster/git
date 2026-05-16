@@ -462,6 +462,53 @@ test_expect_success 'invalid key' '
 	test_must_fail git config inval.2key blabla
 '
 
+test_expect_success 'misplaced "=" in key: bare 1-arg form hints' '
+	test_must_fail git config pull.rebase=false 2>err &&
+	test_grep "invalid key: pull\\.rebase=false" err &&
+	test_grep "did you mean .git config set pull\\.rebase false." err
+'
+
+test_expect_success 'misplaced "=" in key: bare 2-arg form uses given value' '
+	test_must_fail git config pull.rebase=false true 2>err &&
+	test_grep "did you mean .git config set pull\\.rebase true." err
+'
+
+test_expect_success 'misplaced "=" in key: set subcommand uses given value' '
+	test_must_fail git config set pull.rebase=false true 2>err &&
+	test_grep "did you mean .git config set pull\\.rebase true." err
+'
+
+test_expect_success 'misplaced "=" in key: set with single arg hints' '
+	test_must_fail git config set pull.rebase=false 2>err &&
+	test_grep "wrong number of arguments" err &&
+	test_grep "did you mean .git config set pull\\.rebase false." err
+'
+
+test_expect_success 'misplaced "=" in key: explicit --get does not hint' '
+	test_must_fail git config --get pull.rebase=false 2>err &&
+	test_grep "invalid key: pull\\.rebase=false" err &&
+	test_grep ! "did you mean" err
+'
+
+test_expect_success 'misplaced "=" in key: get subcommand does not hint' '
+	test_must_fail git config get pull.rebase=false 2>err &&
+	test_grep ! "did you mean" err
+'
+
+test_expect_success 'misplaced "=" in key: unset subcommand does not hint' '
+	test_must_fail git config unset pull.rebase=false 2>err &&
+	test_grep ! "did you mean" err
+'
+
+test_expect_success '"=" inside subsection is valid, no hint' '
+	test_when_finished "rm -f subsection.cfg" &&
+	git config set -f subsection.cfg foo.bar=baz.boo qux 2>err &&
+	test_grep ! "did you mean" err &&
+	echo qux >expect &&
+	git config get -f subsection.cfg foo.bar=baz.boo >actual &&
+	test_cmp expect actual
+'
+
 test_expect_success 'correct key' '
 	git config 123456.a123 987
 '
