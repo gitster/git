@@ -224,22 +224,21 @@ static uint32_t find_object_pos(struct bitmap_writer *writer,
 		if (writer->midx)
 			base_objects = writer->midx->num_objects +
 				writer->midx->num_objects_in_base;
-
-		if (found)
-			*found = 1;
-		return oe_in_pack_pos(writer->to_pack, entry) + base_objects;
+		pos = oe_in_pack_pos(writer->to_pack, entry) + base_objects;
 	} else if (writer->midx) {
-		uint32_t at, pos;
+		uint32_t at;
 
 		if (!bsearch_midx(oid, writer->midx, &at))
 			goto missing;
 		if (midx_to_pack_pos(writer->midx, at, &pos) < 0)
 			goto missing;
-
-		if (found)
-			*found = 1;
-		return pos;
+	} else {
+		goto missing;
 	}
+
+	if (found)
+		*found = 1;
+	return pos;
 
 missing:
 	if (found)
