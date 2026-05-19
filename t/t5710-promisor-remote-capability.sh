@@ -177,8 +177,7 @@ test_expect_success "init + fetch with promisor.advertise set to 'true'" '
 	git -C server config promisor.advertise true &&
 	test_when_finished "rm -rf client" &&
 
-	mkdir client &&
-	git -C client init &&
+	git init client &&
 	git -C client config remote.lop.promisor true &&
 	git -C client config remote.lop.fetch "+refs/heads/*:refs/remotes/lop/*" &&
 	git -C client config remote.lop.url "$TRASH_DIRECTORY_URL/lop" &&
@@ -231,8 +230,7 @@ test_expect_success "init + fetch two promisors but only one advertised" '
 	# Create a promisor that will be configured but not be used
 	git init --bare unused_lop &&
 
-	mkdir client &&
-	git -C client init &&
+	git init client &&
 	git -C client config remote.unused_lop.promisor true &&
 	git -C client config remote.unused_lop.fetch "+refs/heads/*:refs/remotes/unused_lop/*" &&
 	git -C client config remote.unused_lop.url "$TRASH_DIRECTORY_URL/unused_lop" &&
