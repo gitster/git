@@ -14,6 +14,7 @@
 #include "url.h"
 #include "urlmatch.h"
 #include "version.h"
+#include "wildmatch.h"
 
 struct promisor_remote_config {
 	struct promisor_remote *promisors;
@@ -742,8 +743,79 @@ static void load_accept_from_server_url(struct repository *repo,
 	}
 }
 
+static bool match_pattern_url(const char *pat, size_t pat_len,
+			      const char *url, size_t url_len)
+{
+	char *p_str = xstrndup(pat, pat_len);
+	char *u_str = xstrndup(url, url_len);
+	bool res = !wildmatch(p_str, u_str, 0);
+
+	free(p_str);
+	free(u_str);
+
+	return res;
+}
+
+static bool match_one_url(const struct url_info *pi, const struct url_info *ui)
+{
+	const char *pat = pi->url;
+	const char *url = ui->url;
+
+	/*
+	 * Schemes must match exactly. They are case-folded by
+	 * url_normalize(), so strncmp() suffices.
+	 */
+	if (pi->scheme_len != ui->scheme_len || strncmp(pat, url, pi->scheme_len))
+		return false;
+
+	/*
+	 * Ports must match exactly. url_normalize() strips default
+	 * ports (like 443 for https), so length and content
+	 * comparisons are sufficient.
+	 */
+	if (pi->port_len != ui->port_len ||
+	    strncmp(pat + pi->port_off, url + ui->port_off, pi->port_len))
+		return false;
+
+	/*
+	 * Match host and path separately to prevent a '*' in the host
+	 * portion of the pattern from matching across the '/'
+	 * boundary into the path.
+	 */
+
+	return match_pattern_url(pat + pi->host_off, pi->host_len,
+				 url + ui->host_off, ui->host_len) &&
+		match_pattern_url(pat + pi->path_off, pi->path_len,
+				  url + ui->path_off, ui->path_len);
+}
+
+static struct allowed_url *url_matches_accept_list(
+		struct string_list *accept_urls, const char *url)
+{
+	struct string_list_item *item;
+	struct url_info url_info;
+
+	url_info.url = url_normalize(url, &url_info);
+
+	if (!url_info.url)
+		return NULL;
+
+	for_each_string_list_item(item, accept_urls) {
+		struct allowed_url *allowed = item->util;
+
+		if (match_one_url(&allowed->pattern_info, &url_info)) {
+			free(url_info.url);
+			return allowed;
+		}
+	}
+
+	free(url_info.url);
+	return NULL;
+}
+
 static int should_accept_remote(enum accept_promisor accept,
 				struct promisor_info *advertised,
+				struct string_list *accept_urls,
 				struct string_list *config_info)
 {
 	struct promisor_info *p;
@@ -756,23 +828,27 @@ static int should_accept_remote(enum accept_promisor accept,
 		    "this remote should have been rejected earlier",
 		    remote_name);
 
-	if (accept == ACCEPT_ALL)
-		return all_fields_match(advertised, config_info, NULL);
-
 	/* Get config info for that promisor remote */
 	item = string_list_lookup(config_info, remote_name);
 
-	if (!item)
+	if (!item) {
 		/* We don't know about that remote */
+		if (accept == ACCEPT_ALL)
+			return all_fields_match(advertised, config_info, NULL);
 		return 0;
+	}
 
 	p = item->util;
 
-	if (accept == ACCEPT_KNOWN_NAME)
+	/* Known remote in the allowlist? */
+	if (!strcmp(p->url, remote_url) && url_matches_accept_list(accept_urls, remote_url))
 		return all_fields_match(advertised, config_info, p);
 
-	if (accept != ACCEPT_KNOWN_URL)
-		BUG("Unhandled 'enum accept_promisor' value '%d'", accept);
+	if (accept == ACCEPT_ALL)
+		return all_fields_match(advertised, config_info, NULL);
+
+	if (accept == ACCEPT_KNOWN_NAME)
+		return all_fields_match(advertised, config_info, p);
 
 	if (strcmp(p->url, remote_url)) {
 		warning(_("known remote named '%s' but with URL '%s' instead of '%s', "
@@ -781,7 +857,13 @@ static int should_accept_remote(enum accept_promisor accept,
 		return 0;
 	}
 
-	return all_fields_match(advertised, config_info, p);
+	if (accept == ACCEPT_KNOWN_URL)
+		return all_fields_match(advertised, config_info, p);
+
+	if (accept != ACCEPT_NONE)
+		BUG("Unhandled 'enum accept_promisor' value '%d'", accept);
+
+	return 0;
 }
 
 static int skip_field_name_prefix(const char *elem, const char *field_name, const char **value)
@@ -991,7 +1073,7 @@ static void filter_promisor_remote(struct repository *repo,
 	/* Load and validate the acceptFromServerUrl config */
 	load_accept_from_server_url(repo, &accept_urls);
 
-	if (accept == ACCEPT_NONE)
+	if (accept == ACCEPT_NONE && !accept_urls.nr)
 		return;
 
 	/* Parse remote info received */
@@ -1011,7 +1093,7 @@ static void filter_promisor_remote(struct repository *repo,
 			string_list_sort(&config_info);
 		}
 
-		if (should_accept_remote(accept, advertised, &config_info)) {
+		if (should_accept_remote(accept, advertised, &accept_urls, &config_info)) {
 			if (!store_info)
 				store_info = store_info_new(repo);
 			if (promisor_store_advertised_fields(advertised, store_info))
