@@ -463,12 +463,6 @@ static int fill_bitmap_tree(struct bitmap_writer *writer,
 	struct tree_desc desc;
 	struct name_entry entry;
 
-	/*
-	 * If our bit is already set, then there is nothing to do. Both this
-	 * tree and all of its children will be set.
-	 */
-	if (bitmap_get(bitmap, pos))
-		return 0;
 	bitmap_set(bitmap, pos);
 
 	if (repo_parse_tree(writer->repo, tree) < 0)
@@ -482,6 +476,15 @@ static int fill_bitmap_tree(struct bitmap_writer *writer,
 			pos = find_object_pos(writer, &entry.oid, &found);
 			if (!found)
 				return -1;
+			if (bitmap_get(bitmap, pos)) {
+				/*
+				 * If our bit is already set, then there
+				 * is nothing to do. Both this tree and
+				 * all of its children will be set.
+				 */
+				break;
+			}
+
 			if (fill_bitmap_tree(writer, bitmap,
 					     lookup_tree(writer->repo,
 							 &entry.oid), pos) < 0)
@@ -582,6 +585,14 @@ static int fill_bitmap_commit(struct bitmap_writer *writer,
 		pos = find_object_pos(writer, &t->object.oid, &found);
 		if (!found)
 			return -1;
+		if (bitmap_get(ent->bitmap, pos)) {
+			/*
+			 * If our bit is already set, then there is
+			 * nothing to do. Both this tree and all of its
+			 * children will be set.
+			 */
+			continue;
+		}
 
 		if (fill_bitmap_tree(writer, ent->bitmap, t, pos) < 0)
 			return -1;
