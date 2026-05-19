@@ -509,6 +509,9 @@ static int fill_bitmap_tree(struct bitmap_writer *writer,
 static int reused_bitmaps_nr;
 static int reused_pseudo_merge_bitmaps_nr;
 
+static int fill_bitmap_commit_calls_nr;
+static int fill_bitmap_commit_found_ancestor_nr;
+
 static int fill_bitmap_commit(struct bitmap_writer *writer,
 			      struct bb_commit *ent,
 			      struct commit *commit,
@@ -519,6 +522,9 @@ static int fill_bitmap_commit(struct bitmap_writer *writer,
 {
 	int found;
 	uint32_t pos;
+
+	fill_bitmap_commit_calls_nr++;
+
 	if (!ent->bitmap)
 		ent->bitmap = bitmap_new();
 
@@ -551,6 +557,28 @@ static int fill_bitmap_commit(struct bitmap_writer *writer,
 				continue;
 			}
 			bitmap_free(remapped);
+		}
+
+		/*
+		 * If we encounter an ancestor for which we have already
+		 * computed a bitmap during this build (i.e. a regular
+		 * selected commit processed earlier in topo order), we can
+		 * short-circuit the walk: its stored bitmap already covers
+		 * the commit itself, its tree, and all of its ancestors.
+		 */
+		if (c != commit) {
+			khiter_t hash_pos = kh_get_oid_map(writer->bitmaps,
+							   c->object.oid);
+			if (hash_pos != kh_end(writer->bitmaps)) {
+				struct bitmapped_commit *stored =
+					kh_value(writer->bitmaps, hash_pos);
+				if (stored && stored->bitmap) {
+					fill_bitmap_commit_found_ancestor_nr++;
+					bitmap_or_ewah(ent->bitmap,
+						       stored->bitmap);
+					continue;
+				}
+			}
 		}
 
 		/*
@@ -692,6 +720,12 @@ int bitmap_writer_build(struct bitmap_writer *writer)
 	trace2_data_intmax("pack-bitmap-write", writer->repo,
 			   "building_bitmaps_pseudo_merge_reused",
 			   reused_pseudo_merge_bitmaps_nr);
+	trace2_data_intmax("pack-bitmap-write", writer->repo,
+			   "fill_bitmap_commit_calls_nr",
+			   fill_bitmap_commit_calls_nr);
+	trace2_data_intmax("pack-bitmap-write", writer->repo,
+			   "fill_bitmap_commit_found_ancestor_nr",
+			   fill_bitmap_commit_found_ancestor_nr);
 
 	stop_progress(&writer->progress);
 
