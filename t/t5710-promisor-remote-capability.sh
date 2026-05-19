@@ -387,6 +387,27 @@ test_expect_success "clone with 'KnownUrl' and empty url, so not advertised" '
 	check_missing_objects server 1 "$oid"
 '
 
+test_expect_success "clone with invalid promisor.acceptFromServerUrl" '
+	git -C server config promisor.advertise true &&
+	test_when_finished "rm -rf client" &&
+
+	# As "bad name" contains a space, which is not a valid remote name,
+	# the pattern should be rejected with a warning and no remote created.
+	GIT_NO_LAZY_FETCH=0 git clone \
+		-c promisor.acceptfromserver=None \
+		-c "promisor.acceptFromServerUrl=bad name=https://example.com/*" \
+		--no-local --filter="blob:limit=5k" server client 2>err &&
+
+	# Check that a warning was emitted
+	test_grep "invalid remote name '\''bad name'\''" err &&
+
+	# Check that the largest object is not missing on the server
+	check_missing_objects server 0 "" &&
+
+	# Reinitialize server so that the largest object is missing again
+	initialize_server 1 "$oid"
+'
+
 test_expect_success "clone with promisor.sendFields" '
 	git -C server config promisor.advertise true &&
 	test_when_finished "rm -rf client" &&

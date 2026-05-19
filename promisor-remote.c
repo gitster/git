@@ -12,6 +12,7 @@
 #include "packfile.h"
 #include "environment.h"
 #include "url.h"
+#include "urlmatch.h"
 #include "version.h"
 
 struct promisor_remote_config {
@@ -657,6 +658,90 @@ static bool has_control_char(const char *s)
 	return false;
 }
 
+struct allowed_url {
+	char *remote_name;
+	char *url_pattern;
+	struct url_info pattern_info;
+};
+
+static void allowed_url_free(void *util, const char *str UNUSED)
+{
+	struct allowed_url *allowed = util;
+
+	if (!allowed)
+		return;
+
+	/* Depending on prefix, free either remote_name or url_pattern */
+	free(allowed->remote_name ? allowed->remote_name : allowed->url_pattern);
+	free(allowed->pattern_info.url);
+	free(allowed);
+}
+
+static struct allowed_url *valid_accept_url(const char *url)
+{
+	char *dup, *p;
+	struct allowed_url *allowed;
+
+	if (!url)
+		return NULL;
+
+	dup = xstrdup(url);
+	p = strchr(dup, '=');
+	if (p) {
+		*p = '\0';
+		if (!valid_remote_name(dup)) {
+			warning(_("invalid remote name '%s' before '=' sign "
+				  "in '%s' from promisor.acceptFromServerUrl config"),
+				dup, url);
+			free(dup);
+			return NULL;
+		}
+		p++;
+	} else {
+		p = dup;
+	}
+
+	if (has_control_char(p)) {
+		warning(_("invalid url pattern '%s' "
+			  "in '%s' from promisor.acceptFromServerUrl config"), p, url);
+		free(dup);
+		return NULL;
+	}
+
+	allowed = xmalloc(sizeof(*allowed));
+	allowed->remote_name = (p == dup) ? NULL : dup;
+	allowed->url_pattern = p;
+	allowed->pattern_info.url = url_normalize_pattern(p, &allowed->pattern_info);
+	if (!allowed->pattern_info.url) {
+		warning(_("invalid url pattern '%s' "
+			  "in '%s' from promisor.acceptFromServerUrl config"), p, url);
+		free(dup);
+		free(allowed);
+		return NULL;
+	}
+
+	return allowed;
+}
+
+static void load_accept_from_server_url(struct repository *repo,
+					struct string_list *accept_urls)
+{
+	const struct string_list *config_urls;
+
+	if (!repo_config_get_string_multi(repo, "promisor.acceptfromserverurl", &config_urls)) {
+		struct string_list_item *item;
+
+		for_each_string_list_item(item, config_urls) {
+			struct allowed_url *allowed = valid_accept_url(item->string);
+			if (allowed) {
+				struct string_list_item *new;
+				new = string_list_append(accept_urls, item->string);
+				new->util = allowed;
+			}
+		}
+	}
+}
+
 static int should_accept_remote(enum accept_promisor accept,
 				struct promisor_info *advertised,
 				struct string_list *config_info)
@@ -901,6 +986,10 @@ static void filter_promisor_remote(struct repository *repo,
 	struct string_list_item *item;
 	bool reload_config = false;
 	enum accept_promisor accept = accept_from_server(repo);
+	struct string_list accept_urls = STRING_LIST_INIT_DUP;
+
+	/* Load and validate the acceptFromServerUrl config */
+	load_accept_from_server_url(repo, &accept_urls);
 
 	if (accept == ACCEPT_NONE)
 		return;
@@ -934,6 +1023,7 @@ static void filter_promisor_remote(struct repository *repo,
 		}
 	}
 
+	string_list_clear_func(&accept_urls, allowed_url_free);
 	promisor_info_list_clear(&config_info);
 	string_list_clear(&remote_info, 0);
 	store_info_free(store_info);
