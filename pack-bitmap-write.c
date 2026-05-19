@@ -327,11 +327,40 @@ missing:
 	return 0;
 }
 
+static int bitmapped_commit_date_cmp(const void *_a, const void *_b)
+{
+	const struct bitmapped_commit *a = _a;
+	const struct bitmapped_commit *b = _b;
+
+	if (a->commit->date < b->commit->date)
+		return -1;
+	if (a->commit->date > b->commit->date)
+		return 1;
+	return 0;
+}
+
 static void compute_xor_offsets(struct bitmap_writer *writer)
 {
 	static const int MAX_XOR_OFFSET_SEARCH = 10;
 
 	int i, next = 0;
+	int nr = bitmap_writer_nr_selected_commits(writer);
+
+	if (nr > 1) {
+		QSORT(writer->selected, nr, bitmapped_commit_date_cmp);
+
+		for (i = 0; i < nr; i++) {
+			struct bitmapped_commit *stored = &writer->selected[i];
+			khiter_t hash_pos = kh_get_oid_map(writer->bitmaps,
+							   stored->commit->object.oid);
+
+			if (hash_pos == kh_end(writer->bitmaps))
+				BUG("selected commit missing from bitmap map: %s",
+				    oid_to_hex(&stored->commit->object.oid));
+
+			kh_value(writer->bitmaps, hash_pos) = stored;
+		}
+	}
 
 	while (next < writer->selected_nr) {
 		struct bitmapped_commit *stored = &writer->selected[next];
