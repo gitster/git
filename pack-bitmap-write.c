@@ -456,10 +456,10 @@ static void bitmap_builder_clear(struct bitmap_builder *bb)
 
 static int fill_bitmap_tree(struct bitmap_writer *writer,
 			    struct bitmap *bitmap,
-			    struct tree *tree)
+			    struct tree *tree,
+			    uint32_t pos)
 {
 	int found;
-	uint32_t pos;
 	struct tree_desc desc;
 	struct name_entry entry;
 
@@ -467,9 +467,6 @@ static int fill_bitmap_tree(struct bitmap_writer *writer,
 	 * If our bit is already set, then there is nothing to do. Both this
 	 * tree and all of its children will be set.
 	 */
-	pos = find_object_pos(writer, &tree->object.oid, &found);
-	if (!found)
-		return -1;
 	if (bitmap_get(bitmap, pos))
 		return 0;
 	bitmap_set(bitmap, pos);
@@ -482,8 +479,12 @@ static int fill_bitmap_tree(struct bitmap_writer *writer,
 	while (tree_entry(&desc, &entry)) {
 		switch (object_type(entry.mode)) {
 		case OBJ_TREE:
+			pos = find_object_pos(writer, &entry.oid, &found);
+			if (!found)
+				return -1;
 			if (fill_bitmap_tree(writer, bitmap,
-					     lookup_tree(writer->repo, &entry.oid)) < 0)
+					     lookup_tree(writer->repo,
+							 &entry.oid), pos) < 0)
 				return -1;
 			break;
 		case OBJ_BLOB:
@@ -575,8 +576,14 @@ static int fill_bitmap_commit(struct bitmap_writer *writer,
 	}
 
 	while (tree_queue->nr) {
-		if (fill_bitmap_tree(writer, ent->bitmap,
-				     prio_queue_get(tree_queue)) < 0)
+		struct tree *t = prio_queue_get(tree_queue);
+		int found;
+
+		pos = find_object_pos(writer, &t->object.oid, &found);
+		if (!found)
+			return -1;
+
+		if (fill_bitmap_tree(writer, ent->bitmap, t, pos) < 0)
 			return -1;
 	}
 	return 0;
