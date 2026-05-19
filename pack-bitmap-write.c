@@ -89,6 +89,7 @@ void bitmap_writer_free(struct bitmap_writer *writer)
 	ewah_free(writer->tags);
 
 	kh_destroy_oid_map(writer->bitmaps);
+	free(writer->pos_cache);
 
 	kh_foreach_value(writer->pseudo_merge_commits, idx,
 			 free_pseudo_merge_commit_idx(idx));
@@ -213,14 +214,92 @@ void bitmap_writer_push_commit(struct bitmap_writer *writer,
 	writer->selected_nr++;
 }
 
+struct bitmap_pos_cache_entry {
+	struct object_id oid;
+	uint32_t pos;
+};
+
+#define BITMAP_POS_MIN_CACHE_SIZE (1U << 10)
+#define BITMAP_POS_MAX_CACHE_SIZE (1U << 21)
+#define BITMAP_POS_CACHE_VALID    (1U << 31)
+
+static void bitmap_writer_init_pos_cache(struct bitmap_writer *writer)
+{
+	if (writer->pos_cache)
+		return;
+
+	writer->pos_cache_nr = BITMAP_POS_MIN_CACHE_SIZE;
+
+	while (writer->pos_cache_nr < writer->to_pack->nr_objects &&
+	       writer->pos_cache_nr < BITMAP_POS_MAX_CACHE_SIZE)
+		writer->pos_cache_nr <<= 1;
+
+	CALLOC_ARRAY(writer->pos_cache, writer->pos_cache_nr);
+}
+
+static size_t bitmap_writer_pos_cache_slot(struct bitmap_writer *writer,
+					   const struct object_id *oid)
+{
+	return oidhash(oid) & (writer->pos_cache_nr - 1);
+}
+
+static bool bitmap_writer_pos_cache_valid(struct bitmap_writer *writer,
+					  size_t slot)
+{
+	return !!(writer->pos_cache[slot].pos & BITMAP_POS_CACHE_VALID);
+}
+
+static int find_cached_object_pos(struct bitmap_writer *writer,
+				  const struct object_id *oid, uint32_t *pos)
+{
+	size_t slot = bitmap_writer_pos_cache_slot(writer, oid);
+
+	if (bitmap_writer_pos_cache_valid(writer, slot) &&
+	    oideq(&writer->pos_cache[slot].oid, oid)) {
+		writer->pos_cache_hits++;
+		*pos = writer->pos_cache[slot].pos & ~BITMAP_POS_CACHE_VALID;
+		return 1;
+	}
+
+	writer->pos_cache_misses++;
+	return 0;
+}
+
+static uint32_t store_cached_object_pos(struct bitmap_writer *writer,
+					const struct object_id *oid,
+					uint32_t pos)
+{
+	size_t slot;
+
+	if (pos & BITMAP_POS_CACHE_VALID)
+		return pos; /* too large to cache */
+
+	slot = bitmap_writer_pos_cache_slot(writer, oid);
+
+	oidcpy(&writer->pos_cache[slot].oid, oid);
+	writer->pos_cache[slot].pos = pos | BITMAP_POS_CACHE_VALID;
+
+	return pos;
+}
+
 static uint32_t find_object_pos(struct bitmap_writer *writer,
 				const struct object_id *oid, int *found)
 {
 	struct object_entry *entry;
+	uint32_t pos;
+
+	bitmap_writer_init_pos_cache(writer);
+
+	if (find_cached_object_pos(writer, oid, &pos)) {
+		if (found)
+			*found = 1;
+		return pos;
+	}
 
 	entry = packlist_find(writer->to_pack, oid);
 	if (entry) {
 		uint32_t base_objects = 0;
+
 		if (writer->midx)
 			base_objects = writer->midx->num_objects +
 				writer->midx->num_objects_in_base;
@@ -238,7 +317,7 @@ static uint32_t find_object_pos(struct bitmap_writer *writer,
 
 	if (found)
 		*found = 1;
-	return pos;
+	return store_cached_object_pos(writer, oid, pos);
 
 missing:
 	if (found)
@@ -661,6 +740,10 @@ int bitmap_writer_build(struct bitmap_writer *writer)
 		writer->progress = start_progress(writer->repo,
 						  "Building bitmaps",
 						  writer->selected_nr);
+
+	writer->pos_cache_hits = 0;
+	writer->pos_cache_misses = 0;
+
 	trace2_region_enter("pack-bitmap-write", "building_bitmaps_total",
 			    writer->repo);
 
@@ -725,6 +808,10 @@ int bitmap_writer_build(struct bitmap_writer *writer)
 	trace2_data_intmax("pack-bitmap-write", writer->repo,
 			   "fill_bitmap_commit_found_ancestor_nr",
 			   fill_bitmap_commit_found_ancestor_nr);
+	trace2_data_intmax("pack-bitmap-write", writer->repo,
+			   "bitmap_pos_cache_hits", writer->pos_cache_hits);
+	trace2_data_intmax("pack-bitmap-write", writer->repo,
+			   "bitmap_pos_cache_misses", writer->pos_cache_misses);
 
 	stop_progress(&writer->progress);
 
