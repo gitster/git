@@ -16,7 +16,10 @@ ordering and formatting options, such as `--reverse`.
 `-<number>`::
 `-n <number>`::
 `--max-count=<number>`::
-	Limit the output to _<number>_ commits.
+	Limit the output to the first _<number>_ commits that would be shown.
+
+`--max-count-oldest=<number>`::
+	Limit the output to the last _<number>_ commits that would be shown.
 
 `--skip=<number>`::
 	Skip _<number>_ commits before starting to show the commit output.
