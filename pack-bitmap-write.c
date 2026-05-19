@@ -446,13 +446,17 @@ static void bitmap_builder_init(struct bitmap_builder *bb,
 	revs.topo_order = 1;
 	revs.first_parent_only = 1;
 
-	for (i = 0; i < writer->selected_nr; i++) {
+	for (i = 0; i < bitmap_writer_nr_selected_commits(writer); i++) {
 		struct bitmapped_commit *bc = &writer->selected[i];
 		struct bb_commit *ent = bb_data_at(&bb->data, bc->commit);
 
+		if (bc->pseudo_merge)
+			BUG("unexpected pseudo-merge at %"PRIuMAX,
+			    (uintmax_t)i);
+
 		ent->selected = 1;
 		ent->maximal = 1;
-		ent->pseudo_merge = bc->pseudo_merge;
+		ent->pseudo_merge = 0;
 		ent->idx = i;
 
 		ent->commit_mask = bitmap_new();
@@ -618,6 +622,8 @@ static int fill_bitmap_tree(struct bitmap_writer *writer,
 
 static int reused_bitmaps_nr;
 static int reused_pseudo_merge_bitmaps_nr;
+static int pseudo_merge_bitmap_nr;
+static int pseudo_merge_bitmap_parents;
 
 static int fill_bitmap_commit_calls_nr;
 static int fill_bitmap_commit_found_ancestor_nr;
@@ -631,7 +637,11 @@ static int fill_bitmap_commit(struct bitmap_writer *writer,
 			      const uint32_t *mapping)
 {
 	int found;
+	int from_pseudo_merge = commit->object.flags & BITMAP_PSEUDO_MERGE;
 	uint32_t pos;
+
+	if (ent->pseudo_merge)
+		BUG("unexpected pseudo-merge commit in fill_bitmap_commit()");
 
 	fill_bitmap_commit_calls_nr++;
 
@@ -648,10 +658,7 @@ static int fill_bitmap_commit(struct bitmap_writer *writer,
 			struct ewah_bitmap *old;
 			struct bitmap *remapped = bitmap_new();
 
-			if (commit->object.flags & BITMAP_PSEUDO_MERGE)
-				old = pseudo_merge_bitmap_for_commit(old_bitmap, c);
-			else
-				old = bitmap_for_commit(old_bitmap, c);
+			old = bitmap_for_commit(old_bitmap, c);
 			/*
 			 * If this commit has an old bitmap, then translate that
 			 * bitmap and add its bits to this one. No need to walk
@@ -660,10 +667,7 @@ static int fill_bitmap_commit(struct bitmap_writer *writer,
 			if (old && !rebuild_bitmap(mapping, old, remapped)) {
 				bitmap_or(ent->bitmap, remapped);
 				bitmap_free(remapped);
-				if (commit->object.flags & BITMAP_PSEUDO_MERGE)
-					reused_pseudo_merge_bitmaps_nr++;
-				else
-					reused_bitmaps_nr++;
+				reused_bitmaps_nr++;
 				continue;
 			}
 			bitmap_free(remapped);
@@ -696,12 +700,32 @@ static int fill_bitmap_commit(struct bitmap_writer *writer,
 		 * walk ensures we cover all parents.
 		 */
 		if (!(c->object.flags & BITMAP_PSEUDO_MERGE)) {
+			struct tree *tree;
+
+			if (from_pseudo_merge && !c->object.parsed) {
+				/*
+				 * Commits reachable from selected
+				 * non-pseudo-merges are already parsed
+				 * by the regular bitmap build.
+				 *
+				 * However, pseudo-merge fills can also
+				 * reach commits that were not covered
+				 * there, so parse any such leftovers
+				 * before reading their tree or parents.
+				 */
+				if (repo_parse_commit(writer->repo, c))
+					return -1;
+			}
+
 			pos = find_object_pos(writer, &c->object.oid, &found);
 			if (!found)
 				return -1;
 			bitmap_set(ent->bitmap, pos);
-			prio_queue_put(tree_queue,
-				       repo_get_commit_tree(writer->repo, c));
+
+			tree = repo_get_commit_tree(writer->repo, c);
+			if (!tree)
+				return -1;
+			prio_queue_put(tree_queue, tree);
 		}
 
 		for (p = c->parents; p; p = p->next) {
@@ -736,6 +760,137 @@ static int fill_bitmap_commit(struct bitmap_writer *writer,
 			return -1;
 	}
 	return 0;
+}
+
+static int reuse_pseudo_merge_bitmap(struct bitmap_index *old_bitmap,
+				     const uint32_t *mapping,
+				     struct commit *merge,
+				     struct ewah_bitmap **out)
+{
+	struct ewah_bitmap *old;
+	struct bitmap *remapped;
+
+	if (!old_bitmap || !mapping)
+		return 0;
+
+	old = pseudo_merge_bitmap_for_commit(old_bitmap, merge);
+	if (!old)
+		return 0;
+
+	remapped = bitmap_new();
+	if (rebuild_bitmap(mapping, old, remapped) < 0) {
+		bitmap_free(remapped);
+		return 0;
+	}
+
+	*out = bitmap_to_ewah(remapped);
+	bitmap_free(remapped);
+	reused_pseudo_merge_bitmaps_nr++;
+	return 1;
+}
+
+static int build_pseudo_merge_bitmap(struct bitmap_writer *writer,
+				     struct bitmap_index *old_bitmap,
+				     const uint32_t *mapping,
+				     struct commit *merge,
+				     struct ewah_bitmap **out)
+{
+	struct bb_commit ent = { 0 };
+	struct prio_queue queue = { NULL };
+	struct prio_queue tree_queue = { NULL };
+	unsigned parents = commit_list_count(merge->parents);
+	int ret;
+
+	ent.bitmap = bitmap_new();
+
+	pseudo_merge_bitmap_nr++;
+	pseudo_merge_bitmap_parents += parents;
+
+	if (reuse_pseudo_merge_bitmap(old_bitmap, mapping, merge, out)) {
+		ret = 0;
+		goto done;
+	}
+
+	ret = fill_bitmap_commit(writer, &ent, merge, &queue, &tree_queue,
+				 old_bitmap, mapping);
+
+	if (!ret)
+		*out = bitmap_to_ewah(ent.bitmap);
+
+done:
+	bitmap_free(ent.bitmap);
+	clear_prio_queue(&queue);
+	clear_prio_queue(&tree_queue);
+
+	return ret;
+}
+
+static int build_pseudo_merge_bitmaps(struct bitmap_writer *writer,
+				      struct bitmap_index *old_bitmap,
+				      const uint32_t *mapping,
+				      int *nr_stored)
+{
+	size_t i = bitmap_writer_nr_selected_commits(writer);
+	int ret = 0;
+
+	if (!writer->pseudo_merges_nr)
+		return 0;
+
+	trace2_region_enter("pack-bitmap-write", "building_pseudo_merge_bitmaps",
+			    writer->repo);
+
+	for (; i < writer->selected_nr; i++) {
+		struct bitmapped_commit *merge = &writer->selected[i];
+		struct commit_list *p;
+		struct bitmap *parents = bitmap_new();
+		struct ewah_bitmap *objects = NULL;
+
+		if (!merge->pseudo_merge)
+			BUG("found non-pseudo merge commit at %"PRIuMAX,
+			    (uintmax_t)i);
+
+		for (p = merge->commit->parents; p; p = p->next) {
+			int found;
+			uint32_t pos = find_object_pos(writer,
+						       &p->item->object.oid,
+						       &found);
+			if (!found) {
+				bitmap_free(parents);
+				ret = -1;
+				goto done;
+			}
+			bitmap_set(parents, pos);
+		}
+
+		merge->pseudo_merge_parents = bitmap_to_ewah(parents);
+		bitmap_free(parents);
+
+		if (build_pseudo_merge_bitmap(writer, old_bitmap, mapping,
+					      merge->commit, &objects) < 0) {
+			ret = -1;
+			goto done;
+		}
+		merge->bitmap = objects;
+
+		(*nr_stored)++;
+		display_progress(writer->progress, *nr_stored);
+	}
+
+done:
+	trace2_region_leave("pack-bitmap-write", "building_pseudo_merge_bitmaps",
+			    writer->repo);
+
+	trace2_data_intmax("pack-bitmap-write", writer->repo,
+			   "pseudo_merge_bitmap_nr",
+			   pseudo_merge_bitmap_nr);
+	trace2_data_intmax("pack-bitmap-write", writer->repo,
+			   "building_bitmaps_pseudo_merge_reused",
+			   reused_pseudo_merge_bitmaps_nr);
+	trace2_data_intmax("pack-bitmap-write", writer->repo,
+			   "pseudo_merge_bitmap_parents",
+			   pseudo_merge_bitmap_parents);
+
+	return ret;
 }
 
 static void store_selected(struct bitmap_writer *writer,
@@ -821,6 +976,10 @@ int bitmap_writer_build(struct bitmap_writer *writer)
 			bitmap_free(ent->bitmap);
 		ent->bitmap = NULL;
 	}
+	if (closed &&
+	    build_pseudo_merge_bitmaps(writer, old_bitmap, mapping,
+				       &nr_stored) < 0)
+		closed = 0;
 	clear_prio_queue(&queue);
 	clear_prio_queue(&tree_queue);
 	bitmap_builder_clear(&bb);
@@ -831,9 +990,6 @@ int bitmap_writer_build(struct bitmap_writer *writer)
 			    writer->repo);
 	trace2_data_intmax("pack-bitmap-write", writer->repo,
 			   "building_bitmaps_reused", reused_bitmaps_nr);
-	trace2_data_intmax("pack-bitmap-write", writer->repo,
-			   "building_bitmaps_pseudo_merge_reused",
-			   reused_pseudo_merge_bitmaps_nr);
 	trace2_data_intmax("pack-bitmap-write", writer->repo,
 			   "fill_bitmap_commit_calls_nr",
 			   fill_bitmap_commit_calls_nr);
@@ -1015,23 +1171,6 @@ static void write_pseudo_merges(struct bitmap_writer *writer,
 
 	CALLOC_ARRAY(pseudo_merge_ofs, writer->pseudo_merges_nr);
 
-	for (i = 0; i < writer->pseudo_merges_nr; i++) {
-		struct bitmapped_commit *merge = &writer->selected[base + i];
-		struct commit_list *p;
-		struct bitmap *parents = bitmap_new();
-
-		if (!merge->pseudo_merge)
-			BUG("found non-pseudo merge commit at %"PRIuMAX, (uintmax_t)i);
-
-		for (p = merge->commit->parents; p; p = p->next)
-			bitmap_set(parents,
-				   find_object_pos(writer, &p->item->object.oid,
-						   NULL));
-
-		merge->pseudo_merge_parents = bitmap_to_ewah(parents);
-		bitmap_free(parents);
-	}
-
 	start = hashfile_total(f);
 
 	for (i = 0; i < writer->pseudo_merges_nr; i++) {
@@ -1040,14 +1179,13 @@ static void write_pseudo_merges(struct bitmap_writer *writer,
 		if (!merge->pseudo_merge)
 			BUG("found non-pseudo merge commit at %"PRIuMAX, (uintmax_t)i);
 
-		if (!merge->pseudo_merge_parents)
-			BUG("missing pseudo-merge parents bitmap for commit %s",
+		if (!merge->pseudo_merge_parents || !merge->bitmap)
+			BUG("missing pseudo-merge bitmap for commit %s",
 			    oid_to_hex(&merge->commit->object.oid));
 
 		pseudo_merge_ofs[i] = hashfile_total(f);
-
 		dump_bitmap(f, merge->pseudo_merge_parents);
-		dump_bitmap(f, writer->selected[base+i].write_as);
+		dump_bitmap(f, merge->bitmap);
 	}
 
 	next_ext = st_add(hashfile_total(f),
