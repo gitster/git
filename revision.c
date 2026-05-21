@@ -473,10 +473,10 @@ static struct commit *handle_commit(struct rev_info *revs,
 	die("%s is unknown object", name);
 }
 
-static int everybody_uninteresting(struct commit_list *orig,
+static int everybody_uninteresting(struct prio_queue *orig,
 				   struct commit **interesting_cache)
 {
-	struct commit_list *list = orig;
+	size_t i;
 
 	if (*interesting_cache) {
 		struct commit *commit = *interesting_cache;
@@ -484,9 +484,8 @@ static int everybody_uninteresting(struct commit_list *orig,
 			return 0;
 	}
 
-	while (list) {
-		struct commit *commit = list->item;
-		list = list->next;
+	for (i = 0; i < orig->nr; i++) {
+		struct commit *commit = orig->array[i].data;
 		if (commit->object.flags & UNINTERESTING)
 			continue;
 
@@ -1300,20 +1299,17 @@ static void cherry_pick_list(struct commit_list *list, struct rev_info *revs)
 /* How many extra uninteresting commits we want to see.. */
 #define SLOP 5
 
-static int still_interesting(struct commit_list *src, timestamp_t date, int slop,
+static int still_interesting(struct prio_queue *src, timestamp_t date, int slop,
 			     struct commit **interesting_cache)
 {
 	/*
-	 * No source list at all? We're definitely done..
+	 * Since src is sorted by date, it is enough to peek at the
+	 * first entry to compare dates.  No entry at all means done.
 	 */
-	if (!src)
+	struct commit *commit = prio_queue_peek(src);
+	if (!commit)
 		return 0;
-
-	/*
-	 * Does the destination list contain entries with a date
-	 * before the source list? Definitely _not_ done.
-	 */
-	if (date <= src->item->date)
+	if (date <= commit->date)
 		return SLOP;
 
 	/*
@@ -1451,6 +1447,7 @@ static int limit_list(struct rev_info *revs)
 	struct commit_list *newlist = NULL;
 	struct commit_list **p = &newlist;
 	struct commit *interesting_cache = NULL;
+	struct prio_queue queue = { .compare = compare_commits_by_commit_date };
 
 	if (revs->ancestry_path_implicit_bottoms) {
 		collect_bottom_commits(original_list,
@@ -1461,6 +1458,11 @@ static int limit_list(struct rev_info *revs)
 
 	while (original_list) {
 		struct commit *commit = pop_commit(&original_list);
+		prio_queue_put(&queue, commit);
+	}
+
+	while (queue.nr) {
+		struct commit *commit = prio_queue_get(&queue);
 		struct object *obj = &commit->object;
 
 		if (commit == interesting_cache)
@@ -1468,11 +1470,13 @@ static int limit_list(struct rev_info *revs)
 
 		if (revs->max_age != -1 && (commit->date < revs->max_age))
 			obj->flags |= UNINTERESTING;
-		if (process_parents(revs, commit, &original_list, NULL) < 0)
+		if (process_parents(revs, commit, NULL, &queue) < 0) {
+			clear_prio_queue(&queue);
 			return -1;
+		}
 		if (obj->flags & UNINTERESTING) {
 			mark_parents_uninteresting(revs, commit);
-			slop = still_interesting(original_list, date, slop, &interesting_cache);
+			slop = still_interesting(&queue, date, slop, &interesting_cache);
 			if (slop)
 				continue;
 			break;
@@ -1509,7 +1513,7 @@ static int limit_list(struct rev_info *revs)
 		}
 	}
 
-	commit_list_free(original_list);
+	clear_prio_queue(&queue);
 	revs->commits = newlist;
 	return 0;
 }
