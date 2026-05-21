@@ -1,6 +1,7 @@
 #define USE_THE_REPOSITORY_VARIABLE
 #include "builtin.h"
 #include "abspath.h"
+#include "advice.h"
 #include "config.h"
 #include "color.h"
 #include "date.h"
@@ -208,6 +209,22 @@ static void check_argc(int argc, int min, int max)
 		error(_("wrong number of arguments, should be from %d to %d"),
 		      min, max);
 	exit(129);
+}
+
+static void advise_setting_with_equals(const char *key, const char *value)
+{
+	const char *last_dot = strrchr(key, '.');
+	const char *eq;
+
+	if (!last_dot)
+		return;
+	eq = strchr(last_dot + 1, '=');
+	if (!eq)
+		return;
+	if (!value)
+		value = eq + 1;
+	advise(_("did you mean \"git config set %.*s %s\"?"),
+	       (int)(eq - key), key, value);
 }
 
 static void show_config_origin(const struct config_display_options *opts,
@@ -1133,6 +1150,11 @@ static int cmd_config_set(int argc, const char **argv, const char *prefix,
 
 	argc = parse_options(argc, argv, prefix, opts, builtin_config_set_usage,
 			     PARSE_OPT_STOP_AT_NON_OPTION);
+	if (argc == 1 && strchr(argv[0], '=')) {
+		error(_("wrong number of arguments, should be 2"));
+		advise_setting_with_equals(argv[0], NULL);
+		exit(129);
+	}
 	check_argc(argc, 2, 2);
 
 	if ((flags & CONFIG_FLAGS_FIXED_VALUE) && !value_pattern)
@@ -1160,6 +1182,8 @@ static int cmd_config_set(int argc, const char **argv, const char *prefix,
 			error(_("cannot overwrite multiple values with a single value\n"
 			"       Use --value=<pattern>, --append or --all to change %s."), argv[0]);
 	}
+	if (ret == CONFIG_INVALID_KEY)
+		advise_setting_with_equals(argv[0], argv[1]);
 
 	location_options_release(&location_opts);
 	free(comment);
@@ -1371,6 +1395,7 @@ static int cmd_config_actions(int argc, const char **argv, const char *prefix)
 	};
 	char *value = NULL, *comment = NULL;
 	int ret = 0;
+	int actions_implicit;
 	struct key_value_info default_kvi = KVI_INIT;
 
 	argc = parse_options(argc, argv, prefix, opts,
@@ -1385,6 +1410,7 @@ static int cmd_config_actions(int argc, const char **argv, const char *prefix)
 		exit(129);
 	}
 
+	actions_implicit = (actions == 0);
 	if (actions == 0)
 		switch (argc) {
 		case 1: actions = ACTION_GET; break;
@@ -1485,6 +1511,8 @@ static int cmd_config_actions(int argc, const char **argv, const char *prefix)
 		if (ret == CONFIG_NOTHING_SET)
 			error(_("cannot overwrite multiple values with a single value\n"
 			"       Use a regexp, --add or --replace-all to change %s."), argv[0]);
+		else if (ret == CONFIG_INVALID_KEY)
+			advise_setting_with_equals(argv[0], argv[1]);
 	}
 	else if (actions == ACTION_SET_ALL) {
 		check_write(&location_opts.source);
@@ -1515,6 +1543,8 @@ static int cmd_config_actions(int argc, const char **argv, const char *prefix)
 		check_argc(argc, 1, 2);
 		ret = get_value(&location_opts, &display_opts, argv[0], argv[1],
 				0, flags);
+		if (ret == CONFIG_INVALID_KEY && actions_implicit)
+			advise_setting_with_equals(argv[0], NULL);
 	}
 	else if (actions == ACTION_GET_ALL) {
 		check_argc(argc, 1, 2);
