@@ -2043,13 +2043,12 @@ const char *setup_git_directory_gently(struct repository *repo, int *nongit_ok)
 			setup_git_env_internal(repo, gitdir);
 		}
 
-		repo->objects = odb_new(repo,
-					getenv_safe(&to_free, DB_ENVIRONMENT),
-					getenv_safe(&to_free, ALTERNATE_DB_ENVIRONMENT));
-
 		if (startup_info->have_repository) {
 			struct strbuf err = STRBUF_INIT;
 
+			repo->objects = odb_new(repo,
+						getenv_safe(&to_free, DB_ENVIRONMENT),
+						getenv_safe(&to_free, ALTERNATE_DB_ENVIRONMENT));
 			if (apply_repository_format(repo, &repo_fmt, &err) < 0)
 				die("%s", err.buf);
 
