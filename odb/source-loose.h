@@ -3,6 +3,7 @@
 
 #include "odb/source.h"
 
+struct odb_source_files;
 struct object_database;
 struct oidtree;
 
@@ -11,7 +12,7 @@ struct oidtree;
  * file per object. This source is part of the files source.
  */
 struct odb_source_loose {
-	struct odb_source *source;
+	struct odb_source_files *files;
 
 	/*
 	 * Used to store the results of readdir(3) calls when we are OK
@@ -29,6 +30,6 @@ struct odb_source_loose {
 	struct loose_object_map *map;
 };
 
-struct odb_source_loose *odb_source_loose_new(struct odb_source *source);
+struct odb_source_loose *odb_source_loose_new(struct odb_source_files *files);
 
 #endif

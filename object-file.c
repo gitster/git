@@ -178,7 +178,7 @@ static int open_loose_object(struct odb_source_loose *loose,
 	static struct strbuf buf = STRBUF_INIT;
 	int fd;
 
-	*path = odb_loose_path(loose->source, &buf, oid);
+	*path = odb_loose_path(&loose->files->base, &buf, oid);
 	fd = git_open(*path);
 	if (fd >= 0)
 		return fd;
@@ -189,7 +189,7 @@ static int open_loose_object(struct odb_source_loose *loose,
 static int quick_has_loose(struct odb_source_loose *loose,
 			   const struct object_id *oid)
 {
-	return !!oidtree_contains(odb_source_loose_cache(loose->source, oid), oid);
+	return !!oidtree_contains(odb_source_loose_cache(&loose->files->base, oid), oid);
 }
 
 /*
