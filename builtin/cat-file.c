@@ -862,8 +862,9 @@ static void batch_each_object(struct batch_options *opt,
 	 */
 	odb_prepare_alternates(the_repository->objects);
 	for (source = the_repository->objects->sources; source; source = source->next) {
-		int ret = odb_source_loose_for_each_object(source, NULL, batch_one_object_oi,
-							   &payload, &opts);
+		struct odb_source_files *files = odb_source_files_downcast(source);
+		int ret = odb_source_for_each_object(&files->loose->base, NULL, batch_one_object_oi,
+						     &payload, &opts);
 		if (ret)
 			break;
 	}

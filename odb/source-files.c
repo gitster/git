@@ -82,7 +82,7 @@ static int odb_source_files_for_each_object(struct odb_source *source,
 	int ret;
 
 	if (!(opts->flags & ODB_FOR_EACH_OBJECT_PROMISOR_ONLY)) {
-		ret = odb_source_loose_for_each_object(source, request, cb, cb_data, opts);
+		ret = odb_source_for_each_object(&files->loose->base, request, cb, cb_data, opts);
 		if (ret)
 			return ret;
 	}

@@ -6,6 +6,9 @@
 #include "odb.h"
 #include "odb/source-loose.h"
 
+/* The maximum size for an object header. */
+#define MAX_HEADER_LEN 32
+
 struct index_state;
 
 enum {
@@ -85,19 +88,13 @@ int for_each_loose_file_in_source(struct odb_source *source,
 				  each_loose_cruft_fn cruft_cb,
 				  each_loose_subdir_fn subdir_cb,
 				  void *data);
-
-/*
- * Iterate through all loose objects in the given object database source and
- * invoke the callback function for each of them. If an object info request is
- * given, then the object info will be read for every individual object and
- * passed to the callback as if `odb_source_loose_read_object_info()` was
- * called for the object.
- */
-int odb_source_loose_for_each_object(struct odb_source *source,
-				     const struct object_info *request,
-				     odb_for_each_object_cb cb,
-				     void *cb_data,
-				     const struct odb_for_each_object_options *opts);
+int for_each_file_in_obj_subdir(unsigned int subdir_nr,
+				struct strbuf *path,
+				const struct git_hash_algo *algop,
+				each_loose_object_fn obj_cb,
+				each_loose_cruft_fn cruft_cb,
+				each_loose_subdir_fn subdir_cb,
+				void *data);
 
 /*
  * Count the number of loose objects in this source.
@@ -188,12 +185,6 @@ int read_loose_object(struct repository *repo,
 		      void **contents,
 		      struct object_info *oi);
 
-int read_object_info_from_path(struct odb_source_loose *loose,
-			       const char *path,
-			       const struct object_id *oid,
-			       struct object_info *oi,
-			       enum object_info_flags flags);
-
 enum unpack_loose_header_result {
 	ULHR_OK,
 	ULHR_BAD,
@@ -217,6 +208,9 @@ enum unpack_loose_header_result unpack_loose_header(git_zstream *stream,
 						    unsigned long mapsize,
 						    void *buffer,
 						    unsigned long bufsiz);
+void *unpack_loose_rest(git_zstream *stream,
+			void *buffer, unsigned long size,
+			const struct object_id *oid);
 
 int parse_loose_header(const char *hdr, struct object_info *oi);
 
