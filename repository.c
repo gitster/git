@@ -301,9 +301,6 @@ int repo_init(struct repository *repo,
 	if (worktree)
 		repo_set_worktree(repo, worktree);
 
-	if (repo->compat_hash_algo)
-		repo_read_loose_object_map(repo);
-
 	clear_repository_format(&format);
 	strbuf_release(&err);
 	return 0;
