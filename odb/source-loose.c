@@ -21,6 +21,11 @@ static void odb_source_loose_reprepare(struct odb_source *source)
 	odb_source_loose_clear_cache(loose);
 }
 
+static void odb_source_loose_close(struct odb_source *source UNUSED)
+{
+	/* Nothing to do. */
+}
+
 static void odb_source_loose_reparent(const char *name UNUSED,
 				      const char *old_cwd,
 				      const char *new_cwd,
@@ -53,6 +58,7 @@ struct odb_source_loose *odb_source_loose_new(struct odb_source_files *files)
 	loose->files = files;
 
 	loose->base.free = odb_source_loose_free;
+	loose->base.close = odb_source_loose_close;
 	loose->base.reprepare = odb_source_loose_reprepare;
 
 	if (!is_absolute_path(loose->base.path))

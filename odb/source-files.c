@@ -36,6 +36,7 @@ static void odb_source_files_free(struct odb_source *source)
 static void odb_source_files_close(struct odb_source *source)
 {
 	struct odb_source_files *files = odb_source_files_downcast(source);
+	odb_source_close(&files->loose->base);
 	packfile_store_close(files->packed);
 }
 
