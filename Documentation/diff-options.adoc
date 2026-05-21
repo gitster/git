@@ -457,6 +457,11 @@ endif::git-diff[]
 +
 Note that despite the name of the first mode, color is used to
 highlight the changed parts in all modes if enabled.
++
+Word diff works by finding word-level changes within each hunk of
+the line-level diff.  The line-level alignment determines which
+changed lines are compared to each other, which can affect the
+word-level output.
 
 `--word-diff-regex=<regex>`::
 	Use _<regex>_ to decide what a word is, instead of considering
