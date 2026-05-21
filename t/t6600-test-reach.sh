@@ -612,6 +612,51 @@ test_expect_success 'for-each-ref merged:none' '
 		--format="%(refname)" --stdin
 '
 
+test_expect_success 'for-each-ref merged:duplicate, all reachable' '
+	git branch dup-a commit-3-3 &&
+	git branch dup-b commit-3-3 &&
+	cat >input <<-\EOF &&
+	refs/heads/commit-1-1
+	refs/heads/dup-a
+	refs/heads/dup-b
+	EOF
+	cat >expect <<-\EOF &&
+	refs/heads/commit-1-1
+	refs/heads/dup-a
+	refs/heads/dup-b
+	EOF
+	run_all_modes git for-each-ref --merged=commit-5-5 \
+		--format="%(refname)" --stdin
+'
+
+test_expect_success 'for-each-ref merged:duplicate, none reachable' '
+	cat >input <<-\EOF &&
+	refs/heads/dup-a
+	refs/heads/dup-b
+	refs/heads/commit-9-9
+	EOF
+	>expect &&
+	run_all_modes git for-each-ref --merged=commit-2-2 \
+		--format="%(refname)" --stdin
+'
+
+test_expect_success 'for-each-ref merged:duplicate at min generation' '
+	git branch dup-c commit-1-1 &&
+	git branch dup-d commit-1-1 &&
+	cat >input <<-\EOF &&
+	refs/heads/dup-c
+	refs/heads/dup-d
+	refs/heads/commit-5-5
+	EOF
+	cat >expect <<-\EOF &&
+	refs/heads/commit-5-5
+	refs/heads/dup-c
+	refs/heads/dup-d
+	EOF
+	run_all_modes git for-each-ref --merged=commit-5-5 \
+		--format="%(refname)" --stdin
+'
+
 # For get_branch_base_for_tip, we only care about
 # first-parent history. Here is the test graph with
 # second parents removed:
