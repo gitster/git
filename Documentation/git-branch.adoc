@@ -24,6 +24,8 @@ git branch (-m|-M) [<old-branch>] <new-branch>
 git branch (-c|-C) [<old-branch>] <new-branch>
 git branch (-d|-D) [-r] <branch-name>...
 git branch --edit-description [<branch-name>]
+git branch --forked (<remote>... | --all-remotes)
+git branch --prune-merged (<remote>... | --all-remotes)
 
 DESCRIPTION
 -----------
@@ -198,6 +200,41 @@ This option is only applicable in non-verbose mode.
 `--show-current`::
 	Print the name of the current branch. In detached `HEAD` state,
 	nothing is printed.
+
+`--forked`::
+	List local branches that fork from any of the given _<remote>_
+	arguments, that is, those whose configured upstream
+	(`branch.<name>.merge`) is one of those remotes' remote-tracking
+	branches.
++
+Each _<remote>_ may be either the name of a configured remote
+(e.g. `origin`, meaning any branch tracking a
+`refs/remotes/origin/*` ref) or a specific remote-tracking branch
+(e.g. `origin/master`). Multiple _<remote>_ arguments are unioned.
+
+`--prune-merged`::
+	Delete the local branches that `--forked` would list for
+	the same _<remote>_ arguments, but only those whose tip is
+	reachable from their configured upstream remote-tracking
+	branch (`branch.<name>.merge`). In other words: the work on
+	the branch has already landed on the upstream it tracks, so
+	the local copy is no longer needed.
++
+Run `git fetch` first so the upstream remote-tracking branches
+reflect the current state of _<remote>_; reachability is checked
+against whatever the remote-tracking refs say locally.
++
+A branch whose upstream no longer resolves locally is left alone
+(its disappearance is not, on its own, evidence that the work was
+integrated). The currently checked-out branch in any worktree is
+always preserved, as is any branch with `branch.<name>.pruneMerged`
+set to `false`, and the local branch that mirrors _<remote>_'s
+default branch.
+
+`--all-remotes`::
+	With `--forked` or `--prune-merged`, act on every
+	configured remote in addition to any explicit _<remote>_
+	arguments.
 
 `-v`::
 `-vv`::
