@@ -220,7 +220,7 @@ static int odb_source_loose_read_object_info(struct odb_source *source,
 	if (flags & OBJECT_INFO_SECOND_READ)
 		return -1;
 
-	odb_loose_path(source, &buf, oid);
+	odb_loose_path(loose, &buf, oid);
 	return read_object_info_from_path(loose, buf.buf, oid, oi, flags);
 }
 
@@ -238,7 +238,7 @@ static int open_loose_object(struct odb_source_loose *loose,
 	static struct strbuf buf = STRBUF_INIT;
 	int fd;
 
-	*path = odb_loose_path(&loose->base, &buf, oid);
+	*path = odb_loose_path(loose, &buf, oid);
 	fd = git_open(*path);
 	if (fd >= 0)
 		return fd;
@@ -584,8 +584,9 @@ out:
 static int odb_source_loose_freshen_object(struct odb_source *source,
 					   const struct object_id *oid)
 {
+	struct odb_source_loose *loose = odb_source_loose_downcast(source);
 	static struct strbuf path = STRBUF_INIT;
-	odb_loose_path(source, &path, oid);
+	odb_loose_path(loose, &path, oid);
 	return !!check_and_freshen_file(path.buf, 1);
 }
 
@@ -624,7 +625,7 @@ static int odb_source_loose_write_object(struct odb_source *source,
 	write_object_file_prepare(algo, buf, len, type, oid, hdr, &hdrlen);
 	if (odb_freshen_object(source->odb, oid))
 		return 0;
-	if (write_loose_object(source, oid, hdr, hdrlen, buf, len, 0, flags))
+	if (write_loose_object(loose, oid, hdr, hdrlen, buf, len, 0, flags))
 		return -1;
 	if (compat)
 		return repo_add_loose_object_map(loose, oid, &compat_oid);

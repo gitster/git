@@ -23,7 +23,7 @@ int index_path(struct index_state *istate, struct object_id *oid, const char *pa
 struct object_info;
 struct odb_source;
 
-int odb_source_loose_write_stream(struct odb_source *source,
+int odb_source_loose_write_stream(struct odb_source_loose *loose,
 				  struct odb_write_stream *stream, size_t len,
 				  struct object_id *oid);
 
@@ -31,7 +31,7 @@ int odb_source_loose_write_stream(struct odb_source *source,
  * Put in `buf` the name of the file in the local object database that
  * would be used to store a loose object with the specified oid.
  */
-const char *odb_loose_path(struct odb_source *source,
+const char *odb_loose_path(struct odb_source_loose *source,
 			   struct strbuf *buf,
 			   const struct object_id *oid);
 
@@ -127,7 +127,7 @@ void write_object_file_prepare(const struct git_hash_algo *algo,
 			       const void *buf, unsigned long len,
 			       enum object_type type, struct object_id *oid,
 			       char *hdr, int *hdrlen);
-int write_loose_object(struct odb_source *source,
+int write_loose_object(struct odb_source_loose *loose,
 		       const struct object_id *oid, char *hdr,
 		       int hdrlen, const void *buf, unsigned long len,
 		       time_t mtime, unsigned flags);
