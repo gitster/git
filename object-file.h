@@ -18,12 +18,7 @@ int index_fd(struct index_state *istate, struct object_id *oid, int fd, struct s
 int index_path(struct index_state *istate, struct object_id *oid, const char *path, struct stat *st, unsigned flags);
 
 struct object_info;
-struct odb_read_stream;
 struct odb_source;
-
-int odb_source_loose_read_object_stream(struct odb_read_stream **out,
-					struct odb_source *source,
-					const struct object_id *oid);
 
 /*
  * Return true iff an object database source has a loose object
@@ -198,6 +193,32 @@ int read_object_info_from_path(struct odb_source_loose *loose,
 			       const struct object_id *oid,
 			       struct object_info *oi,
 			       enum object_info_flags flags);
+
+enum unpack_loose_header_result {
+	ULHR_OK,
+	ULHR_BAD,
+	ULHR_TOO_LONG,
+};
+
+/**
+ * unpack_loose_header() initializes the data stream needed to unpack
+ * a loose object header.
+ *
+ * Returns:
+ *
+ * - ULHR_OK on success
+ * - ULHR_BAD on error
+ * - ULHR_TOO_LONG if the header was too long
+ *
+ * It will only parse up to MAX_HEADER_LEN bytes.
+ */
+enum unpack_loose_header_result unpack_loose_header(git_zstream *stream,
+						    unsigned char *map,
+						    unsigned long mapsize,
+						    void *buffer,
+						    unsigned long bufsiz);
+
+int parse_loose_header(const char *hdr, struct object_info *oi);
 
 struct odb_transaction;
 

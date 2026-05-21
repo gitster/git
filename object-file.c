@@ -164,28 +164,6 @@ int stream_object_signature(struct repository *r,
 	return !oideq(oid, &real_oid) ? -1 : 0;
 }
 
-/*
- * Find "oid" as a loose object in given source, open the object and return its
- * file descriptor. Returns the file descriptor on success, negative on failure.
- *
- * The "path" out-parameter will give the path of the object we found (if any).
- * Note that it may point to static storage and is only valid until another
- * call to stat_loose_object().
- */
-static int open_loose_object(struct odb_source_loose *loose,
-			     const struct object_id *oid, const char **path)
-{
-	static struct strbuf buf = STRBUF_INIT;
-	int fd;
-
-	*path = odb_loose_path(&loose->files->base, &buf, oid);
-	fd = git_open(*path);
-	if (fd >= 0)
-		return fd;
-
-	return -1;
-}
-
 static int quick_has_loose(struct odb_source_loose *loose,
 			   const struct object_id *oid)
 {
@@ -215,42 +193,11 @@ static void *map_fd(int fd, const char *path, unsigned long *size)
 	return map;
 }
 
-static void *odb_source_loose_map_object(struct odb_source *source,
-					 const struct object_id *oid,
-					 unsigned long *size)
-{
-	struct odb_source_files *files = odb_source_files_downcast(source);
-	const char *p;
-	int fd = open_loose_object(files->loose, oid, &p);
-
-	if (fd < 0)
-		return NULL;
-	return map_fd(fd, p, size);
-}
-
-enum unpack_loose_header_result {
-	ULHR_OK,
-	ULHR_BAD,
-	ULHR_TOO_LONG,
-};
-
-/**
- * unpack_loose_header() initializes the data stream needed to unpack
- * a loose object header.
- *
- * Returns:
- *
- * - ULHR_OK on success
- * - ULHR_BAD on error
- * - ULHR_TOO_LONG if the header was too long
- *
- * It will only parse up to MAX_HEADER_LEN bytes.
- */
-static enum unpack_loose_header_result unpack_loose_header(git_zstream *stream,
-							   unsigned char *map,
-							   unsigned long mapsize,
-							   void *buffer,
-							   unsigned long bufsiz)
+enum unpack_loose_header_result unpack_loose_header(git_zstream *stream,
+						    unsigned char *map,
+						    unsigned long mapsize,
+						    void *buffer,
+						    unsigned long bufsiz)
 {
 	int status;
 
@@ -340,7 +287,7 @@ static void *unpack_loose_rest(git_zstream *stream,
  * too permissive for what we want to check. So do an anal
  * object header parse by hand.
  */
-static int parse_loose_header(const char *hdr, struct object_info *oi)
+int parse_loose_header(const char *hdr, struct object_info *oi)
 {
 	const char *type_buf = hdr;
 	size_t size;
@@ -2169,139 +2116,4 @@ struct odb_transaction *odb_transaction_files_begin(struct odb_source *source)
 	transaction->base.write_object_stream = odb_transaction_files_write_object_stream;
 
 	return &transaction->base;
-}
-
-struct odb_loose_read_stream {
-	struct odb_read_stream base;
-	git_zstream z;
-	enum {
-		ODB_LOOSE_READ_STREAM_INUSE,
-		ODB_LOOSE_READ_STREAM_DONE,
-		ODB_LOOSE_READ_STREAM_ERROR,
-	} z_state;
-	void *mapped;
-	unsigned long mapsize;
-	char hdr[32];
-	int hdr_avail;
-	int hdr_used;
-};
-
-static ssize_t read_istream_loose(struct odb_read_stream *_st, char *buf, size_t sz)
-{
-	struct odb_loose_read_stream *st =
-		container_of(_st, struct odb_loose_read_stream, base);
-	size_t total_read = 0;
-
-	switch (st->z_state) {
-	case ODB_LOOSE_READ_STREAM_DONE:
-		return 0;
-	case ODB_LOOSE_READ_STREAM_ERROR:
-		return -1;
-	default:
-		break;
-	}
-
-	if (st->hdr_used < st->hdr_avail) {
-		size_t to_copy = st->hdr_avail - st->hdr_used;
-		if (sz < to_copy)
-			to_copy = sz;
-		memcpy(buf, st->hdr + st->hdr_used, to_copy);
-		st->hdr_used += to_copy;
-		total_read += to_copy;
-	}
-
-	while (total_read < sz) {
-		int status;
-
-		st->z.next_out = (unsigned char *)buf + total_read;
-		st->z.avail_out = sz - total_read;
-		status = git_inflate(&st->z, Z_FINISH);
-
-		total_read = st->z.next_out - (unsigned char *)buf;
-
-		if (status == Z_STREAM_END) {
-			git_inflate_end(&st->z);
-			st->z_state = ODB_LOOSE_READ_STREAM_DONE;
-			break;
-		}
-		if (status != Z_OK && (status != Z_BUF_ERROR || total_read < sz)) {
-			git_inflate_end(&st->z);
-			st->z_state = ODB_LOOSE_READ_STREAM_ERROR;
-			return -1;
-		}
-	}
-	return total_read;
-}
-
-static int close_istream_loose(struct odb_read_stream *_st)
-{
-	struct odb_loose_read_stream *st =
-		container_of(_st, struct odb_loose_read_stream, base);
-
-	if (st->z_state == ODB_LOOSE_READ_STREAM_INUSE)
-		git_inflate_end(&st->z);
-	munmap(st->mapped, st->mapsize);
-	return 0;
-}
-
-int odb_source_loose_read_object_stream(struct odb_read_stream **out,
-					struct odb_source *source,
-					const struct object_id *oid)
-{
-	struct object_info oi = OBJECT_INFO_INIT;
-	struct odb_loose_read_stream *st;
-	unsigned long mapsize;
-	unsigned long size_ul;
-	void *mapped;
-
-	mapped = odb_source_loose_map_object(source, oid, &mapsize);
-	if (!mapped)
-		return -1;
-
-	/*
-	 * Note: we must allocate this structure early even though we may still
-	 * fail. This is because we need to initialize the zlib stream, and it
-	 * is not possible to copy the stream around after the fact because it
-	 * has self-referencing pointers.
-	 */
-	CALLOC_ARRAY(st, 1);
-
-	switch (unpack_loose_header(&st->z, mapped, mapsize, st->hdr,
-				    sizeof(st->hdr))) {
-	case ULHR_OK:
-		break;
-	case ULHR_BAD:
-	case ULHR_TOO_LONG:
-		goto error;
-	}
-
-	/*
-	 * object_info.sizep is unsigned long* (32-bit on Windows), but
-	 * st->base.size is size_t (64-bit). Use temporary variable.
-	 * Note: loose objects >4GB would still truncate here, but such
-	 * large loose objects are uncommon (they'd normally be packed).
-	 */
-	oi.sizep = &size_ul;
-	oi.typep = &st->base.type;
-
-	if (parse_loose_header(st->hdr, &oi) < 0 || st->base.type < 0)
-		goto error;
-	st->base.size = size_ul;
-
-	st->mapped = mapped;
-	st->mapsize = mapsize;
-	st->hdr_used = strlen(st->hdr) + 1;
-	st->hdr_avail = st->z.total_out;
-	st->z_state = ODB_LOOSE_READ_STREAM_INUSE;
-	st->base.close = close_istream_loose;
-	st->base.read = read_istream_loose;
-
-	*out = &st->base;
-
-	return 0;
-error:
-	git_inflate_end(&st->z);
-	munmap(mapped, mapsize);
-	free(st);
-	return -1;
 }
