@@ -309,8 +309,8 @@ static int connect_setup(struct transport *transport, int for_push)
 
 	data->conn = git_connect(data->fd, transport->url,
 				 for_push ?
-					"git-receive-pack" :
-					"git-upload-pack",
+					GIT_CONNECT_RECEIVE_PACK :
+					GIT_CONNECT_UPLOAD_PACK,
 				 for_push ?
 					data->options.receivepack :
 					data->options.uploadpack,
@@ -961,12 +961,13 @@ static int git_transport_push(struct transport *transport, struct ref *remote_re
 	return ret;
 }
 
-static int connect_git(struct transport *transport, const char *name,
+static int connect_git(struct transport *transport,
+		       enum git_connect_service service,
 		       const char *executable, int fd[2])
 {
 	struct git_transport_data *data = transport->data;
 	data->conn = git_connect(data->fd, transport->url,
-				 name, executable, 0);
+				 service, executable, 0);
 	fd[0] = data->fd[0];
 	fd[1] = data->fd[1];
 	return 0;
@@ -1664,11 +1665,12 @@ void transport_unlock_pack(struct transport *transport, unsigned int flags)
 		string_list_clear(&transport->pack_lockfiles, 0);
 }
 
-int transport_connect(struct transport *transport, const char *name,
+int transport_connect(struct transport *transport,
+		      enum git_connect_service service,
 		      const char *exec, int fd[2])
 {
 	if (transport->vtable->connect)
-		return transport->vtable->connect(transport, name, exec, fd);
+		return transport->vtable->connect(transport, service, exec, fd);
 	else
 		die(_("operation not supported by protocol"));
 }

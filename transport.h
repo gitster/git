@@ -5,6 +5,7 @@
 #include "remote.h"
 #include "list-objects-filter-options.h"
 #include "string-list.h"
+#include "connect.h"
 
 struct git_transport_options {
 	unsigned thin : 1;
@@ -325,7 +326,8 @@ char *transport_anonymize_url(const char *url);
 void transport_take_over(struct transport *transport,
 			 struct child_process *child);
 
-int transport_connect(struct transport *transport, const char *name,
+int transport_connect(struct transport *transport,
+		      enum git_connect_service service,
 		      const char *exec, int fd[2]);
 
 /* Transport methods defined outside transport.c */
