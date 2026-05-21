@@ -705,14 +705,14 @@ static void odb_source_loose_free(struct odb_source *source)
 	free(loose);
 }
 
-struct odb_source_loose *odb_source_loose_new(struct odb_source_files *files)
+struct odb_source_loose *odb_source_loose_new(struct object_database *odb,
+					      const char *path,
+					      bool local)
 {
 	struct odb_source_loose *loose;
 
 	CALLOC_ARRAY(loose, 1);
-	odb_source_init(&loose->base, files->base.odb, ODB_SOURCE_LOOSE,
-			files->base.path, files->base.local);
-	loose->files = files;
+	odb_source_init(&loose->base, odb, ODB_SOURCE_LOOSE, path, local);
 
 	loose->base.free = odb_source_loose_free;
 	loose->base.close = odb_source_loose_close;

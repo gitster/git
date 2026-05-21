@@ -9,11 +9,10 @@ struct oidtree;
 
 /*
  * An object database source that stores its objects in loose format, one
- * file per object. This source is part of the files source.
+ * file per object.
  */
 struct odb_source_loose {
 	struct odb_source base;
-	struct odb_source_files *files;
 
 	/*
 	 * Used to store the results of readdir(3) calls when we are OK
@@ -31,7 +30,9 @@ struct odb_source_loose {
 	struct loose_object_map *map;
 };
 
-struct odb_source_loose *odb_source_loose_new(struct odb_source_files *files);
+struct odb_source_loose *odb_source_loose_new(struct object_database *odb,
+					      const char *path,
+					      bool local);
 
 /*
  * Cast the given object database source to the loose backend. This will cause
