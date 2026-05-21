@@ -96,20 +96,6 @@ int for_each_file_in_obj_subdir(unsigned int subdir_nr,
 				each_loose_subdir_fn subdir_cb,
 				void *data);
 
-/*
- * Count the number of loose objects in this source.
- *
- * The object count is approximated by opening a single sharding directory for
- * loose objects and scanning its contents. The result is then extrapolated by
- * 256. This should generally work as a reasonable estimate given that the
- * object hash is supposed to be indistinguishable from random.
- *
- * Returns 0 on success, a negative error code otherwise.
- */
-int odb_source_loose_count_objects(struct odb_source *source,
-				   enum odb_count_objects_flags flags,
-				   unsigned long *out);
-
 /**
  * format_object_header() is a thin wrapper around s xsnprintf() that
  * writes the initial "<type> <obj-len>" part of the loose object

@@ -109,7 +109,7 @@ static int odb_source_files_count_objects(struct odb_source *source,
 	if (!(flags & ODB_COUNT_OBJECTS_APPROXIMATE)) {
 		unsigned long loose_count;
 
-		ret = odb_source_loose_count_objects(source, flags, &loose_count);
+		ret = odb_source_count_objects(&files->loose->base, flags, &loose_count);
 		if (ret < 0)
 			goto out;
 

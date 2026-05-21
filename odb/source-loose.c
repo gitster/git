@@ -520,6 +520,66 @@ static int odb_source_loose_find_abbrev_len(struct odb_source *source,
 	return ret;
 }
 
+static int count_loose_object(const struct object_id *oid UNUSED,
+			      struct object_info *oi UNUSED,
+			      void *payload)
+{
+	unsigned long *count = payload;
+	(*count)++;
+	return 0;
+}
+
+static int odb_source_loose_count_objects(struct odb_source *source,
+					  enum odb_count_objects_flags flags,
+					  unsigned long *out)
+{
+	struct odb_source_loose *loose = odb_source_loose_downcast(source);
+	const unsigned hexsz = source->odb->repo->hash_algo->hexsz - 2;
+	char *path = NULL;
+	DIR *dir = NULL;
+	int ret;
+
+	if (flags & ODB_COUNT_OBJECTS_APPROXIMATE) {
+		unsigned long count = 0;
+		struct dirent *ent;
+
+		path = xstrfmt("%s/17", source->path);
+
+		dir = opendir(path);
+		if (!dir) {
+			if (errno == ENOENT) {
+				*out = 0;
+				ret = 0;
+				goto out;
+			}
+
+			ret = error_errno("cannot open object shard '%s'", path);
+			goto out;
+		}
+
+		while ((ent = readdir(dir)) != NULL) {
+			if (strspn(ent->d_name, "0123456789abcdef") != hexsz ||
+			    ent->d_name[hexsz] != '\0')
+				continue;
+			count++;
+		}
+
+		*out = count * 256;
+		ret = 0;
+	} else {
+		struct odb_for_each_object_options opts = { 0 };
+		*out = 0;
+		ret = odb_source_for_each_object(&loose->base, NULL, count_loose_object,
+						 out, &opts);
+	}
+
+out:
+	if (dir)
+		closedir(dir);
+	free(path);
+	return ret;
+}
+
 static void odb_source_loose_clear_cache(struct odb_source_loose *loose)
 {
 	oidtree_clear(loose->cache);
@@ -577,6 +637,7 @@ struct odb_source_loose *odb_source_loose_new(struct odb_source_files *files)
 	loose->base.read_object_stream = odb_source_loose_read_object_stream;
 	loose->base.for_each_object = odb_source_loose_for_each_object;
 	loose->base.find_abbrev_len = odb_source_loose_find_abbrev_len;
+	loose->base.count_objects = odb_source_loose_count_objects;
 
 	if (!is_absolute_path(loose->base.path))
 		chdir_notify_register(NULL, odb_source_loose_reparent, loose);
