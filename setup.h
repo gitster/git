@@ -221,6 +221,15 @@ void clear_repository_format(struct repository_format *format);
 int verify_repository_format(const struct repository_format *format,
 			     struct strbuf *err);
 
+/*
+ * Apply the given repository format to the repo. This initializes extensions
+ * and basic data structures required for normal operation. Returns 0 on
+ * success, a negative error code otherwise.
+ */
+int apply_repository_format(struct repository *repo,
+			    const struct repository_format *format,
+			    struct strbuf *err);
+
 const char *get_template_dir(const char *option_template);
 
 #define INIT_DB_QUIET      (1 << 0)

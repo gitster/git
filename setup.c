@@ -750,8 +750,7 @@ static int check_repo_format(const char *var, const char *value,
 	return read_worktree_config(var, value, ctx, vdata);
 }
 
-static int check_repository_format_gently(struct repository *repo,
-					  const char *gitdir,
+static int check_repository_format_gently(const char *gitdir,
 					  struct repository_format *candidate,
 					  int *nongit_ok)
 {
@@ -765,7 +764,7 @@ static int check_repository_format_gently(struct repository *repo,
 	strbuf_release(&sb);
 
 	/*
-	 * For historical use of check_repository_format() in git-init,
+	 * For historical use of check_and_apply_repository_format() in git-init,
 	 * we treat a missing config as a silent "ok", even when nongit_ok
 	 * is unset.
 	 */
@@ -781,8 +780,6 @@ static int check_repository_format_gently(struct repository *repo,
 		}
 		die("%s", err.buf);
 	}
-
-	repo->repository_format_precious_objects = candidate->precious_objects;
 
 	string_list_clear(&candidate->unknown_extensions, 0);
 	string_list_clear(&candidate->v1_only_extensions, 0);
@@ -1140,7 +1137,7 @@ static const char *setup_explicit_git_dir(struct repository *repo,
 		die(_("not a git repository: '%s'"), gitdirenv);
 	}
 
-	if (check_repository_format_gently(repo, gitdirenv, repo_fmt, nongit_ok)) {
+	if (check_repository_format_gently(gitdirenv, repo_fmt, nongit_ok)) {
 		free(gitfile);
 		return NULL;
 	}
@@ -1217,7 +1214,7 @@ static const char *setup_discovered_git_dir(struct repository *repo,
 					    struct repository_format *repo_fmt,
 					    int *nongit_ok)
 {
-	if (check_repository_format_gently(repo, gitdir, repo_fmt, nongit_ok))
+	if (check_repository_format_gently(gitdir, repo_fmt, nongit_ok))
 		return NULL;
 
 	/* --work-tree is set without --git-dir; use discovered one */
@@ -1265,7 +1262,7 @@ static const char *setup_bare_git_dir(struct repository *repo,
 {
 	int root_len;
 
-	if (check_repository_format_gently(repo, ".", repo_fmt, nongit_ok))
+	if (check_repository_format_gently(".", repo_fmt, nongit_ok))
 		return NULL;
 
 	setenv(GIT_IMPLICIT_WORK_TREE_ENVIRONMENT, "0", 1);
@@ -1757,6 +1754,32 @@ enum discovery_result discover_git_directory_reason(struct strbuf *commondir,
 	return result;
 }
 
+int apply_repository_format(struct repository *repo,
+			    const struct repository_format *format,
+			    struct strbuf *err)
+{
+	if (verify_repository_format(format, err) < 0)
+		return -1;
+
+	repo_set_hash_algo(repo, format->hash_algo);
+	repo_set_compat_hash_algo(repo, format->compat_hash_algo);
+	repo_set_ref_storage_format(repo,
+				    format->ref_storage_format,
+				    format->ref_storage_payload);
+	repo->repository_format_worktree_config =
+		format->worktree_config;
+	repo->repository_format_submodule_path_cfg =
+		format->submodule_path_cfg;
+	repo->repository_format_relative_worktrees =
+		format->relative_worktrees;
+	repo->repository_format_partial_clone =
+		xstrdup_or_null(format->partial_clone);
+	repo->repository_format_precious_objects =
+		format->precious_objects;
+
+	return 0;
+}
+
 /*
  * Check the repository format version in the path found in repo_get_git_dir(repo),
  * and die if it is a version we don't understand. Generally one would
@@ -1765,26 +1788,20 @@ enum discovery_result discover_git_directory_reason(struct strbuf *commondir,
  *
  * If successful and fmt is not NULL, fill fmt with data.
  */
-static void check_repository_format(struct repository *repo, struct repository_format *fmt)
+static void check_and_apply_repository_format(struct repository *repo,
+					      struct repository_format *fmt)
 {
 	struct repository_format repo_fmt = REPOSITORY_FORMAT_INIT;
+	struct strbuf err = STRBUF_INIT;
+
 	if (!fmt)
 		fmt = &repo_fmt;
-	check_repository_format_gently(repo, repo_get_git_dir(repo), fmt, NULL);
+
+	check_repository_format_gently(repo_get_git_dir(repo), fmt, NULL);
+	if (apply_repository_format(repo, fmt, &err) < 0)
+		die("%s", err.buf);
 	startup_info->have_repository = 1;
-	repo_set_hash_algo(repo, fmt->hash_algo);
-	repo_set_compat_hash_algo(repo, fmt->compat_hash_algo);
-	repo_set_ref_storage_format(repo,
-				    fmt->ref_storage_format,
-				    fmt->ref_storage_payload);
-	repo->repository_format_worktree_config =
-		fmt->worktree_config;
-	repo->repository_format_submodule_path_cfg =
-		fmt->submodule_path_cfg;
-	repo->repository_format_relative_worktrees =
-		fmt->relative_worktrees;
-	repo->repository_format_partial_clone =
-		xstrdup_or_null(fmt->partial_clone);
+
 	clear_repository_format(&repo_fmt);
 }
 
@@ -1862,7 +1879,7 @@ const char *enter_repo(struct repository *repo, const char *path, unsigned flags
 
 	if (is_git_directory(".")) {
 		set_git_dir(repo, ".", 0);
-		check_repository_format(repo, NULL);
+		check_and_apply_repository_format(repo, NULL);
 		return path;
 	}
 
@@ -2020,25 +2037,15 @@ const char *setup_git_directory_gently(struct repository *repo, int *nongit_ok)
 				gitdir = DEFAULT_GIT_DIR_ENVIRONMENT;
 			setup_git_env_internal(repo, gitdir, false);
 		}
+
 		if (startup_info->have_repository) {
-			repo_set_hash_algo(repo, repo_fmt.hash_algo);
-			repo_set_compat_hash_algo(repo,
-						  repo_fmt.compat_hash_algo);
-			repo_set_ref_storage_format(repo,
-						    repo_fmt.ref_storage_format,
-						    repo_fmt.ref_storage_payload);
-			repo->repository_format_worktree_config =
-				repo_fmt.worktree_config;
-			repo->repository_format_relative_worktrees =
-				repo_fmt.relative_worktrees;
-			repo->repository_format_submodule_path_cfg =
-				repo_fmt.submodule_path_cfg;
-			/* take ownership of repo_fmt.partial_clone */
-			repo->repository_format_partial_clone =
-				repo_fmt.partial_clone;
-			repo_fmt.partial_clone = NULL;
-			repo->repository_format_precious_objects =
-				repo_fmt.precious_objects;
+			struct strbuf err = STRBUF_INIT;
+
+			if (apply_repository_format(repo, &repo_fmt, &err) < 0)
+				die("%s", err.buf);
+
+			clear_repository_format(&repo_fmt);
+			strbuf_release(&err);
 		}
 	}
 	/*
@@ -2814,7 +2821,7 @@ int init_db(struct repository *repo,
 	 * config file, so this will not fail.  What we are catching
 	 * is an attempt to reinitialize new repository with an old tool.
 	 */
-	check_repository_format(repo, &repo_fmt);
+	check_and_apply_repository_format(repo, &repo_fmt);
 
 	repository_format_configure(repo, &repo_fmt, hash, ref_storage_format);
 
