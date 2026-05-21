@@ -23,12 +23,6 @@ int index_path(struct index_state *istate, struct object_id *oid, const char *pa
 struct object_info;
 struct odb_source;
 
-int odb_source_loose_write_object(struct odb_source *source,
-				  const void *buf, unsigned long len,
-				  enum object_type type, struct object_id *oid,
-				  struct object_id *compat_oid_in,
-				  enum odb_write_object_flags flags);
-
 int odb_source_loose_write_stream(struct odb_source *source,
 				  struct odb_write_stream *stream, size_t len,
 				  struct object_id *oid);
@@ -129,6 +123,14 @@ int finalize_object_file_flags(struct repository *repo,
 void hash_object_file(const struct git_hash_algo *algo, const void *buf,
 		      unsigned long len, enum object_type type,
 		      struct object_id *oid);
+void write_object_file_prepare(const struct git_hash_algo *algo,
+			       const void *buf, unsigned long len,
+			       enum object_type type, struct object_id *oid,
+			       char *hdr, int *hdrlen);
+int write_loose_object(struct odb_source *source,
+		       const struct object_id *oid, char *hdr,
+		       int hdrlen, const void *buf, unsigned long len,
+		       time_t mtime, unsigned flags);
 
 /* Helper to check and "touch" a file */
 int check_and_freshen_file(const char *fn, int freshen);

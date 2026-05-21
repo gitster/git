@@ -5,6 +5,7 @@
 #include "hex.h"
 #include "loose.h"
 #include "object-file.h"
+#include "object-file-convert.h"
 #include "odb.h"
 #include "odb/source-files.h"
 #include "odb/source-loose.h"
@@ -588,6 +589,48 @@ static int odb_source_loose_freshen_object(struct odb_source *source,
 	return !!check_and_freshen_file(path.buf, 1);
 }
 
+static int odb_source_loose_write_object(struct odb_source *source,
+					 const void *buf, unsigned long len,
+					 enum object_type type, struct object_id *oid,
+					 struct object_id *compat_oid_in,
+					 enum odb_write_object_flags flags)
+{
+	struct odb_source_loose *loose = odb_source_loose_downcast(source);
+	const struct git_hash_algo *algo = source->odb->repo->hash_algo;
+	const struct git_hash_algo *compat = source->odb->repo->compat_hash_algo;
+	struct object_id compat_oid;
+	char hdr[MAX_HEADER_LEN];
+	int hdrlen = sizeof(hdr);
+
+	/* Generate compat_oid */
+	if (compat) {
+		if (compat_oid_in)
+			oidcpy(&compat_oid, compat_oid_in);
+		else if (type == OBJ_BLOB)
+			hash_object_file(compat, buf, len, type, &compat_oid);
+		else {
+			struct strbuf converted = STRBUF_INIT;
+			convert_object_file(source->odb->repo, &converted, algo, compat,
+					    buf, len, type, 0);
+			hash_object_file(compat, converted.buf, converted.len,
+					 type, &compat_oid);
+			strbuf_release(&converted);
+		}
+	}
+
+	/* Normally if we have it in the pack then we do not bother writing
+	 * it out into .git/objects/??/?{38} file.
+	 */
+	write_object_file_prepare(algo, buf, len, type, oid, hdr, &hdrlen);
+	if (odb_freshen_object(source->odb, oid))
+		return 0;
+	if (write_loose_object(source, oid, hdr, hdrlen, buf, len, 0, flags))
+		return -1;
+	if (compat)
+		return repo_add_loose_object_map(loose, oid, &compat_oid);
+	return 0;
+}
+
 static void odb_source_loose_clear_cache(struct odb_source_loose *loose)
 {
 	oidtree_clear(loose->cache);
@@ -647,6 +690,7 @@ struct odb_source_loose *odb_source_loose_new(struct odb_source_files *files)
 	loose->base.find_abbrev_len = odb_source_loose_find_abbrev_len;
 	loose->base.count_objects = odb_source_loose_count_objects;
 	loose->base.freshen_object = odb_source_loose_freshen_object;
+	loose->base.write_object = odb_source_loose_write_object;
 
 	if (!is_absolute_path(loose->base.path))
 		chdir_notify_register(NULL, odb_source_loose_reparent, loose);

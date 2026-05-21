@@ -326,10 +326,10 @@ static void hash_object_body(const struct git_hash_algo *algo, struct git_hash_c
 	git_hash_final_oid(oid, c);
 }
 
-static void write_object_file_prepare(const struct git_hash_algo *algo,
-				      const void *buf, unsigned long len,
-				      enum object_type type, struct object_id *oid,
-				      char *hdr, int *hdrlen)
+void write_object_file_prepare(const struct git_hash_algo *algo,
+			       const void *buf, unsigned long len,
+			       enum object_type type, struct object_id *oid,
+			       char *hdr, int *hdrlen)
 {
 	struct git_hash_ctx c;
 
@@ -746,10 +746,10 @@ static int end_loose_object_common(struct odb_source *source,
 	return Z_OK;
 }
 
-static int write_loose_object(struct odb_source *source,
-			      const struct object_id *oid, char *hdr,
-			      int hdrlen, const void *buf, unsigned long len,
-			      time_t mtime, unsigned flags)
+int write_loose_object(struct odb_source *source,
+		       const struct object_id *oid, char *hdr,
+		       int hdrlen, const void *buf, unsigned long len,
+		       time_t mtime, unsigned flags)
 {
 	int fd, ret;
 	unsigned char compressed[4096];
@@ -924,48 +924,6 @@ cleanup:
 	strbuf_release(&tmp_file);
 	strbuf_release(&filename);
 	return err;
-}
-
-int odb_source_loose_write_object(struct odb_source *source,
-				  const void *buf, unsigned long len,
-				  enum object_type type, struct object_id *oid,
-				  struct object_id *compat_oid_in,
-				  enum odb_write_object_flags flags)
-{
-	struct odb_source_files *files = odb_source_files_downcast(source);
-	const struct git_hash_algo *algo = source->odb->repo->hash_algo;
-	const struct git_hash_algo *compat = source->odb->repo->compat_hash_algo;
-	struct object_id compat_oid;
-	char hdr[MAX_HEADER_LEN];
-	int hdrlen = sizeof(hdr);
-
-	/* Generate compat_oid */
-	if (compat) {
-		if (compat_oid_in)
-			oidcpy(&compat_oid, compat_oid_in);
-		else if (type == OBJ_BLOB)
-			hash_object_file(compat, buf, len, type, &compat_oid);
-		else {
-			struct strbuf converted = STRBUF_INIT;
-			convert_object_file(source->odb->repo, &converted, algo, compat,
-					    buf, len, type, 0);
-			hash_object_file(compat, converted.buf, converted.len,
-					 type, &compat_oid);
-			strbuf_release(&converted);
-		}
-	}
-
-	/* Normally if we have it in the pack then we do not bother writing
-	 * it out into .git/objects/??/?{38} file.
-	 */
-	write_object_file_prepare(algo, buf, len, type, oid, hdr, &hdrlen);
-	if (odb_freshen_object(source->odb, oid))
-		return 0;
-	if (write_loose_object(source, oid, hdr, hdrlen, buf, len, 0, flags))
-		return -1;
-	if (compat)
-		return repo_add_loose_object_map(files->loose, oid, &compat_oid);
-	return 0;
 }
 
 int force_object_loose(struct odb_source *source,
