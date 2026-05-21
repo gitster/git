@@ -145,7 +145,7 @@ static int bitmap_write(const char *basename)
 
 int cmd__bitmap(int argc, const char **argv)
 {
-	setup_git_directory();
+	setup_git_directory(the_repository);
 
 	if (argc == 2 && !strcmp(argv[1], "list-commits"))
 		return bitmap_list_commits();
