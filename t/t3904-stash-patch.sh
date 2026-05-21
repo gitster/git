@@ -84,6 +84,24 @@ test_expect_success 'none of this moved HEAD' '
 	verify_saved_head
 '
 
+test_expect_success 'stash -p with unmodified tracked files present' '
+	git reset --hard &&
+	echo line1 >alpha &&
+	echo line1 >beta &&
+	git add alpha beta &&
+	git commit -m "add alpha and beta" &&
+	echo line2 >>alpha &&
+	echo y | git stash -p &&
+	echo line1 >expect &&
+	test_cmp expect alpha &&
+	test_cmp expect beta &&
+	git stash pop &&
+	printf "line1\nline2\n" >expect &&
+	test_cmp expect alpha &&
+	echo line1 >expect &&
+	test_cmp expect beta
+'
+
 test_expect_success 'stash -p with split hunk' '
 	git reset --hard &&
 	cat >test <<-\EOF &&
