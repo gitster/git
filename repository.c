@@ -181,12 +181,6 @@ void repo_set_gitdir(struct repository *repo,
 	free(old_gitdir);
 
 	repo_set_commondir(repo, o->commondir);
-
-	if (!repo->objects)
-		repo->objects = odb_new(repo, o->object_dir, o->alternate_db);
-	else if (!o->skip_initializing_odb)
-		BUG("cannot reinitialize an already-initialized object directory");
-
 	repo->disable_ref_updates = o->disable_ref_updates;
 
 	expand_base_dir(&repo->graft_file, o->graft_file,
@@ -301,6 +295,8 @@ int repo_init(struct repository *repo,
 		warning("%s", err.buf);
 		goto error;
 	}
+
+	repo->objects = odb_new(repo, NULL, NULL);
 
 	if (worktree)
 		repo_set_worktree(repo, worktree);

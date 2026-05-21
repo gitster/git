@@ -1045,16 +1045,17 @@ static void setup_git_env_internal(struct repository *repo,
 	struct strvec to_free = STRVEC_INIT;
 
 	args.commondir = getenv_safe(&to_free, GIT_COMMON_DIR_ENVIRONMENT);
-	args.object_dir = getenv_safe(&to_free, DB_ENVIRONMENT);
 	args.graft_file = getenv_safe(&to_free, GRAFT_ENVIRONMENT);
 	args.index_file = getenv_safe(&to_free, INDEX_ENVIRONMENT);
-	args.alternate_db = getenv_safe(&to_free, ALTERNATE_DB_ENVIRONMENT);
 	if (getenv(GIT_QUARANTINE_ENVIRONMENT))
 		args.disable_ref_updates = true;
-	args.skip_initializing_odb = skip_initializing_odb;
 
 	repo_set_gitdir(repo, git_dir, &args);
 	strvec_clear(&to_free);
+
+	if (!skip_initializing_odb)
+		repo->objects = odb_new(repo, getenv_safe(&to_free, DB_ENVIRONMENT),
+					getenv_safe(&to_free, ALTERNATE_DB_ENVIRONMENT));
 
 	if (getenv(NO_REPLACE_OBJECTS_ENVIRONMENT))
 		disable_replace_refs();
