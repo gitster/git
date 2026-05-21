@@ -2041,14 +2041,6 @@ static struct oidtree *odb_source_loose_cache(struct odb_source *source,
 	return files->loose->cache;
 }
 
-static void odb_source_loose_clear_cache(struct odb_source_loose *loose)
-{
-	oidtree_clear(loose->cache);
-	FREE_AND_NULL(loose->cache);
-	memset(&loose->subdir_seen, 0,
-	       sizeof(loose->subdir_seen));
-}
-
 void odb_source_loose_reprepare(struct odb_source *source)
 {
 	struct odb_source_files *files = odb_source_files_downcast(source);
@@ -2203,15 +2195,6 @@ struct odb_transaction *odb_transaction_files_begin(struct odb_source *source)
 	transaction->base.write_object_stream = odb_transaction_files_write_object_stream;
 
 	return &transaction->base;
-}
-
-void odb_source_loose_free(struct odb_source_loose *loose)
-{
-	if (!loose)
-		return;
-	odb_source_loose_clear_cache(loose);
-	loose_object_map_clear(&loose->map);
-	free(loose);
 }
 
 struct odb_loose_read_stream {

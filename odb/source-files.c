@@ -27,7 +27,7 @@ static void odb_source_files_free(struct odb_source *source)
 {
 	struct odb_source_files *files = odb_source_files_downcast(source);
 	chdir_notify_unregister(NULL, odb_source_files_reparent, files);
-	odb_source_loose_free(files->loose);
+	odb_source_free(&files->loose->base);
 	packfile_store_free(files->packed);
 	odb_source_release(&files->base);
 	free(files);

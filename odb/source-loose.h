@@ -12,6 +12,7 @@ struct oidtree;
  * file per object. This source is part of the files source.
  */
 struct odb_source_loose {
+	struct odb_source base;
 	struct odb_source_files *files;
 
 	/*
@@ -31,5 +32,18 @@ struct odb_source_loose {
 };
 
 struct odb_source_loose *odb_source_loose_new(struct odb_source_files *files);
+
+/*
+ * Cast the given object database source to the loose backend. This will cause
+ * a BUG in case the source uses doesn't use this backend.
+ */
+static inline struct odb_source_loose *odb_source_loose_downcast(struct odb_source *source)
+{
+	if (source->type != ODB_SOURCE_LOOSE)
+		BUG("trying to downcast source of type '%d' to loose", source->type);
+	return container_of(source, struct odb_source_loose, base);
+}
+
+void odb_source_loose_clear_cache(struct odb_source_loose *loose);
 
 #endif
