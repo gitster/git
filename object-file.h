@@ -4,6 +4,7 @@
 #include "git-zlib.h"
 #include "object.h"
 #include "odb.h"
+#include "odb/source-loose.h"
 
 struct index_state;
 
@@ -20,26 +21,6 @@ struct object_info;
 struct odb_read_stream;
 struct odb_source;
 
-struct odb_source_loose {
-	struct odb_source *source;
-
-	/*
-	 * Used to store the results of readdir(3) calls when we are OK
-	 * sacrificing accuracy due to races for speed. That includes
-	 * object existence with OBJECT_INFO_QUICK, as well as
-	 * our search for unique abbreviated hashes. Don't use it for tasks
-	 * requiring greater accuracy!
-	 *
-	 * Be sure to call odb_load_loose_cache() before using.
-	 */
-	uint32_t subdir_seen[8]; /* 256 bits */
-	struct oidtree *cache;
-
-	/* Map between object IDs for loose objects. */
-	struct loose_object_map *map;
-};
-
-struct odb_source_loose *odb_source_loose_new(struct odb_source *source);
 void odb_source_loose_free(struct odb_source_loose *loose);
 
 /* Reprepare the loose source by emptying the loose object cache. */

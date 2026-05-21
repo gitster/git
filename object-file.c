@@ -2205,14 +2205,6 @@ struct odb_transaction *odb_transaction_files_begin(struct odb_source *source)
 	return &transaction->base;
 }
 
-struct odb_source_loose *odb_source_loose_new(struct odb_source *source)
-{
-	struct odb_source_loose *loose;
-	CALLOC_ARRAY(loose, 1);
-	loose->source = source;
-	return loose;
-}
-
 void odb_source_loose_free(struct odb_source_loose *loose)
 {
 	if (!loose)
