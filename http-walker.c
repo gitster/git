@@ -268,7 +268,7 @@ static void process_alternates_response(void *callback_data)
 				 */
 				const char *colon_ss = strstr(base,"://");
 				if (colon_ss) {
-					serverlen = (strchr(colon_ss + 3, '/')
+					serverlen = (strchrnul(colon_ss + 3, '/')
 						     - base);
 					okay = 1;
 				}
