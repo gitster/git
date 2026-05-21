@@ -645,6 +645,25 @@ static int odb_source_loose_write_object_stream(struct odb_source *source,
 	return odb_source_loose_write_stream(loose, in_stream, len, oid);
 }
 
+static int odb_source_loose_begin_transaction(struct odb_source *source UNUSED,
+					      struct odb_transaction **out UNUSED)
+{
+	/* TODO: this is a known omission that we'll want to address eventually. */
+	return error("loose source does not support transactions");
+}
+
+static int odb_source_loose_read_alternates(struct odb_source *source UNUSED,
+					    struct strvec *out UNUSED)
+{
+	return 0;
+}
+
+static int odb_source_loose_write_alternate(struct odb_source *source UNUSED,
+					    const char *alternate UNUSED)
+{
+	return error("loose source does not support alternates");
+}
+
 static void odb_source_loose_clear_cache(struct odb_source_loose *loose)
 {
 	oidtree_clear(loose->cache);
@@ -706,6 +725,9 @@ struct odb_source_loose *odb_source_loose_new(struct odb_source_files *files)
 	loose->base.freshen_object = odb_source_loose_freshen_object;
 	loose->base.write_object = odb_source_loose_write_object;
 	loose->base.write_object_stream = odb_source_loose_write_object_stream;
+	loose->base.begin_transaction = odb_source_loose_begin_transaction;
+	loose->base.read_alternates = odb_source_loose_read_alternates;
+	loose->base.write_alternate = odb_source_loose_write_alternate;
 
 	if (!is_absolute_path(loose->base.path))
 		chdir_notify_register(NULL, odb_source_loose_reparent, loose);
