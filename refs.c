@@ -2532,7 +2532,7 @@ int refs_update_symref_extended(struct ref_store *refs, const char *ref,
 	if (referent && refs_read_symbolic_ref(refs, ref, referent) == NOT_A_SYMREF) {
 		struct object_id oid;
 		if (!refs_read_ref(refs, ref, &oid)) {
-			strbuf_addstr(referent, oid_to_hex(&oid));
+			strbuf_add_oid_hex(referent, &oid);
 			ret = NOT_A_SYMREF;
 		}
 	}
