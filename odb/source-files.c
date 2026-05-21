@@ -7,6 +7,7 @@
 #include "odb.h"
 #include "odb/source.h"
 #include "odb/source-files.h"
+#include "odb/source-loose.h"
 #include "packfile.h"
 #include "strbuf.h"
 #include "write-or-die.h"
@@ -175,7 +176,7 @@ static int odb_source_files_write_object_stream(struct odb_source *source,
 						struct object_id *oid)
 {
 	struct odb_source_files *files = odb_source_files_downcast(source);
-	return odb_source_loose_write_stream(files->loose, stream, len, oid);
+	return odb_source_write_object_stream(&files->loose->base, stream, len, oid);
 }
 
 static int odb_source_files_begin_transaction(struct odb_source *source,

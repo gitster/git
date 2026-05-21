@@ -23,7 +23,17 @@ int index_path(struct index_state *istate, struct object_id *oid, const char *pa
 struct object_info;
 struct odb_source;
 
-int odb_source_loose_write_stream(struct odb_source_loose *loose,
+/*
+ * Write the given stream into the loose object source. The only difference to
+ * the generic implementation of this function is that we don't perform an
+ * object existence check here.
+ *
+ * TODO: We should stop exposing this function altogether and move it into
+ * "odb/source-loose.c". This requires a couple of refactorings though to make
+ * `force_object_loose()` generic and is thus postponed to a later point in
+ * time.
+ */
+int odb_source_loose_write_stream(struct odb_source_loose *source,
 				  struct odb_write_stream *stream, size_t len,
 				  struct object_id *oid);
 

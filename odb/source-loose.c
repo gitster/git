@@ -632,6 +632,19 @@ static int odb_source_loose_write_object(struct odb_source *source,
 	return 0;
 }
 
+static int odb_source_loose_write_object_stream(struct odb_source *source,
+						struct odb_write_stream *in_stream,
+						size_t len,
+						struct object_id *oid)
+{
+	/*
+	 * TODO: the implementation should be moved here, see the comment on
+	 * the called function in "object-file.h".
+	 */
+	struct odb_source_loose *loose = odb_source_loose_downcast(source);
+	return odb_source_loose_write_stream(loose, in_stream, len, oid);
+}
+
 static void odb_source_loose_clear_cache(struct odb_source_loose *loose)
 {
 	oidtree_clear(loose->cache);
@@ -692,6 +705,7 @@ struct odb_source_loose *odb_source_loose_new(struct odb_source_files *files)
 	loose->base.count_objects = odb_source_loose_count_objects;
 	loose->base.freshen_object = odb_source_loose_freshen_object;
 	loose->base.write_object = odb_source_loose_write_object;
+	loose->base.write_object_stream = odb_source_loose_write_object_stream;
 
 	if (!is_absolute_path(loose->base.path))
 		chdir_notify_register(NULL, odb_source_loose_reparent, loose);
