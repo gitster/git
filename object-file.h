@@ -21,11 +21,6 @@ struct object_info;
 struct odb_read_stream;
 struct odb_source;
 
-int odb_source_loose_read_object_info(struct odb_source *source,
-				      const struct object_id *oid,
-				      struct object_info *oi,
-				      enum object_info_flags flags);
-
 int odb_source_loose_read_object_stream(struct odb_read_stream **out,
 					struct odb_source *source,
 					const struct object_id *oid);
@@ -197,6 +192,12 @@ int read_loose_object(struct repository *repo,
 		      struct object_id *real_oid,
 		      void **contents,
 		      struct object_info *oi);
+
+int read_object_info_from_path(struct odb_source_loose *loose,
+			       const char *path,
+			       const struct object_id *oid,
+			       struct object_info *oi,
+			       enum object_info_flags flags);
 
 struct odb_transaction;
 

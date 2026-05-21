@@ -2,10 +2,33 @@
 #include "abspath.h"
 #include "chdir-notify.h"
 #include "loose.h"
+#include "object-file.h"
 #include "odb.h"
 #include "odb/source-files.h"
 #include "odb/source-loose.h"
 #include "oidtree.h"
+#include "strbuf.h"
+
+static int odb_source_loose_read_object_info(struct odb_source *source,
+					     const struct object_id *oid,
+					     struct object_info *oi,
+					     enum object_info_flags flags)
+{
+	struct odb_source_loose *loose = odb_source_loose_downcast(source);
+	static struct strbuf buf = STRBUF_INIT;
+
+	/*
+	 * The second read shouldn't cause new loose objects to show up, unless
+	 * there was a race condition with a secondary process. We don't care
+	 * about this case though, so we simply skip reading loose objects a
+	 * second time.
+	 */
+	if (flags & OBJECT_INFO_SECOND_READ)
+		return -1;
+
+	odb_loose_path(source, &buf, oid);
+	return read_object_info_from_path(loose, buf.buf, oid, oi, flags);
+}
 
 static void odb_source_loose_clear_cache(struct odb_source_loose *loose)
 {
@@ -60,6 +83,7 @@ struct odb_source_loose *odb_source_loose_new(struct odb_source_files *files)
 	loose->base.free = odb_source_loose_free;
 	loose->base.close = odb_source_loose_close;
 	loose->base.reprepare = odb_source_loose_reprepare;
+	loose->base.read_object_info = odb_source_loose_read_object_info;
 
 	if (!is_absolute_path(loose->base.path))
 		chdir_notify_register(NULL, odb_source_loose_reparent, loose);

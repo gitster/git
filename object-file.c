@@ -396,13 +396,12 @@ static int parse_loose_header(const char *hdr, struct object_info *oi)
 	return 0;
 }
 
-static int read_object_info_from_path(struct odb_source *source,
-				      const char *path,
-				      const struct object_id *oid,
-				      struct object_info *oi,
-				      enum object_info_flags flags)
+int read_object_info_from_path(struct odb_source_loose *loose,
+			       const char *path,
+			       const struct object_id *oid,
+			       struct object_info *oi,
+			       enum object_info_flags flags)
 {
-	struct odb_source_files *files = odb_source_files_downcast(source);
 	int ret;
 	int fd;
 	unsigned long mapsize;
@@ -425,7 +424,7 @@ static int read_object_info_from_path(struct odb_source *source,
 		struct stat st;
 
 		if ((!oi || (!oi->disk_sizep && !oi->mtimep)) && (flags & OBJECT_INFO_QUICK)) {
-			ret = quick_has_loose(files->loose, oid) ? 0 : -1;
+			ret = quick_has_loose(loose, oid) ? 0 : -1;
 			goto out;
 		}
 
@@ -532,32 +531,12 @@ out:
 		if (oi->typep == &type_scratch)
 			oi->typep = NULL;
 		if (oi->delta_base_oid)
-			oidclr(oi->delta_base_oid, source->odb->repo->hash_algo);
+			oidclr(oi->delta_base_oid, loose->base.odb->repo->hash_algo);
 		if (!ret)
 			oi->whence = OI_LOOSE;
 	}
 
 	return ret;
-}
-
-int odb_source_loose_read_object_info(struct odb_source *source,
-				      const struct object_id *oid,
-				      struct object_info *oi,
-				      enum object_info_flags flags)
-{
-	static struct strbuf buf = STRBUF_INIT;
-
-	/*
-	 * The second read shouldn't cause new loose objects to show up, unless
-	 * there was a race condition with a secondary process. We don't care
-	 * about this case though, so we simply skip reading loose objects a
-	 * second time.
-	 */
-	if (flags & OBJECT_INFO_SECOND_READ)
-		return -1;
-
-	odb_loose_path(source, &buf, oid);
-	return read_object_info_from_path(source, buf.buf, oid, oi, flags);
 }
 
 static void hash_object_body(const struct git_hash_algo *algo, struct git_hash_ctx *c,
@@ -1833,7 +1812,7 @@ int for_each_loose_file_in_source(struct odb_source *source,
 }
 
 struct for_each_object_wrapper_data {
-	struct odb_source *source;
+	struct odb_source_loose *loose;
 	const struct object_info *request;
 	odb_for_each_object_cb cb;
 	void *cb_data;
@@ -1848,7 +1827,7 @@ static int for_each_object_wrapper_cb(const struct object_id *oid,
 	if (data->request) {
 		struct object_info oi = *data->request;
 
-		if (read_object_info_from_path(data->source, path, oid, &oi, 0) < 0)
+		if (read_object_info_from_path(data->loose, path, oid, &oi, 0) < 0)
 			return -1;
 
 		return data->cb(oid, &oi, data->cb_data);
@@ -1865,8 +1844,8 @@ static int for_each_prefixed_object_wrapper_cb(const struct object_id *oid,
 	if (data->request) {
 		struct object_info oi = *data->request;
 
-		if (odb_source_loose_read_object_info(data->source,
-						      oid, &oi, 0) < 0)
+		if (odb_source_read_object_info(&data->loose->base,
+						oid, &oi, 0) < 0)
 			return -1;
 
 		return data->cb(oid, &oi, data->cb_data);
@@ -1881,8 +1860,9 @@ int odb_source_loose_for_each_object(struct odb_source *source,
 				     void *cb_data,
 				     const struct odb_for_each_object_options *opts)
 {
+	struct odb_source_files *files = odb_source_files_downcast(source);
 	struct for_each_object_wrapper_data data = {
-		.source = source,
+		.loose = files->loose,
 		.request = request,
 		.cb = cb,
 		.cb_data = cb_data,

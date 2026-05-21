@@ -55,7 +55,7 @@ static int odb_source_files_read_object_info(struct odb_source *source,
 	struct odb_source_files *files = odb_source_files_downcast(source);
 
 	if (!packfile_store_read_object_info(files->packed, oid, oi, flags) ||
-	    !odb_source_loose_read_object_info(source, oid, oi, flags))
+	    !odb_source_read_object_info(&files->loose->base, oid, oi, flags))
 		return 0;
 
 	return -1;
