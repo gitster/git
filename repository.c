@@ -291,12 +291,10 @@ int repo_init(struct repository *repo,
 	if (read_repository_format_from_commondir(&format, repo->commondir))
 		goto error;
 
-	if (apply_repository_format(repo, &format, &err) < 0) {
+	if (apply_repository_format(repo, &format, 0, &err) < 0) {
 		warning("%s", err.buf);
 		goto error;
 	}
-
-	repo->objects = odb_new(repo, NULL, NULL);
 
 	if (worktree)
 		repo_set_worktree(repo, worktree);

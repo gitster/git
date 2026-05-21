@@ -1752,12 +1752,22 @@ enum discovery_result discover_git_directory_reason(struct strbuf *commondir,
 
 int apply_repository_format(struct repository *repo,
 			    const struct repository_format *format,
+			    enum apply_repository_format_flags flags,
 			    struct strbuf *err)
 {
+	char *object_directory = NULL, *alternate_object_directories = NULL;
+
 	if (verify_repository_format(format, err) < 0)
 		return -1;
 
+	if (flags & APPLY_REPOSITORY_FORMAT_HONOR_ENV) {
+		object_directory = xstrdup_or_null(getenv(DB_ENVIRONMENT));
+		alternate_object_directories = xstrdup_or_null(getenv(ALTERNATE_DB_ENVIRONMENT));
+	}
+
 	repo_set_hash_algo(repo, format->hash_algo);
+	repo->objects = odb_new(repo, object_directory,
+				alternate_object_directories);
 	repo_set_compat_hash_algo(repo, format->compat_hash_algo);
 	repo_set_ref_storage_format(repo,
 				    format->ref_storage_format,
@@ -1773,6 +1783,8 @@ int apply_repository_format(struct repository *repo,
 	repo->repository_format_precious_objects =
 		format->precious_objects;
 
+	free(alternate_object_directories);
+	free(object_directory);
 	return 0;
 }
 
@@ -1785,7 +1797,8 @@ int apply_repository_format(struct repository *repo,
  * If successful and fmt is not NULL, fill fmt with data.
  */
 static void check_and_apply_repository_format(struct repository *repo,
-					      struct repository_format *fmt)
+					      struct repository_format *fmt,
+					      enum apply_repository_format_flags flags)
 {
 	struct repository_format repo_fmt = REPOSITORY_FORMAT_INIT;
 	struct strbuf err = STRBUF_INIT;
@@ -1794,7 +1807,7 @@ static void check_and_apply_repository_format(struct repository *repo,
 		fmt = &repo_fmt;
 
 	check_repository_format_gently(repo_get_git_dir(repo), fmt, NULL);
-	if (apply_repository_format(repo, fmt, &err) < 0)
+	if (apply_repository_format(repo, fmt, flags, &err) < 0)
 		die("%s", err.buf);
 	startup_info->have_repository = 1;
 
@@ -1874,15 +1887,9 @@ const char *enter_repo(struct repository *repo, const char *path, unsigned flags
 	}
 
 	if (is_git_directory(".")) {
-		struct strvec to_free = STRVEC_INIT;
-
 		set_git_dir(repo, ".", 0);
-		repo->objects = odb_new(repo,
-					getenv_safe(&to_free, DB_ENVIRONMENT),
-					getenv_safe(&to_free, ALTERNATE_DB_ENVIRONMENT));
-		check_and_apply_repository_format(repo, NULL);
-
-		strvec_clear(&to_free);
+		check_and_apply_repository_format(repo, NULL,
+						  APPLY_REPOSITORY_FORMAT_HONOR_ENV);
 		return path;
 	}
 
@@ -2034,8 +2041,6 @@ const char *setup_git_directory_gently(struct repository *repo, int *nongit_ok)
 	    startup_info->have_repository ||
 	    /* GIT_DIR_EXPLICIT */
 	    getenv(GIT_DIR_ENVIRONMENT)) {
-		struct strvec to_free = STRVEC_INIT;
-
 		if (!repo->gitdir) {
 			const char *gitdir = getenv(GIT_DIR_ENVIRONMENT);
 			if (!gitdir)
@@ -2046,17 +2051,13 @@ const char *setup_git_directory_gently(struct repository *repo, int *nongit_ok)
 		if (startup_info->have_repository) {
 			struct strbuf err = STRBUF_INIT;
 
-			repo->objects = odb_new(repo,
-						getenv_safe(&to_free, DB_ENVIRONMENT),
-						getenv_safe(&to_free, ALTERNATE_DB_ENVIRONMENT));
-			if (apply_repository_format(repo, &repo_fmt, &err) < 0)
+			if (apply_repository_format(repo, &repo_fmt,
+						    APPLY_REPOSITORY_FORMAT_HONOR_ENV, &err) < 0)
 				die("%s", err.buf);
 
 			clear_repository_format(&repo_fmt);
 			strbuf_release(&err);
 		}
-
-		strvec_clear(&to_free);
 	}
 	/*
 	 * Since precompose_string_if_needed() needs to look at
@@ -2805,7 +2806,6 @@ int init_db(struct repository *repo,
 	int exist_ok = flags & INIT_DB_EXIST_OK;
 	char *original_git_dir = real_pathdup(git_dir, 1);
 	struct repository_format repo_fmt = REPOSITORY_FORMAT_INIT;
-	struct strvec to_free = STRVEC_INIT;
 
 	if (real_git_dir) {
 		struct stat st;
@@ -2826,16 +2826,14 @@ int init_db(struct repository *repo,
 	}
 	startup_info->have_repository = 1;
 
-	repo->objects = odb_new(repo, getenv_safe(&to_free, DB_ENVIRONMENT),
-				getenv_safe(&to_free, ALTERNATE_DB_ENVIRONMENT));
-
 	/*
 	 * Check to see if the repository version is right.
 	 * Note that a newly created repository does not have
 	 * config file, so this will not fail.  What we are catching
 	 * is an attempt to reinitialize new repository with an old tool.
 	 */
-	check_and_apply_repository_format(repo, &repo_fmt);
+	check_and_apply_repository_format(repo, &repo_fmt,
+					  APPLY_REPOSITORY_FORMAT_HONOR_ENV);
 
 	repository_format_configure(repo, &repo_fmt, hash, ref_storage_format);
 
@@ -2892,7 +2890,6 @@ int init_db(struct repository *repo,
 	}
 
 	clear_repository_format(&repo_fmt);
-	strvec_clear(&to_free);
 	free(original_git_dir);
 	return 0;
 }
