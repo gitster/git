@@ -44,6 +44,4 @@ static inline struct odb_source_loose *odb_source_loose_downcast(struct odb_sour
 	return container_of(source, struct odb_source_loose, base);
 }
 
-void odb_source_loose_clear_cache(struct odb_source_loose *loose);
-
 #endif

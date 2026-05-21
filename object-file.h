@@ -21,9 +21,6 @@ struct object_info;
 struct odb_read_stream;
 struct odb_source;
 
-/* Reprepare the loose source by emptying the loose object cache. */
-void odb_source_loose_reprepare(struct odb_source *source);
-
 int odb_source_loose_read_object_info(struct odb_source *source,
 				      const struct object_id *oid,
 				      struct object_info *oi,

@@ -42,7 +42,7 @@ static void odb_source_files_close(struct odb_source *source)
 static void odb_source_files_reprepare(struct odb_source *source)
 {
 	struct odb_source_files *files = odb_source_files_downcast(source);
-	odb_source_loose_reprepare(&files->base);
+	odb_source_reprepare(&files->loose->base);
 	packfile_store_reprepare(files->packed);
 }
 

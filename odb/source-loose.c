@@ -7,12 +7,18 @@
 #include "odb/source-loose.h"
 #include "oidtree.h"
 
-void odb_source_loose_clear_cache(struct odb_source_loose *loose)
+static void odb_source_loose_clear_cache(struct odb_source_loose *loose)
 {
 	oidtree_clear(loose->cache);
 	FREE_AND_NULL(loose->cache);
 	memset(&loose->subdir_seen, 0,
 	       sizeof(loose->subdir_seen));
+}
+
+static void odb_source_loose_reprepare(struct odb_source *source)
+{
+	struct odb_source_loose *loose = odb_source_loose_downcast(source);
+	odb_source_loose_clear_cache(loose);
 }
 
 static void odb_source_loose_reparent(const char *name UNUSED,
@@ -47,6 +53,7 @@ struct odb_source_loose *odb_source_loose_new(struct odb_source_files *files)
 	loose->files = files;
 
 	loose->base.free = odb_source_loose_free;
+	loose->base.reprepare = odb_source_loose_reprepare;
 
 	if (!is_absolute_path(loose->base.path))
 		chdir_notify_register(NULL, odb_source_loose_reparent, loose);

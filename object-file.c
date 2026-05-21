@@ -2041,12 +2041,6 @@ static struct oidtree *odb_source_loose_cache(struct odb_source *source,
 	return files->loose->cache;
 }
 
-void odb_source_loose_reprepare(struct odb_source *source)
-{
-	struct odb_source_files *files = odb_source_files_downcast(source);
-	odb_source_loose_clear_cache(files->loose);
-}
-
 static int check_stream_oid(git_zstream *stream,
 			    const char *hdr,
 			    unsigned long size,
