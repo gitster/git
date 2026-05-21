@@ -96,12 +96,6 @@ static int check_and_freshen_source(struct odb_source *source,
 	return check_and_freshen_file(path.buf, freshen);
 }
 
-int odb_source_loose_has_object(struct odb_source *source,
-				const struct object_id *oid)
-{
-	return check_and_freshen_source(source, oid, 0);
-}
-
 int format_object_header(char *str, size_t size, enum object_type type,
 			 size_t objsize)
 {
@@ -1000,9 +994,11 @@ int force_object_loose(struct odb_source *source,
 	int hdrlen;
 	int ret;
 
-	for (struct odb_source *s = source->odb->sources; s; s = s->next)
-		if (odb_source_loose_has_object(s, oid))
+	for (struct odb_source *s = source->odb->sources; s; s = s->next) {
+		struct odb_source_files *files = odb_source_files_downcast(s);
+		if (!odb_source_read_object_info(&files->loose->base, oid, NULL, 0))
 			return 0;
+	}
 
 	oi.typep = &type;
 	oi.sizep = &len;

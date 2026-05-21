@@ -1750,9 +1750,11 @@ static int want_object_in_pack_mtime(const struct object_id *oid,
 		 * skip the local object source.
 		 */
 		struct odb_source *source = the_repository->objects->sources->next;
-		for (; source; source = source->next)
-			if (odb_source_loose_has_object(source, oid))
+		for (; source; source = source->next) {
+			struct odb_source_files *files = odb_source_files_downcast(source);
+			if (!odb_source_read_object_info(&files->loose->base, oid, NULL, 0))
 				return 0;
+		}
 	}
 
 	/*
@@ -4135,9 +4137,11 @@ static void add_cruft_object_entry(const struct object_id *oid, enum object_type
 			struct odb_source *source = the_repository->objects->sources;
 			int found = 0;
 
-			for (; !found && source; source = source->next)
-				if (odb_source_loose_has_object(source, oid))
+			for (; !found && source; source = source->next) {
+				struct odb_source_files *files = odb_source_files_downcast(source);
+				if (!odb_source_read_object_info(&files->loose->base, oid, NULL, 0))
 					found = 1;
+			}
 
 			/*
 			 * If a traversed tree has a missing blob then we want

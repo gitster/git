@@ -23,14 +23,6 @@ int index_path(struct index_state *istate, struct object_id *oid, const char *pa
 struct object_info;
 struct odb_source;
 
-/*
- * Return true iff an object database source has a loose object
- * with the specified name.  This function does not respect replace
- * references.
- */
-int odb_source_loose_has_object(struct odb_source *source,
-				const struct object_id *oid);
-
 int odb_source_loose_freshen_object(struct odb_source *source,
 				    const struct object_id *oid);
 
