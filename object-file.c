@@ -810,6 +810,7 @@ int odb_source_loose_write_stream(struct odb_source *source,
 				  struct odb_write_stream *in_stream, size_t len,
 				  struct object_id *oid)
 {
+	struct odb_source_files *files = odb_source_files_downcast(source);
 	const struct git_hash_algo *compat = source->odb->repo->compat_hash_algo;
 	struct object_id compat_oid;
 	int fd, ret, err = 0, flush = 0;
@@ -918,7 +919,7 @@ int odb_source_loose_write_stream(struct odb_source *source,
 	err = finalize_object_file_flags(source->odb->repo, tmp_file.buf, filename.buf,
 					 FOF_SKIP_COLLISION_CHECK);
 	if (!err && compat)
-		err = repo_add_loose_object_map(source, oid, &compat_oid);
+		err = repo_add_loose_object_map(files->loose, oid, &compat_oid);
 cleanup:
 	strbuf_release(&tmp_file);
 	strbuf_release(&filename);
@@ -931,6 +932,7 @@ int odb_source_loose_write_object(struct odb_source *source,
 				  struct object_id *compat_oid_in,
 				  enum odb_write_object_flags flags)
 {
+	struct odb_source_files *files = odb_source_files_downcast(source);
 	const struct git_hash_algo *algo = source->odb->repo->hash_algo;
 	const struct git_hash_algo *compat = source->odb->repo->compat_hash_algo;
 	struct object_id compat_oid;
@@ -962,13 +964,14 @@ int odb_source_loose_write_object(struct odb_source *source,
 	if (write_loose_object(source, oid, hdr, hdrlen, buf, len, 0, flags))
 		return -1;
 	if (compat)
-		return repo_add_loose_object_map(source, oid, &compat_oid);
+		return repo_add_loose_object_map(files->loose, oid, &compat_oid);
 	return 0;
 }
 
 int force_object_loose(struct odb_source *source,
 		       const struct object_id *oid, time_t mtime)
 {
+	struct odb_source_files *files = odb_source_files_downcast(source);
 	const struct git_hash_algo *compat = source->odb->repo->compat_hash_algo;
 	void *buf;
 	unsigned long len;
@@ -998,7 +1001,7 @@ int force_object_loose(struct odb_source *source,
 	hdrlen = format_object_header(hdr, sizeof(hdr), type, len);
 	ret = write_loose_object(source, oid, hdr, hdrlen, buf, len, mtime, 0);
 	if (!ret && compat)
-		ret = repo_add_loose_object_map(source, oid, &compat_oid);
+		ret = repo_add_loose_object_map(files->loose, oid, &compat_oid);
 	free(buf);
 
 	return ret;
