@@ -1074,11 +1074,6 @@ static void setup_git_env_internal(struct repository *repo,
 		fetch_if_missing = 0;
 }
 
-static void setup_git_env(struct repository *repo, const char *git_dir)
-{
-	setup_git_env_internal(repo, git_dir, false);
-}
-
 static void set_git_dir_1(struct repository *repo, const char *path, bool skip_initializing_odb)
 {
 	xsetenv(GIT_DIR_ENVIRONMENT, path, 1);
@@ -2023,7 +2018,7 @@ const char *setup_git_directory_gently(struct repository *repo, int *nongit_ok)
 			const char *gitdir = getenv(GIT_DIR_ENVIRONMENT);
 			if (!gitdir)
 				gitdir = DEFAULT_GIT_DIR_ENVIRONMENT;
-			setup_git_env(repo, gitdir);
+			setup_git_env_internal(repo, gitdir, false);
 		}
 		if (startup_info->have_repository) {
 			repo_set_hash_algo(repo, repo_fmt.hash_algo);
