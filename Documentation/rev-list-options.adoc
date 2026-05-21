@@ -23,7 +23,8 @@ ordering and formatting options, such as `--reverse`.
 
 `--since=<date>`::
 `--after=<date>`::
-	Show commits more recent than _<date>_.
+	Show commits more recent than _<date>_.  As a special case,
+	'today' means the last midnight.
 
 `--since-as-filter=<date>`::
 	Show all commits more recent than _<date>_. This visits
