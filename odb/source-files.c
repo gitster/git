@@ -136,7 +136,7 @@ static int odb_source_files_find_abbrev_len(struct odb_source *source,
 	if (ret < 0)
 		goto out;
 
-	ret = odb_source_loose_find_abbrev_len(source, oid, len, &len);
+	ret = odb_source_find_abbrev_len(&files->loose->base, oid, len, &len);
 	if (ret < 0)
 		goto out;
 
