@@ -4766,7 +4766,7 @@ static int add_objects_by_path(const char *path,
 	return 0;
 }
 
-static void get_object_list_path_walk(struct rev_info *revs)
+static int get_object_list_path_walk(struct rev_info *revs)
 {
 	struct path_walk_info info = PATH_WALK_INFO_INIT;
 	unsigned int processed = 0;
@@ -4789,8 +4789,9 @@ static void get_object_list_path_walk(struct rev_info *revs)
 	result = walk_objects_by_path(&info);
 	trace2_region_leave("pack-objects", "path-walk", revs->repo);
 
-	if (result)
-		die(_("failed to pack objects via path-walk"));
+	path_walk_info_clear(&info);
+
+	return result;
 }
 
 static void get_object_list(struct rev_info *revs, struct strvec *argv)
@@ -4854,8 +4855,13 @@ static void get_object_list(struct rev_info *revs, struct strvec *argv)
 		fn_show_object = show_object;
 
 	if (path_walk) {
-		get_object_list_path_walk(revs);
-	} else {
+		if (get_object_list_path_walk(revs)) {
+			warning(_("failed to pack objects via path-walk"));
+			path_walk = 0;
+		}
+	}
+
+	if (!path_walk) {
 		if (prepare_revision_walk(revs))
 			die(_("revision walk setup failed"));
 		mark_edges_uninteresting(revs, show_edge, sparse);
@@ -5191,7 +5197,7 @@ int cmd_pack_objects(int argc,
 
 	if (path_walk) {
 		const char *option = NULL;
-		if (filter_options.choice)
+		if (!path_walk_filter_compatible(&filter_options))
 			option = "--filter";
 		else if (use_delta_islands)
 			option = "--delta-islands";
@@ -5204,10 +5210,7 @@ int cmd_pack_objects(int argc,
 	}
 	if (path_walk) {
 		strvec_push(&rp, "--boundary");
-		 /*
-		  * We must disable the bitmaps because we are removing
-		  * the --objects / --objects-edge[-aggressive] options.
-		  */
+		strvec_push(&rp, "--objects");
 		use_bitmap_index = 0;
 	} else if (thin) {
 		use_internal_rev_list = 1;
