@@ -23,9 +23,6 @@ int index_path(struct index_state *istate, struct object_id *oid, const char *pa
 struct object_info;
 struct odb_source;
 
-int odb_source_loose_freshen_object(struct odb_source *source,
-				    const struct object_id *oid);
-
 int odb_source_loose_write_object(struct odb_source *source,
 				  const void *buf, unsigned long len,
 				  enum object_type type, struct object_id *oid,

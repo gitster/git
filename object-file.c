@@ -87,15 +87,6 @@ int check_and_freshen_file(const char *fn, int freshen)
 	return 1;
 }
 
-static int check_and_freshen_source(struct odb_source *source,
-				    const struct object_id *oid,
-				    int freshen)
-{
-	static struct strbuf path = STRBUF_INIT;
-	odb_loose_path(source, &path, oid);
-	return check_and_freshen_file(path.buf, freshen);
-}
-
 int format_object_header(char *str, size_t size, enum object_type type,
 			 size_t objsize)
 {
@@ -813,12 +804,6 @@ static int write_loose_object(struct odb_source *source,
 
 	return finalize_object_file_flags(source->odb->repo, tmp_file.buf, filename.buf,
 					  FOF_SKIP_COLLISION_CHECK);
-}
-
-int odb_source_loose_freshen_object(struct odb_source *source,
-				    const struct object_id *oid)
-{
-	return !!check_and_freshen_source(source, oid, 1);
 }
 
 int odb_source_loose_write_stream(struct odb_source *source,

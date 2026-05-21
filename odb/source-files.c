@@ -152,7 +152,7 @@ static int odb_source_files_freshen_object(struct odb_source *source,
 {
 	struct odb_source_files *files = odb_source_files_downcast(source);
 	if (packfile_store_freshen_object(files->packed, oid) ||
-	    odb_source_loose_freshen_object(source, oid))
+	    odb_source_freshen_object(&files->loose->base, oid))
 		return 1;
 	return 0;
 }

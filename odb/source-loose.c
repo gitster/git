@@ -580,6 +580,14 @@ out:
 	return ret;
 }
 
+static int odb_source_loose_freshen_object(struct odb_source *source,
+					   const struct object_id *oid)
+{
+	static struct strbuf path = STRBUF_INIT;
+	odb_loose_path(source, &path, oid);
+	return !!check_and_freshen_file(path.buf, 1);
+}
+
 static void odb_source_loose_clear_cache(struct odb_source_loose *loose)
 {
 	oidtree_clear(loose->cache);
@@ -638,6 +646,7 @@ struct odb_source_loose *odb_source_loose_new(struct odb_source_files *files)
 	loose->base.for_each_object = odb_source_loose_for_each_object;
 	loose->base.find_abbrev_len = odb_source_loose_find_abbrev_len;
 	loose->base.count_objects = odb_source_loose_count_objects;
+	loose->base.freshen_object = odb_source_loose_freshen_object;
 
 	if (!is_absolute_path(loose->base.path))
 		chdir_notify_register(NULL, odb_source_loose_reparent, loose);
