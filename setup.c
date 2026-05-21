@@ -1035,8 +1035,7 @@ cleanup_return:
 }
 
 static void setup_git_env_internal(struct repository *repo,
-				   const char *git_dir,
-				   bool skip_initializing_odb)
+				   const char *git_dir)
 {
 	char *git_replace_ref_base;
 	const char *shallow_file;
@@ -1053,10 +1052,6 @@ static void setup_git_env_internal(struct repository *repo,
 	repo_set_gitdir(repo, git_dir, &args);
 	strvec_clear(&to_free);
 
-	if (!skip_initializing_odb)
-		repo->objects = odb_new(repo, getenv_safe(&to_free, DB_ENVIRONMENT),
-					getenv_safe(&to_free, ALTERNATE_DB_ENVIRONMENT));
-
 	if (getenv(NO_REPLACE_OBJECTS_ENVIRONMENT))
 		disable_replace_refs();
 	replace_ref_base = getenv(GIT_REPLACE_REF_BASE_ENVIRONMENT);
@@ -1072,10 +1067,10 @@ static void setup_git_env_internal(struct repository *repo,
 		fetch_if_missing = 0;
 }
 
-static void set_git_dir_1(struct repository *repo, const char *path, bool skip_initializing_odb)
+static void set_git_dir_1(struct repository *repo, const char *path)
 {
 	xsetenv(GIT_DIR_ENVIRONMENT, path, 1);
-	setup_git_env_internal(repo, path, skip_initializing_odb);
+	setup_git_env_internal(repo, path);
 }
 
 static void update_relative_gitdir(const char *name UNUSED,
@@ -1089,7 +1084,7 @@ static void update_relative_gitdir(const char *name UNUSED,
 	trace_printf_key(&trace_setup_key,
 			 "setup: move $GIT_DIR to '%s'",
 			 path);
-	set_git_dir_1(repo, path, true);
+	set_git_dir_1(repo, path);
 	free(path);
 }
 
@@ -1102,7 +1097,7 @@ static void set_git_dir(struct repository *repo, const char *path, int make_real
 		path = realpath.buf;
 	}
 
-	set_git_dir_1(repo, path, false);
+	set_git_dir_1(repo, path);
 	if (!is_absolute_path(path))
 		chdir_notify_register(NULL, update_relative_gitdir, repo);
 
@@ -1879,8 +1874,15 @@ const char *enter_repo(struct repository *repo, const char *path, unsigned flags
 	}
 
 	if (is_git_directory(".")) {
+		struct strvec to_free = STRVEC_INIT;
+
 		set_git_dir(repo, ".", 0);
+		repo->objects = odb_new(repo,
+					getenv_safe(&to_free, DB_ENVIRONMENT),
+					getenv_safe(&to_free, ALTERNATE_DB_ENVIRONMENT));
 		check_and_apply_repository_format(repo, NULL);
+
+		strvec_clear(&to_free);
 		return path;
 	}
 
@@ -2032,12 +2034,18 @@ const char *setup_git_directory_gently(struct repository *repo, int *nongit_ok)
 	    startup_info->have_repository ||
 	    /* GIT_DIR_EXPLICIT */
 	    getenv(GIT_DIR_ENVIRONMENT)) {
+		struct strvec to_free = STRVEC_INIT;
+
 		if (!repo->gitdir) {
 			const char *gitdir = getenv(GIT_DIR_ENVIRONMENT);
 			if (!gitdir)
 				gitdir = DEFAULT_GIT_DIR_ENVIRONMENT;
-			setup_git_env_internal(repo, gitdir, false);
+			setup_git_env_internal(repo, gitdir);
 		}
+
+		repo->objects = odb_new(repo,
+					getenv_safe(&to_free, DB_ENVIRONMENT),
+					getenv_safe(&to_free, ALTERNATE_DB_ENVIRONMENT));
 
 		if (startup_info->have_repository) {
 			struct strbuf err = STRBUF_INIT;
@@ -2048,6 +2056,8 @@ const char *setup_git_directory_gently(struct repository *repo, int *nongit_ok)
 			clear_repository_format(&repo_fmt);
 			strbuf_release(&err);
 		}
+
+		strvec_clear(&to_free);
 	}
 	/*
 	 * Since precompose_string_if_needed() needs to look at
@@ -2796,6 +2806,7 @@ int init_db(struct repository *repo,
 	int exist_ok = flags & INIT_DB_EXIST_OK;
 	char *original_git_dir = real_pathdup(git_dir, 1);
 	struct repository_format repo_fmt = REPOSITORY_FORMAT_INIT;
+	struct strvec to_free = STRVEC_INIT;
 
 	if (real_git_dir) {
 		struct stat st;
@@ -2815,6 +2826,9 @@ int init_db(struct repository *repo,
 		git_dir = repo_get_git_dir(repo);
 	}
 	startup_info->have_repository = 1;
+
+	repo->objects = odb_new(repo, getenv_safe(&to_free, DB_ENVIRONMENT),
+				getenv_safe(&to_free, ALTERNATE_DB_ENVIRONMENT));
 
 	/*
 	 * Check to see if the repository version is right.
@@ -2879,6 +2893,7 @@ int init_db(struct repository *repo,
 	}
 
 	clear_repository_format(&repo_fmt);
+	strvec_clear(&to_free);
 	free(original_git_dir);
 	return 0;
 }
