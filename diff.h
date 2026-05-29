@@ -173,7 +173,9 @@ struct diff_flags {
 	 */
 	unsigned allow_external;
 
-	/** Disables diff.<driver>.process. */
+	/**
+	 * Disables diff.<driver>.process.  Set by --no-ext-diff.
+	 */
 	unsigned no_diff_process;
 
 	/**
