@@ -12,7 +12,6 @@ test_fetch_bitmaps () {
 
 	test_expect_success 'create bitmapped server repo' '
 		git config pack.writebitmaps true &&
-		git config pack.writeBitmapLookupTable '"$1"' &&
 		git repack -ad
 	'
 
@@ -32,7 +31,7 @@ test_fetch_bitmaps () {
 			} >revs
 		'
 
-		test_perf "server $title (lookup=$1)" '
+		test_perf "server $title" '
 			git pack-objects --stdout --revs \
 					--thin --delta-base-offset \
 					<revs >tmp.pack
@@ -42,13 +41,12 @@ test_fetch_bitmaps () {
 			test_file_size tmp.pack
 		'
 
-		test_perf "client $title (lookup=$1)" '
+		test_perf "client $title" '
 			git index-pack --stdin --fix-thin <tmp.pack
 		'
 	done
 }
 
-test_fetch_bitmaps true
-test_fetch_bitmaps false
+test_fetch_bitmaps
 
 test_done
