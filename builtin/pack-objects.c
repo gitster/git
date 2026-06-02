@@ -4747,13 +4747,29 @@ static int add_objects_by_path(const char *path,
 
 		add_object_entry(oid, type, path, exclude);
 
-		if (type == OBJ_COMMIT && write_bitmap_index) {
+		if (type == OBJ_COMMIT) {
 			struct commit *commit;
+
+			if (!write_bitmap_index && !use_delta_islands)
+				continue;
 
 			commit = lookup_commit(the_repository, oid);
 			if (!commit)
 				die(_("could not find commit %s"), oid_to_hex(oid));
-			index_commit_for_bitmap(commit);
+			if (write_bitmap_index)
+				index_commit_for_bitmap(commit);
+			/*
+			 * Skip island propagation for boundary commits.
+			 * The regular traversal's show_commit() is only
+			 * called for interesting commits; matching that
+			 * here keeps path-walk from doing extra work that
+			 * would only be a no-op anyway (boundary commits
+			 * are not in island_marks).
+			 */
+			if (use_delta_islands && !exclude)
+				propagate_island_marks(the_repository, commit);
+		} else if (type == OBJ_TREE && use_delta_islands) {
+			record_tree_depth(oid, path);
 		}
 	}
 
@@ -5215,8 +5231,6 @@ int cmd_pack_objects(int argc,
 		const char *option = NULL;
 		if (!path_walk_filter_compatible(&filter_options))
 			option = "--filter";
-		else if (use_delta_islands)
-			option = "--delta-islands";
 
 		if (option) {
 			warning(_("cannot use %s with %s"),
