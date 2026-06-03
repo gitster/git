@@ -21,6 +21,12 @@ enum reset_head_flags {
 
 	/* Update ORIG_HEAD as well as HEAD */
 	RESET_HEAD_ORIG_HEAD = (1 << 4),
+
+	/*
+	 * Perform a dry-run by performing the operation without updating
+	 * any user-visible state.
+	 */
+	RESET_HEAD_DRY_RUN = (1 << 5),
 };
 
 struct reset_head_opts {
