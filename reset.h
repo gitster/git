@@ -27,6 +27,9 @@ enum reset_head_flags {
 	 * any user-visible state.
 	 */
 	RESET_HEAD_DRY_RUN = (1 << 5),
+
+	/* Skip updating any references, only update the worktree and index. */
+	RESET_HEAD_SKIP_REF_UPDATES = (1 << 6),
 };
 
 struct reset_head_opts {

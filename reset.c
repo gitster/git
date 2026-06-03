@@ -93,6 +93,7 @@ int reset_head(struct repository *r, const struct reset_head_opts *opts)
 	unsigned refs_only = opts->flags & RESET_HEAD_REFS_ONLY;
 	unsigned update_orig_head = opts->flags & RESET_HEAD_ORIG_HEAD;
 	unsigned dry_run = opts->flags & RESET_HEAD_DRY_RUN;
+	unsigned skip_ref_updates = opts->flags & RESET_HEAD_SKIP_REF_UPDATES;
 	struct object_id *head = NULL, head_oid;
 	struct tree_desc desc[2] = { { NULL }, { NULL } };
 	struct lock_file lock = LOCK_INIT;
@@ -111,6 +112,9 @@ int reset_head(struct repository *r, const struct reset_head_opts *opts)
 
 	if (opts->branch_msg && !opts->branch)
 		BUG("branch reflog message given without a branch");
+
+	if (skip_ref_updates && (opts->branch || refs_only))
+		BUG("asked to perform ref updates and skip them at the same time");
 
 	if (!refs_only && !dry_run && repo_hold_locked_index(r, &lock, LOCK_REPORT_ON_ERROR) < 0) {
 		ret = -1;
@@ -196,7 +200,8 @@ int reset_head(struct repository *r, const struct reset_head_opts *opts)
 		goto leave_reset_head;
 	}
 
-	if (oid != &head_oid || update_orig_head || switch_to_branch)
+	if (!skip_ref_updates &&
+	    (oid != &head_oid || update_orig_head || switch_to_branch))
 		ret = update_refs(r, opts, oid, head);
 
 leave_reset_head:
