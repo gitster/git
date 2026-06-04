@@ -88,7 +88,7 @@ static int odb_source_files_for_each_object(struct odb_source *source,
 			return ret;
 	}
 
-	ret = packfile_store_for_each_object(files->packed, request, cb, cb_data, opts);
+	ret = odb_source_for_each_object(&files->packed->base, request, cb, cb_data, opts);
 	if (ret)
 		return ret;
 

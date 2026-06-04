@@ -239,21 +239,6 @@ int for_each_object_in_pack(struct packed_git *p,
 			    each_packed_object_fn, void *data,
 			    enum odb_for_each_object_flags flags);
 
-/*
- * Iterate through all packed objects in the given packfile store and invoke
- * the callback function for each of them. If an object info request is given,
- * then the object info will be read for every individual object and passed to
- * the callback as if `packfile_store_read_object_info()` was called for the
- * object.
- *
- * The flags parameter is a combination of `odb_for_each_object_flags`.
- */
-int packfile_store_for_each_object(struct odb_source_packed *store,
-				   const struct object_info *request,
-				   odb_for_each_object_cb cb,
-				   void *cb_data,
-				   const struct odb_for_each_object_options *opts);
-
 int packfile_store_find_abbrev_len(struct odb_source_packed *store,
 				   const struct object_id *oid,
 				   unsigned min_len,
@@ -366,6 +351,8 @@ extern int do_check_packed_object_crc;
  */
 int packed_object_info(struct packed_git *pack,
 		       off_t offset, struct object_info *);
+int packed_object_info_with_index_pos(struct packed_git *p, off_t obj_offset,
+				      uint32_t *maybe_index_pos, struct object_info *oi);
 
 void mark_bad_packed_object(struct packed_git *, const struct object_id *);
 const struct packed_git *has_packed_and_bad(struct repository *, const struct object_id *);
