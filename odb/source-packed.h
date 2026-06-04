@@ -18,7 +18,6 @@ struct packfile_list_entry {
  */
 struct odb_source_packed {
 	struct odb_source base;
-	struct odb_source_files *files;
 
 	/*
 	 * The list of packfiles in the order in which they have been most
@@ -74,9 +73,11 @@ struct odb_source_packed {
 
 /*
  * Allocate and initialize a new empty packfile store for the given object
- * database source.
+ * database.
  */
-struct odb_source_packed *odb_source_packed_new(struct odb_source_files *parent);
+struct odb_source_packed *odb_source_packed_new(struct object_database *odb,
+						const char *path,
+						bool local);
 
 /*
  * Cast the given object database source to the packed backend. This will cause

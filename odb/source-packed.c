@@ -585,7 +585,7 @@ static void report_pack_garbage(struct string_list *list)
 }
 
 struct prepare_pack_data {
-	struct odb_source *source;
+	struct odb_source_packed *source;
 	struct string_list *garbage;
 };
 
@@ -593,15 +593,14 @@ static void prepare_pack(const char *full_name, size_t full_name_len,
 			 const char *file_name, void *_data)
 {
 	struct prepare_pack_data *data = (struct prepare_pack_data *)_data;
-	struct odb_source_files *files = odb_source_files_downcast(data->source);
 	size_t base_len = full_name_len;
 
 	if (strip_suffix_mem(full_name, &base_len, ".idx") &&
-	    !(files->packed->midx &&
-	      midx_contains_pack(files->packed->midx, file_name))) {
+	    !(data->source->midx &&
+	      midx_contains_pack(data->source->midx, file_name))) {
 		char *trimmed_path = xstrndup(full_name, full_name_len);
-		packfile_store_load_pack(files->packed,
-					 trimmed_path, data->source->local);
+		packfile_store_load_pack(data->source,
+					 trimmed_path, data->source->base.local);
 		free(trimmed_path);
 	}
 
@@ -626,7 +625,7 @@ static void prepare_pack(const char *full_name, size_t full_name_len,
 		report_garbage(PACKDIR_FILE_GARBAGE, full_name);
 }
 
-static void prepare_packed_git_one(struct odb_source *source)
+static void prepare_packed_git_one(struct odb_source_packed *source)
 {
 	struct string_list garbage = STRING_LIST_INIT_DUP;
 	struct prepare_pack_data data = {
@@ -634,7 +633,7 @@ static void prepare_packed_git_one(struct odb_source *source)
 		.garbage = &garbage,
 	};
 
-	for_each_file_in_pack_dir(source->path, prepare_pack, &data);
+	for_each_file_in_pack_dir(source->base.path, prepare_pack, &data);
 
 	report_pack_garbage(data.garbage);
 	string_list_clear(data.garbage, 0);
@@ -675,7 +674,7 @@ void odb_source_packed_prepare(struct odb_source_packed *source)
 		return;
 
 	prepare_multi_pack_index_one(source);
-	prepare_packed_git_one(&source->files->base);
+	prepare_packed_git_one(source);
 
 	sort_packs(&source->packs.head, sort_pack);
 	for (struct packfile_list_entry *e = source->packs.head; e; e = e->next)
@@ -733,14 +732,14 @@ static void odb_source_packed_free(struct odb_source *source)
 	free(packed);
 }
 
-struct odb_source_packed *odb_source_packed_new(struct odb_source_files *parent)
+struct odb_source_packed *odb_source_packed_new(struct object_database *odb,
+						const char *path,
+						bool local)
 {
 	struct odb_source_packed *packed;
 
 	CALLOC_ARRAY(packed, 1);
-	odb_source_init(&packed->base, parent->base.odb, ODB_SOURCE_PACKED,
-			parent->base.path, parent->base.local);
-	packed->files = parent;
+	odb_source_init(&packed->base, odb, ODB_SOURCE_PACKED, path, local);
 	strmap_init(&packed->packs_by_path);
 
 	packed->base.free = odb_source_packed_free;
@@ -758,7 +757,7 @@ struct odb_source_packed *odb_source_packed_new(struct odb_source_files *parent)
 	packed->base.read_alternates = odb_source_packed_read_alternates;
 	packed->base.write_alternate = odb_source_packed_write_alternate;
 
-	if (!is_absolute_path(parent->base.path))
+	if (!is_absolute_path(path))
 		chdir_notify_register(NULL, odb_source_packed_reparent, packed);
 
 	return packed;
