@@ -141,17 +141,6 @@ int packfile_store_read_object_stream(struct odb_read_stream **out,
 				      const struct object_id *oid);
 
 /*
- * Try to read the object identified by its ID from the object store and
- * populate the object info with its data. Returns 1 in case the object was
- * not found, 0 if it was and read successfully, and a negative error code in
- * case the object was corrupted.
- */
-int packfile_store_read_object_info(struct odb_source_packed *store,
-				    const struct object_id *oid,
-				    struct object_info *oi,
-				    enum object_info_flags flags);
-
-/*
  * Open the packfile and add it to the store if it isn't yet known. Returns
  * either the newly opened packfile or the preexisting packfile. Returns a
  * `NULL` pointer in case the packfile could not be opened.
@@ -351,6 +340,10 @@ off_t nth_packed_object_offset(const struct packed_git *, uint32_t n);
  * return its offset within the packfile; otherwise, return 0.
  */
 off_t find_pack_entry_one(const struct object_id *oid, struct packed_git *);
+
+int packfile_fill_entry(struct packed_git *p,
+			const struct object_id *oid,
+			struct pack_entry *e);
 
 int is_pack_valid(struct packed_git *);
 void *unpack_entry(struct repository *r, struct packed_git *, off_t, enum object_type *, unsigned long *);

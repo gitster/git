@@ -7,6 +7,65 @@
 #include "odb/source-packed.h"
 #include "packfile.h"
 
+int find_pack_entry(struct odb_source_packed *store,
+		    const struct object_id *oid,
+		    struct pack_entry *e)
+{
+	struct packfile_list_entry *l;
+
+	odb_source_packed_prepare(store);
+	if (store->midx && fill_midx_entry(store->midx, oid, e))
+		return 1;
+
+	for (l = store->packs.head; l; l = l->next) {
+		struct packed_git *p = l->pack;
+
+		if (!p->multi_pack_index && packfile_fill_entry(p, oid, e)) {
+			if (!store->skip_mru_updates)
+				packfile_list_prepend(&store->packs, p);
+			return 1;
+		}
+	}
+
+	return 0;
+}
+
+static int odb_source_packed_read_object_info(struct odb_source *source,
+					      const struct object_id *oid,
+					      struct object_info *oi,
+					      enum object_info_flags flags)
+{
+	struct odb_source_packed *packed = odb_source_packed_downcast(source);
+	struct pack_entry e;
+	int ret;
+
+	/*
+	 * In case the first read didn't surface the object, we have to reload
+	 * packfiles. This may cause us to discover new packfiles that have
+	 * been added since the last time we have prepared the packfile store.
+	 */
+	if (flags & OBJECT_INFO_SECOND_READ)
+		odb_source_reprepare(source);
+
+	if (!find_pack_entry(packed, oid, &e))
+		return 1;
+
+	/*
+	 * We know that the caller doesn't actually need the
+	 * information below, so return early.
+	 */
+	if (!oi)
+		return 0;
+
+	ret = packed_object_info(e.p, e.offset, oi);
+	if (ret < 0) {
+		mark_bad_packed_object(e.p, oid);
+		return -1;
+	}
+
+	return 0;
+}
+
 void (*report_garbage)(unsigned seen_bits, const char *path);
 
 static void report_helper(const struct string_list *list,
@@ -215,6 +274,7 @@ struct odb_source_packed *odb_source_packed_new(struct odb_source_files *parent)
 	packed->base.free = odb_source_packed_free;
 	packed->base.close = odb_source_packed_close;
 	packed->base.reprepare = odb_source_packed_reprepare;
+	packed->base.read_object_info = odb_source_packed_read_object_info;
 
 	if (!is_absolute_path(parent->base.path))
 		chdir_notify_register(NULL, odb_source_packed_reparent, packed);

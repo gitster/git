@@ -1978,9 +1978,9 @@ int is_pack_valid(struct packed_git *p)
 	return !open_packed_git(p);
 }
 
-static int fill_pack_entry(const struct object_id *oid,
-			   struct pack_entry *e,
-			   struct packed_git *p)
+int packfile_fill_entry(struct packed_git *p,
+			const struct object_id *oid,
+			struct pack_entry *e)
 {
 	off_t offset;
 
@@ -2006,29 +2006,6 @@ static int fill_pack_entry(const struct object_id *oid,
 	return 1;
 }
 
-static int find_pack_entry(struct odb_source_packed *store,
-			   const struct object_id *oid,
-			   struct pack_entry *e)
-{
-	struct packfile_list_entry *l;
-
-	odb_source_packed_prepare(store);
-	if (store->midx && fill_midx_entry(store->midx, oid, e))
-		return 1;
-
-	for (l = store->packs.head; l; l = l->next) {
-		struct packed_git *p = l->pack;
-
-		if (!p->multi_pack_index && fill_pack_entry(oid, e, p)) {
-			if (!store->skip_mru_updates)
-				packfile_list_prepend(&store->packs, p);
-			return 1;
-		}
-	}
-
-	return 0;
-}
-
 int packfile_store_freshen_object(struct odb_source_packed *store,
 				  const struct object_id *oid)
 {
@@ -2043,41 +2020,6 @@ int packfile_store_freshen_object(struct odb_source_packed *store,
 		return 0;
 	e.p->freshened = 1;
 	return 1;
-}
-
-int packfile_store_read_object_info(struct odb_source_packed *store,
-				    const struct object_id *oid,
-				    struct object_info *oi,
-				    enum object_info_flags flags)
-{
-	struct pack_entry e;
-	int ret;
-
-	/*
-	 * In case the first read didn't surface the object, we have to reload
-	 * packfiles. This may cause us to discover new packfiles that have
-	 * been added since the last time we have prepared the packfile store.
-	 */
-	if (flags & OBJECT_INFO_SECOND_READ)
-		odb_source_reprepare(&store->base);
-
-	if (!find_pack_entry(store, oid, &e))
-		return 1;
-
-	/*
-	 * We know that the caller doesn't actually need the
-	 * information below, so return early.
-	 */
-	if (!oi)
-		return 0;
-
-	ret = packed_object_info(e.p, e.offset, oi);
-	if (ret < 0) {
-		mark_bad_packed_object(e.p, oid);
-		return -1;
-	}
-
-	return 0;
 }
 
 static void maybe_invalidate_kept_pack_cache(struct odb_source_packed *store,
@@ -2136,7 +2078,7 @@ int has_object_pack(struct repository *r, const struct object_id *oid)
 	odb_prepare_alternates(r->objects);
 	for (source = r->objects->sources; source; source = source->next) {
 		struct odb_source_files *files = odb_source_files_downcast(source);
-		if (!packfile_store_read_object_info(files->packed, oid, NULL, 0))
+		if (!odb_source_read_object_info(&files->packed->base, oid, NULL, 0))
 			return 1;
 	}
 
@@ -2157,7 +2099,7 @@ int has_object_kept_pack(struct repository *r, const struct object_id *oid,
 
 		for (; *cache; cache++) {
 			struct packed_git *p = *cache;
-			if (fill_pack_entry(oid, &e, p))
+			if (packfile_fill_entry(p, oid, &e))
 				return 1;
 		}
 	}
@@ -2291,8 +2233,8 @@ static int for_each_prefixed_object_in_midx(
 			if (data->request) {
 				struct object_info oi = *data->request;
 
-				ret = packfile_store_read_object_info(store, current,
-								      &oi, 0);
+				ret = odb_source_read_object_info(&store->base, current,
+								  &oi, 0);
 				if (ret)
 					goto out;
 
@@ -2342,7 +2284,7 @@ static int for_each_prefixed_object_in_pack(
 		if (data->request) {
 			struct object_info oi = *data->request;
 
-			ret = packfile_store_read_object_info(store, &oid, &oi, 0);
+			ret = odb_source_read_object_info(&store->base, &oid, &oi, 0);
 			if (ret)
 				goto out;
 
