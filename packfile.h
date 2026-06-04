@@ -5,9 +5,9 @@
 #include "object.h"
 #include "odb.h"
 #include "odb/source-files.h"
+#include "odb/source-packed.h"
 #include "oidset.h"
 #include "repository.h"
-#include "strmap.h"
 
 /* in odb.h */
 struct object_info;
@@ -54,15 +54,6 @@ struct packed_git {
 	char pack_name[FLEX_ARRAY]; /* more */
 };
 
-struct packfile_list {
-	struct packfile_list_entry *head, *tail;
-};
-
-struct packfile_list_entry {
-	struct packfile_list_entry *next;
-	struct packed_git *pack;
-};
-
 void packfile_list_clear(struct packfile_list *list);
 void packfile_list_remove(struct packfile_list *list, struct packed_git *pack);
 void packfile_list_prepend(struct packfile_list *list, struct packed_git *pack);
@@ -75,70 +66,6 @@ void packfile_list_append(struct packfile_list *list, struct packed_git *pack);
  */
 struct packed_git *packfile_list_find_oid(struct packfile_list_entry *packs,
 					  const struct object_id *oid);
-
-/*
- * A store that manages packfiles for a given object database.
- */
-struct odb_source_packed {
-	struct odb_source *source;
-
-	/*
-	 * The list of packfiles in the order in which they have been most
-	 * recently used.
-	 */
-	struct packfile_list packs;
-
-	/*
-	 * Cache of packfiles which are marked as "kept", either because there
-	 * is an on-disk ".keep" file or because they are marked as "kept" in
-	 * memory.
-	 *
-	 * Should not be accessed directly, but via
-	 * `packfile_store_get_kept_pack_cache()`. The list of packs gets
-	 * invalidated when the stored flags and the flags passed to
-	 * `packfile_store_get_kept_pack_cache()` mismatch.
-	 */
-	struct {
-		struct packed_git **packs;
-		unsigned flags;
-	} kept_cache;
-
-	/* The multi-pack index that belongs to this specific packfile store. */
-	struct multi_pack_index *midx;
-
-	/*
-	 * A map of packfile names to packed_git structs for tracking which
-	 * packs have been loaded already.
-	 */
-	struct strmap packs_by_path;
-
-	/*
-	 * Whether packfiles have already been populated with this store's
-	 * packs.
-	 */
-	bool initialized;
-
-	/*
-	 * Usually, packfiles will be reordered to the front of the `packs`
-	 * list whenever an object is looked up via them. This has the effect
-	 * that packs that contain a lot of accessed objects will be located
-	 * towards the front.
-	 *
-	 * This is usually desireable, but there are exceptions. One exception
-	 * is when the looking up multiple objects in a loop for each packfile.
-	 * In that case, we may easily end up with an infinite loop as the
-	 * packfiles get reordered to the front repeatedly.
-	 *
-	 * Setting this field to `true` thus disables these reorderings.
-	 */
-	bool skip_mru_updates;
-};
-
-/*
- * Allocate and initialize a new empty packfile store for the given object
- * database source.
- */
-struct odb_source_packed *packfile_store_new(struct odb_source *source);
 
 /*
  * Free the packfile store and all its associated state. All packfiles
