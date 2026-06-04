@@ -136,8 +136,8 @@ static int for_each_prefixed_object_in_midx(
 
 	for (; m; m = m->base_midx) {
 		uint32_t num, i, first = 0;
-		int len = opts->prefix_hex_len > m->source->odb->repo->hash_algo->hexsz ?
-			m->source->odb->repo->hash_algo->hexsz : opts->prefix_hex_len;
+		int len = opts->prefix_hex_len > m->source->base.odb->repo->hash_algo->hexsz ?
+			m->source->base.odb->repo->hash_algo->hexsz : opts->prefix_hex_len;
 
 		if (!m->num_objects)
 			continue;
@@ -249,7 +249,7 @@ static int odb_source_packed_for_each_prefixed_object(
 
 	store->skip_mru_updates = true;
 
-	m = get_multi_pack_index(&store->files->base);
+	m = get_multi_pack_index(store);
 	if (m) {
 		ret = for_each_prefixed_object_in_midx(store, m, opts, data);
 		if (ret)
@@ -348,7 +348,7 @@ static int odb_source_packed_count_objects(struct odb_source *source,
 	unsigned long count = 0;
 	int ret;
 
-	m = get_multi_pack_index(&packed->files->base);
+	m = get_multi_pack_index(packed);
 	if (m)
 		count += m->num_objects + m->num_objects_in_base;
 
@@ -465,7 +465,7 @@ static int odb_source_packed_find_abbrev_len(struct odb_source *source,
 	struct packfile_list_entry *e;
 	struct multi_pack_index *m;
 
-	m = get_multi_pack_index(&packed->files->base);
+	m = get_multi_pack_index(packed);
 	if (m)
 		find_abbrev_len_for_midx(m, oid, min_len, &min_len);
 
@@ -674,7 +674,7 @@ void odb_source_packed_prepare(struct odb_source_packed *source)
 	if (source->initialized)
 		return;
 
-	prepare_multi_pack_index_one(&source->files->base);
+	prepare_multi_pack_index_one(source);
 	prepare_packed_git_one(&source->files->base);
 
 	sort_packs(&source->packs.head, sort_pack);
