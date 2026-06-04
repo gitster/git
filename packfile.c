@@ -949,37 +949,6 @@ struct packfile_list_entry *packfile_store_get_packs(struct odb_source_packed *s
 	return store->packs.head;
 }
 
-int packfile_store_count_objects(struct odb_source_packed *store,
-				 enum odb_count_objects_flags flags UNUSED,
-				 unsigned long *out)
-{
-	struct packfile_list_entry *e;
-	struct multi_pack_index *m;
-	unsigned long count = 0;
-	int ret;
-
-	m = get_multi_pack_index(&store->files->base);
-	if (m)
-		count += m->num_objects + m->num_objects_in_base;
-
-	for (e = packfile_store_get_packs(store); e; e = e->next) {
-		if (e->pack->multi_pack_index)
-			continue;
-		if (open_pack_index(e->pack)) {
-			ret = -1;
-			goto out;
-		}
-
-		count += e->pack->num_objects;
-	}
-
-	*out = count;
-	ret = 0;
-
-out:
-	return ret;
-}
-
 unsigned long unpack_object_header_buffer(const unsigned char *buf,
 		unsigned long len, enum object_type *type, size_t *sizep)
 {

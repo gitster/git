@@ -103,7 +103,7 @@ static int odb_source_files_count_objects(struct odb_source *source,
 	unsigned long count;
 	int ret;
 
-	ret = packfile_store_count_objects(files->packed, flags, &count);
+	ret = odb_source_count_objects(&files->packed->base, flags, &count);
 	if (ret < 0)
 		goto out;
 
