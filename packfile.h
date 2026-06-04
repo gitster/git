@@ -144,9 +144,6 @@ static inline void repo_for_each_pack_data_next(struct repo_for_each_pack_data *
 struct packed_git *packfile_store_load_pack(struct odb_source_packed *store,
 					    const char *idx_path, int local);
 
-int packfile_store_freshen_object(struct odb_source_packed *store,
-				  const struct object_id *oid);
-
 enum kept_pack_type {
 	KEPT_PACK_ON_DISK = (1 << 0),
 	KEPT_PACK_IN_CORE = (1 << 1),

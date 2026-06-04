@@ -98,10 +98,4 @@ static inline struct odb_source_packed *odb_source_packed_downcast(struct odb_so
  */
 void odb_source_packed_prepare(struct odb_source_packed *source);
 
-struct pack_entry;
-
-int find_pack_entry(struct odb_source_packed *store,
-		    const struct object_id *oid,
-		    struct pack_entry *e);
-
 #endif
