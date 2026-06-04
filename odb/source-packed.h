@@ -89,4 +89,13 @@ static inline struct odb_source_packed *odb_source_packed_downcast(struct odb_so
 	return container_of(source, struct odb_source_packed, base);
 }
 
+/*
+ * Prepare the source by loading packfiles and multi-pack indices for
+ * all alternates. This becomes a no-op if the source is already prepared.
+ *
+ * It shouldn't typically be necessary to call this function directly, as
+ * functions that access the source know to prepare it.
+ */
+void odb_source_packed_prepare(struct odb_source_packed *source);
+
 #endif

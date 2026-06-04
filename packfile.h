@@ -68,23 +68,6 @@ struct packed_git *packfile_list_find_oid(struct packfile_list_entry *packs,
 					  const struct object_id *oid);
 
 /*
- * Prepare the packfile store by loading packfiles and multi-pack indices for
- * all alternates. This becomes a no-op if the store is already prepared.
- *
- * It shouldn't typically be necessary to call this function directly, as
- * functions that access the store know to prepare it.
- */
-void packfile_store_prepare(struct odb_source_packed *store);
-
-/*
- * Clear the packfile caches and try to look up any new packfiles that have
- * appeared since last preparing the packfiles store.
- *
- * This function must be called under the `odb_read_lock()`.
- */
-void packfile_store_reprepare(struct odb_source_packed *store);
-
-/*
  * Add the pack to the store so that contained objects become accessible via
  * the store. This moves ownership into the store.
  */
