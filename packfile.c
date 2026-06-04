@@ -859,7 +859,7 @@ struct packed_git *add_packed_git(struct repository *r, const char *path,
 	return p;
 }
 
-void packfile_store_add_pack(struct packfile_store *store,
+void packfile_store_add_pack(struct odb_source_packed *store,
 			     struct packed_git *pack)
 {
 	if (pack->pack_fd != -1)
@@ -869,7 +869,7 @@ void packfile_store_add_pack(struct packfile_store *store,
 	strmap_put(&store->packs_by_path, pack->pack_name, pack);
 }
 
-struct packed_git *packfile_store_load_pack(struct packfile_store *store,
+struct packed_git *packfile_store_load_pack(struct odb_source_packed *store,
 					    const char *idx_path, int local)
 {
 	struct strbuf key = STRBUF_INIT;
@@ -1068,7 +1068,7 @@ static int sort_pack(const struct packfile_list_entry *a,
 	return -1;
 }
 
-void packfile_store_prepare(struct packfile_store *store)
+void packfile_store_prepare(struct odb_source_packed *store)
 {
 	if (store->initialized)
 		return;
@@ -1084,13 +1084,13 @@ void packfile_store_prepare(struct packfile_store *store)
 	store->initialized = true;
 }
 
-void packfile_store_reprepare(struct packfile_store *store)
+void packfile_store_reprepare(struct odb_source_packed *store)
 {
 	store->initialized = false;
 	packfile_store_prepare(store);
 }
 
-struct packfile_list_entry *packfile_store_get_packs(struct packfile_store *store)
+struct packfile_list_entry *packfile_store_get_packs(struct odb_source_packed *store)
 {
 	packfile_store_prepare(store);
 
@@ -1103,7 +1103,7 @@ struct packfile_list_entry *packfile_store_get_packs(struct packfile_store *stor
 	return store->packs.head;
 }
 
-int packfile_store_count_objects(struct packfile_store *store,
+int packfile_store_count_objects(struct odb_source_packed *store,
 				 enum odb_count_objects_flags flags UNUSED,
 				 unsigned long *out)
 {
@@ -2160,7 +2160,7 @@ static int fill_pack_entry(const struct object_id *oid,
 	return 1;
 }
 
-static int find_pack_entry(struct packfile_store *store,
+static int find_pack_entry(struct odb_source_packed *store,
 			   const struct object_id *oid,
 			   struct pack_entry *e)
 {
@@ -2183,7 +2183,7 @@ static int find_pack_entry(struct packfile_store *store,
 	return 0;
 }
 
-int packfile_store_freshen_object(struct packfile_store *store,
+int packfile_store_freshen_object(struct odb_source_packed *store,
 				  const struct object_id *oid)
 {
 	struct pack_entry e;
@@ -2199,7 +2199,7 @@ int packfile_store_freshen_object(struct packfile_store *store,
 	return 1;
 }
 
-int packfile_store_read_object_info(struct packfile_store *store,
+int packfile_store_read_object_info(struct odb_source_packed *store,
 				    const struct object_id *oid,
 				    struct object_info *oi,
 				    enum object_info_flags flags)
@@ -2234,7 +2234,7 @@ int packfile_store_read_object_info(struct packfile_store *store,
 	return 0;
 }
 
-static void maybe_invalidate_kept_pack_cache(struct packfile_store *store,
+static void maybe_invalidate_kept_pack_cache(struct odb_source_packed *store,
 					     unsigned flags)
 {
 	if (!store->kept_cache.packs)
@@ -2245,7 +2245,7 @@ static void maybe_invalidate_kept_pack_cache(struct packfile_store *store,
 	store->kept_cache.flags = 0;
 }
 
-struct packed_git **packfile_store_get_kept_pack_cache(struct packfile_store *store,
+struct packed_git **packfile_store_get_kept_pack_cache(struct odb_source_packed *store,
 						       unsigned flags)
 {
 	maybe_invalidate_kept_pack_cache(store, flags);
@@ -2365,8 +2365,8 @@ int for_each_object_in_pack(struct packed_git *p,
 	return r;
 }
 
-struct packfile_store_for_each_object_wrapper_data {
-	struct packfile_store *store;
+struct odb_source_packed_for_each_object_wrapper_data {
+	struct odb_source_packed *store;
 	const struct object_info *request;
 	odb_for_each_object_cb cb;
 	void *cb_data;
@@ -2377,7 +2377,7 @@ static int packfile_store_for_each_object_wrapper(const struct object_id *oid,
 						  uint32_t index_pos,
 						  void *cb_data)
 {
-	struct packfile_store_for_each_object_wrapper_data *data = cb_data;
+	struct odb_source_packed_for_each_object_wrapper_data *data = cb_data;
 
 	if (data->request) {
 		off_t offset = nth_packed_object_offset(pack, index_pos);
@@ -2411,10 +2411,10 @@ static int match_hash(unsigned len, const unsigned char *a, const unsigned char 
 }
 
 static int for_each_prefixed_object_in_midx(
-	struct packfile_store *store,
+	struct odb_source_packed *store,
 	struct multi_pack_index *m,
 	const struct odb_for_each_object_options *opts,
-	struct packfile_store_for_each_object_wrapper_data *data)
+	struct odb_source_packed_for_each_object_wrapper_data *data)
 {
 	int ret;
 
@@ -2470,10 +2470,10 @@ out:
 }
 
 static int for_each_prefixed_object_in_pack(
-	struct packfile_store *store,
+	struct odb_source_packed *store,
 	struct packed_git *p,
 	const struct odb_for_each_object_options *opts,
-	struct packfile_store_for_each_object_wrapper_data *data)
+	struct odb_source_packed_for_each_object_wrapper_data *data)
 {
 	uint32_t num, i, first = 0;
 	int len = opts->prefix_hex_len > p->repo->hash_algo->hexsz ?
@@ -2519,9 +2519,9 @@ out:
 }
 
 static int packfile_store_for_each_prefixed_object(
-	struct packfile_store *store,
+	struct odb_source_packed *store,
 	const struct odb_for_each_object_options *opts,
-	struct packfile_store_for_each_object_wrapper_data *data)
+	struct odb_source_packed_for_each_object_wrapper_data *data)
 {
 	struct packfile_list_entry *e;
 	struct multi_pack_index *m;
@@ -2566,13 +2566,13 @@ out:
 	return ret;
 }
 
-int packfile_store_for_each_object(struct packfile_store *store,
+int packfile_store_for_each_object(struct odb_source_packed *store,
 				   const struct object_info *request,
 				   odb_for_each_object_cb cb,
 				   void *cb_data,
 				   const struct odb_for_each_object_options *opts)
 {
-	struct packfile_store_for_each_object_wrapper_data data = {
+	struct odb_source_packed_for_each_object_wrapper_data data = {
 		.store = store,
 		.request = request,
 		.cb = cb,
@@ -2707,7 +2707,7 @@ static void find_abbrev_len_for_pack(struct packed_git *p,
 	*out = len;
 }
 
-int packfile_store_find_abbrev_len(struct packfile_store *store,
+int packfile_store_find_abbrev_len(struct odb_source_packed *store,
 				   const struct object_id *oid,
 				   unsigned min_len,
 				   unsigned *out)
@@ -2832,16 +2832,16 @@ int parse_pack_header_option(const char *in, unsigned char *out, unsigned int *l
 	return 0;
 }
 
-struct packfile_store *packfile_store_new(struct odb_source *source)
+struct odb_source_packed *packfile_store_new(struct odb_source *source)
 {
-	struct packfile_store *store;
+	struct odb_source_packed *store;
 	CALLOC_ARRAY(store, 1);
 	store->source = source;
 	strmap_init(&store->packs_by_path);
 	return store;
 }
 
-void packfile_store_free(struct packfile_store *store)
+void packfile_store_free(struct odb_source_packed *store)
 {
 	for (struct packfile_list_entry *e = store->packs.head; e; e = e->next)
 		free(e->pack);
@@ -2851,7 +2851,7 @@ void packfile_store_free(struct packfile_store *store)
 	free(store);
 }
 
-void packfile_store_close(struct packfile_store *store)
+void packfile_store_close(struct odb_source_packed *store)
 {
 	for (struct packfile_list_entry *e = store->packs.head; e; e = e->next) {
 		if (e->pack->do_not_close)
@@ -2988,7 +2988,7 @@ int packfile_read_object_stream(struct odb_read_stream **out,
 }
 
 int packfile_store_read_object_stream(struct odb_read_stream **out,
-				      struct packfile_store *store,
+				      struct odb_source_packed *store,
 				      const struct object_id *oid)
 {
 	struct pack_entry e;

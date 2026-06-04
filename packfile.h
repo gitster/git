@@ -79,7 +79,7 @@ struct packed_git *packfile_list_find_oid(struct packfile_list_entry *packs,
 /*
  * A store that manages packfiles for a given object database.
  */
-struct packfile_store {
+struct odb_source_packed {
 	struct odb_source *source;
 
 	/*
@@ -138,19 +138,19 @@ struct packfile_store {
  * Allocate and initialize a new empty packfile store for the given object
  * database source.
  */
-struct packfile_store *packfile_store_new(struct odb_source *source);
+struct odb_source_packed *packfile_store_new(struct odb_source *source);
 
 /*
  * Free the packfile store and all its associated state. All packfiles
  * tracked by the store will be closed.
  */
-void packfile_store_free(struct packfile_store *store);
+void packfile_store_free(struct odb_source_packed *store);
 
 /*
  * Close all packfiles associated with this store. The packfiles won't be
  * free'd, so they can be re-opened at a later point in time.
  */
-void packfile_store_close(struct packfile_store *store);
+void packfile_store_close(struct odb_source_packed *store);
 
 /*
  * Prepare the packfile store by loading packfiles and multi-pack indices for
@@ -159,7 +159,7 @@ void packfile_store_close(struct packfile_store *store);
  * It shouldn't typically be necessary to call this function directly, as
  * functions that access the store know to prepare it.
  */
-void packfile_store_prepare(struct packfile_store *store);
+void packfile_store_prepare(struct odb_source_packed *store);
 
 /*
  * Clear the packfile caches and try to look up any new packfiles that have
@@ -167,20 +167,20 @@ void packfile_store_prepare(struct packfile_store *store);
  *
  * This function must be called under the `odb_read_lock()`.
  */
-void packfile_store_reprepare(struct packfile_store *store);
+void packfile_store_reprepare(struct odb_source_packed *store);
 
 /*
  * Add the pack to the store so that contained objects become accessible via
  * the store. This moves ownership into the store.
  */
-void packfile_store_add_pack(struct packfile_store *store,
+void packfile_store_add_pack(struct odb_source_packed *store,
 			     struct packed_git *pack);
 
 /*
  * Get all packs managed by the given store, including packfiles that are
  * referenced by multi-pack indices.
  */
-struct packfile_list_entry *packfile_store_get_packs(struct packfile_store *store);
+struct packfile_list_entry *packfile_store_get_packs(struct odb_source_packed *store);
 
 struct repo_for_each_pack_data {
 	struct odb_source *source;
@@ -239,7 +239,7 @@ static inline void repo_for_each_pack_data_next(struct repo_for_each_pack_data *
 	     repo_for_each_pack_data_next(&eack_pack_data))
 
 int packfile_store_read_object_stream(struct odb_read_stream **out,
-				      struct packfile_store *store,
+				      struct odb_source_packed *store,
 				      const struct object_id *oid);
 
 /*
@@ -248,7 +248,7 @@ int packfile_store_read_object_stream(struct odb_read_stream **out,
  * not found, 0 if it was and read successfully, and a negative error code in
  * case the object was corrupted.
  */
-int packfile_store_read_object_info(struct packfile_store *store,
+int packfile_store_read_object_info(struct odb_source_packed *store,
 				    const struct object_id *oid,
 				    struct object_info *oi,
 				    enum object_info_flags flags);
@@ -258,10 +258,10 @@ int packfile_store_read_object_info(struct packfile_store *store,
  * either the newly opened packfile or the preexisting packfile. Returns a
  * `NULL` pointer in case the packfile could not be opened.
  */
-struct packed_git *packfile_store_load_pack(struct packfile_store *store,
+struct packed_git *packfile_store_load_pack(struct odb_source_packed *store,
 					    const char *idx_path, int local);
 
-int packfile_store_freshen_object(struct packfile_store *store,
+int packfile_store_freshen_object(struct odb_source_packed *store,
 				  const struct object_id *oid);
 
 enum kept_pack_type {
@@ -276,7 +276,7 @@ enum kept_pack_type {
  *
  * Return 0 on success, a negative error code otherwise.
  */
-int packfile_store_count_objects(struct packfile_store *store,
+int packfile_store_count_objects(struct odb_source_packed *store,
 				 enum odb_count_objects_flags flags,
 				 unsigned long *out);
 
@@ -285,7 +285,7 @@ int packfile_store_count_objects(struct packfile_store *store,
  * combination of `kept_pack_type` flags. The cache is computed on demand and
  * will be recomputed whenever the flags change.
  */
-struct packed_git **packfile_store_get_kept_pack_cache(struct packfile_store *store,
+struct packed_git **packfile_store_get_kept_pack_cache(struct odb_source_packed *store,
 						       unsigned flags);
 
 struct pack_window {
@@ -365,13 +365,13 @@ int for_each_object_in_pack(struct packed_git *p,
  *
  * The flags parameter is a combination of `odb_for_each_object_flags`.
  */
-int packfile_store_for_each_object(struct packfile_store *store,
+int packfile_store_for_each_object(struct odb_source_packed *store,
 				   const struct object_info *request,
 				   odb_for_each_object_cb cb,
 				   void *cb_data,
 				   const struct odb_for_each_object_options *opts);
 
-int packfile_store_find_abbrev_len(struct packfile_store *store,
+int packfile_store_find_abbrev_len(struct odb_source_packed *store,
 				   const struct object_id *oid,
 				   unsigned min_len,
 				   unsigned *out);
