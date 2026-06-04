@@ -2,9 +2,11 @@
 #include "abspath.h"
 #include "chdir-notify.h"
 #include "dir.h"
+#include "git-zlib.h"
 #include "mergesort.h"
 #include "midx.h"
 #include "odb/source-packed.h"
+#include "odb/streaming.h"
 #include "packfile.h"
 
 int find_pack_entry(struct odb_source_packed *store,
@@ -64,6 +66,19 @@ static int odb_source_packed_read_object_info(struct odb_source *source,
 	}
 
 	return 0;
+}
+
+static int odb_source_packed_read_object_stream(struct odb_read_stream **out,
+						struct odb_source *source,
+						const struct object_id *oid)
+{
+	struct odb_source_packed *packed = odb_source_packed_downcast(source);
+	struct pack_entry e;
+
+	if (!find_pack_entry(packed, oid, &e))
+		return -1;
+
+	return packfile_read_object_stream(out, oid, e.p, e.offset);
 }
 
 void (*report_garbage)(unsigned seen_bits, const char *path);
@@ -275,6 +290,7 @@ struct odb_source_packed *odb_source_packed_new(struct odb_source_files *parent)
 	packed->base.close = odb_source_packed_close;
 	packed->base.reprepare = odb_source_packed_reprepare;
 	packed->base.read_object_info = odb_source_packed_read_object_info;
+	packed->base.read_object_stream = odb_source_packed_read_object_stream;
 
 	if (!is_absolute_path(parent->base.path))
 		chdir_notify_register(NULL, odb_source_packed_reparent, packed);

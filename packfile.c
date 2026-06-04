@@ -2741,15 +2741,3 @@ int packfile_read_object_stream(struct odb_read_stream **out,
 
 	return 0;
 }
-
-int packfile_store_read_object_stream(struct odb_read_stream **out,
-				      struct odb_source_packed *store,
-				      const struct object_id *oid)
-{
-	struct pack_entry e;
-
-	if (!find_pack_entry(store, oid, &e))
-		return -1;
-
-	return packfile_read_object_stream(out, oid, e.p, e.offset);
-}

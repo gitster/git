@@ -136,10 +136,6 @@ static inline void repo_for_each_pack_data_next(struct repo_for_each_pack_data *
 	     ((p) = (eack_pack_data.entry ? eack_pack_data.entry->pack : NULL)); \
 	     repo_for_each_pack_data_next(&eack_pack_data))
 
-int packfile_store_read_object_stream(struct odb_read_stream **out,
-				      struct odb_source_packed *store,
-				      const struct object_id *oid);
-
 /*
  * Open the packfile and add it to the store if it isn't yet known. Returns
  * either the newly opened packfile or the preexisting packfile. Returns a
