@@ -2832,18 +2832,6 @@ int parse_pack_header_option(const char *in, unsigned char *out, unsigned int *l
 	return 0;
 }
 
-void packfile_store_close(struct odb_source_packed *store)
-{
-	for (struct packfile_list_entry *e = store->packs.head; e; e = e->next) {
-		if (e->pack->do_not_close)
-			BUG("want to close pack marked 'do-not-close'");
-		close_pack(e->pack);
-	}
-	if (store->midx)
-		close_midx(store->midx);
-	store->midx = NULL;
-}
-
 struct odb_packed_read_stream {
 	struct odb_read_stream base;
 	struct packed_git *pack;
