@@ -104,6 +104,12 @@ values that they return:
 `object.format`::
 	The object format (hash algorithm) used in the repository.
 
+`path.gitdir.absolute`::
+	The canonical absolute path to the Git repository directory (the `.git` directory).
+
+`path.gitdir.relative`::
+	The path to the Git repository directory relative to the current working directory.
+
 `references.format`::
 	The reference storage format. The valid values are:
 +
