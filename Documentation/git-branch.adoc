@@ -217,9 +217,10 @@ the upstream refs refreshed.
 +
 A branch is left alone if any of the following holds:
 its upstream no longer resolves locally; it is checked out in any
-worktree; or its push destination (`<branch>@{push}`) equals its
+worktree; its push destination (`<branch>@{push}`) equals its
 upstream (`<branch>@{upstream}`), so it cannot be distinguished
-from a freshly pulled trunk that just looks "fully merged".
+from a freshly pulled trunk that just looks "fully merged"; or
+`branch.<name>.pruneMerged` is set to `false`.
 +
 Branches refused by the "fully merged" safety check are listed as
 warnings and skipped; pass them to `git branch -D` explicitly if
