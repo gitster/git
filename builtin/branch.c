@@ -715,7 +715,7 @@ static int parse_opt_forked(const struct option *opt, const char *arg, int unset
 }
 
 static int prune_merged_branches(int argc, const char **argv,
-				 int quiet)
+				 int quiet, int dry_run)
 {
 	struct ref_store *refs = get_main_ref_store(the_repository);
 	struct ref_filter filter = REF_FILTER_INIT;
@@ -775,7 +775,8 @@ static int prune_merged_branches(int argc, const char **argv,
 				      FILTER_REFS_BRANCHES,
 				      DELETE_BRANCH_WARN_ONLY |
 				      DELETE_BRANCH_NO_HEAD_FALLBACK |
-				      (quiet ? DELETE_BRANCH_QUIET : 0));
+				      (quiet ? DELETE_BRANCH_QUIET : 0) |
+				      (dry_run ? DELETE_BRANCH_DRY_RUN : 0));
 
 	strvec_clear(&deletable);
 	ref_array_clear(&candidates);
@@ -825,6 +826,7 @@ int cmd_branch(int argc,
 	int delete = 0, rename = 0, copy = 0, list = 0,
 	    unset_upstream = 0, show_current = 0, edit_description = 0;
 	int prune_merged = 0;
+	int dry_run = 0;
 	const char *new_upstream = NULL;
 	int noncreate_actions = 0;
 	/* possible options */
@@ -880,6 +882,8 @@ int cmd_branch(int argc,
 			 N_("edit the description for the branch")),
 		OPT_BOOL(0, "prune-merged", &prune_merged,
 			N_("delete local branches whose upstream matches <branch> and is merged")),
+		OPT_BOOL(0, "dry-run", &dry_run,
+			N_("with --prune-merged, only print which branches would be deleted")),
 		OPT__FORCE(&force, N_("force creation, move/rename, deletion"), PARSE_OPT_NOCOMPLETE),
 		OPT_MERGED(&filter, N_("print only branches that are merged")),
 		OPT_NO_MERGED(&filter, N_("print only branches that are not merged")),
@@ -942,6 +946,9 @@ int cmd_branch(int argc,
 	if (noncreate_actions > 1)
 		usage_with_options(builtin_branch_usage, options);
 
+	if (dry_run && !prune_merged)
+		die(_("--dry-run requires --prune-merged"));
+
 	if (recurse_submodules_explicit) {
 		if (!submodule_propagate_branches)
 			die(_("branch with --recurse-submodules can only be used if submodule.propagateBranches is enabled"));
@@ -981,7 +988,7 @@ int cmd_branch(int argc,
 				      (quiet ? DELETE_BRANCH_QUIET : 0));
 		goto out;
 	} else if (prune_merged) {
-		ret = prune_merged_branches(argc, argv, quiet);
+		ret = prune_merged_branches(argc, argv, quiet, dry_run);
 		goto out;
 	} else if (show_current) {
 		print_current_branch_name();
