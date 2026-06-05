@@ -186,6 +186,13 @@ test_expect_success 'setup test repository layout for path fields' '
 	mkdir -p test-repo/sub
 '
 
+test_expect_success 'setup custom-common for commondir tests' '
+	git init --bare test-repo/custom-common
+'
+
+test_repo_info_path 'commondir' 'echo "$(cd .. && pwd)/.git"' '../.git'
+test_repo_info_path 'commondir' 'echo "$(cd .. && pwd)/custom-common"' '../custom-common' 'GIT_COMMON_DIR="$(cd .. && pwd)/custom-common" GIT_DIR=../.git'
+test_repo_info_path 'commondir' 'echo "$(cd .. && pwd)/.git"' '../.git' 'GIT_DIR=../.git'
 test_repo_info_path 'gitdir' 'echo "$(cd .. && pwd)/.git"' '../.git'
 
 test_done
