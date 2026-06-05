@@ -3315,19 +3315,31 @@ static int do_filter_refs(struct ref_filter *filter, unsigned int type, refs_for
 		prefix = "refs/tags/";
 
 	if (prefix) {
-		struct ref_iterator *iter;
+		if (filter->start_after) {
+			struct ref_iterator *iter;
 
-		iter = refs_ref_iterator_begin(get_main_ref_store(the_repository),
-					       "", NULL, 0, 0);
+			iter = refs_ref_iterator_begin(
+				get_main_ref_store(the_repository), "", NULL, 0,
+				0);
 
-		if (filter->start_after)
 			ret = start_ref_iterator_after(iter, filter->start_after);
-		else
-			ret = ref_iterator_seek(iter, prefix,
-						REF_ITERATOR_SEEK_SET_PREFIX);
+			if (!ret)
+				ret = do_for_each_ref_iterator(iter, fn,
+							       cb_data);
+		} else {
+			/*
+			 * Pass the prefix during construction because the files
+			 * backend primes loose refs before a later seek can
+			 * narrow the iterator.
+			 */
+			struct refs_for_each_ref_options opts = {
+				.prefix = prefix,
+			};
 
-		if (!ret)
-			ret = do_for_each_ref_iterator(iter, fn, cb_data);
+			ret = refs_for_each_ref_ext(
+				get_main_ref_store(the_repository), fn, cb_data,
+				&opts);
+		}
 	} else if (filter->kind & FILTER_REFS_REGULAR) {
 		ret = for_each_fullref_in_pattern(filter, fn, cb_data);
 	}
