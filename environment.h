@@ -91,6 +91,8 @@ struct repo_config_values {
 	/* section "core" config values */
 	char *attributes_file;
 	int apply_sparse_checkout;
+	int protect_hfs;
+	int protect_ntfs;
 
 	/* section "branch" config values */
 	enum branch_track branch_track;
@@ -173,8 +175,6 @@ extern int pack_compression_level;
 extern unsigned long pack_size_limit_cfg;
 
 extern int precomposed_unicode;
-extern int protect_hfs;
-extern int protect_ntfs;
 
 extern int core_sparse_checkout_cone;
 extern int sparse_expect_files_outside_of_patterns;
