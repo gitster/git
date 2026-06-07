@@ -1069,7 +1069,7 @@ static int push_refs_with_push(struct transport *transport,
 			if (ref->peer_ref)
 				strbuf_addstr(&buf, ref->peer_ref->name);
 			else
-				strbuf_addstr(&buf, oid_to_hex(&ref->new_oid));
+				strbuf_add_oid_hex(&buf, &ref->new_oid);
 		}
 		strbuf_addch(&buf, ':');
 		strbuf_addstr(&buf, ref->name);

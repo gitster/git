@@ -334,7 +334,7 @@ static int expand_atom(struct strbuf *sb, const char *atom, int len,
 {
 	if (is_atom("objectname", atom, len)) {
 		if (!data->mark_query)
-			strbuf_addstr(sb, oid_to_hex(&data->oid));
+			strbuf_add_oid_hex(sb, &data->oid);
 	} else if (is_atom("objecttype", atom, len)) {
 		if (data->mark_query)
 			data->info.typep = &data->type;
@@ -359,8 +359,7 @@ static int expand_atom(struct strbuf *sb, const char *atom, int len,
 		if (data->mark_query)
 			data->info.delta_base_oid = &data->delta_base_oid;
 		else
-			strbuf_addstr(sb,
-				      oid_to_hex(&data->delta_base_oid));
+			strbuf_add_oid_hex(sb, &data->delta_base_oid);
 	} else if (is_atom("objectmode", atom, len)) {
 		if (!data->mark_query && !(S_IFINVALID == data->mode))
 			strbuf_addf(sb, "%06o", data->mode);

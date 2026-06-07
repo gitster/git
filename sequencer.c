@@ -2223,7 +2223,7 @@ static void refer_to_commit(struct repository *r, struct strbuf *msgbuf,
 		repo_format_commit_message(r, commit,
 					   "%h (%s, %ad)", msgbuf, &ctx);
 	} else {
-		strbuf_addstr(msgbuf, oid_to_hex(&commit->object.oid));
+		strbuf_add_oid_hex(msgbuf, &commit->object.oid);
 	}
 }
 
@@ -2395,7 +2395,7 @@ static int do_pick_commit(struct repository *r,
 			if (!has_conforming_footer(&ctx->message, NULL, 0))
 				strbuf_addch(&ctx->message, '\n');
 			strbuf_addstr(&ctx->message, cherry_picked_prefix);
-			strbuf_addstr(&ctx->message, oid_to_hex(&commit->object.oid));
+			strbuf_add_oid_hex(&ctx->message, &commit->object.oid);
 			strbuf_addstr(&ctx->message, ")\n");
 		}
 		if (!is_fixup(command))

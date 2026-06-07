@@ -836,7 +836,7 @@ static enum bisect_error bisect_start(struct bisect_terms *terms, int argc,
 		if (!repo_get_oid(the_repository, head, &head_oid) &&
 		    !starts_with(head, "refs/heads/")) {
 			strbuf_reset(&start_head);
-			strbuf_addstr(&start_head, oid_to_hex(&head_oid));
+			strbuf_add_oid_hex(&start_head, &head_oid);
 		} else if (!repo_get_oid(the_repository, head, &head_oid) &&
 			   skip_prefix(head, "refs/heads/", &head)) {
 			strbuf_addstr(&start_head, head);
