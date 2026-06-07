@@ -203,15 +203,34 @@ void fill_stat_cache_info(struct index_state *istate, struct cache_entry *ce, st
 	}
 }
 
-static unsigned int st_mode_from_ce(const struct cache_entry *ce)
+unsigned int ce_mode_from_stat(struct index_state *istate,
+			       const struct cache_entry *ce,
+			       unsigned int mode)
 {
-	extern int trust_executable_bit, has_symlinks;
+	struct repository *repo = (istate && istate->repo) ? istate->repo : the_repository;
+	struct repo_config_values *cfg = repo_config_values(repo);
+
+	if (!has_symlinks && S_ISREG(mode) &&
+	    ce && S_ISLNK(ce->ce_mode))
+		return ce->ce_mode;
+	if (!cfg->trust_executable_bit && S_ISREG(mode)) {
+		if (ce && S_ISREG(ce->ce_mode))
+			return ce->ce_mode;
+		return create_ce_mode(0666);
+	}
+	return create_ce_mode(mode);
+}
+
+static unsigned int st_mode_from_ce(struct index_state *istate, const struct cache_entry *ce)
+{
+	struct repository *repo = (istate && istate->repo) ? istate->repo : the_repository;
+	struct repo_config_values *cfg = repo_config_values(repo);
 
 	switch (ce->ce_mode & S_IFMT) {
 	case S_IFLNK:
 		return has_symlinks ? S_IFLNK : (S_IFREG | 0644);
 	case S_IFREG:
-		return (ce->ce_mode & (trust_executable_bit ? 0755 : 0644)) | S_IFREG;
+		return (ce->ce_mode & (cfg->trust_executable_bit ? 0755 : 0644)) | S_IFREG;
 	case S_IFGITLINK:
 		return S_IFDIR | 0755;
 	case S_IFDIR:
@@ -221,10 +240,10 @@ static unsigned int st_mode_from_ce(const struct cache_entry *ce)
 	}
 }
 
-int fake_lstat(const struct cache_entry *ce, struct stat *st)
+int fake_lstat(struct index_state *istate, const struct cache_entry *ce, struct stat *st)
 {
 	fake_lstat_data(&ce->ce_stat_data, st);
-	st->st_mode = st_mode_from_ce(ce);
+	st->st_mode = st_mode_from_ce(istate, ce);
 
 	/* always succeed as lstat() replacement */
 	return 0;
@@ -308,9 +327,12 @@ static int ce_modified_check_fs(struct index_state *istate,
 	return 0;
 }
 
-static int ce_match_stat_basic(const struct cache_entry *ce, struct stat *st)
+static int ce_match_stat_basic(struct index_state *istate,
+			       const struct cache_entry *ce, struct stat *st)
 {
 	unsigned int changed = 0;
+	struct repository *repo = (istate && istate->repo) ? istate->repo : the_repository;
+	struct repo_config_values *cfg = repo_config_values(repo);
 
 	if (ce->ce_flags & CE_REMOVE)
 		return MODE_CHANGED | DATA_CHANGED | TYPE_CHANGED;
@@ -321,7 +343,7 @@ static int ce_match_stat_basic(const struct cache_entry *ce, struct stat *st)
 		/* We consider only the owner x bit to be relevant for
 		 * "mode changes"
 		 */
-		if (trust_executable_bit &&
+		if (cfg->trust_executable_bit &&
 		    (0100 & (ce->ce_mode ^ st->st_mode)))
 			changed |= MODE_CHANGED;
 		break;
@@ -415,7 +437,7 @@ int ie_match_stat(struct index_state *istate,
 	if (ce_intent_to_add(ce))
 		return DATA_CHANGED | TYPE_CHANGED | MODE_CHANGED;
 
-	changed = ce_match_stat_basic(ce, st);
+	changed = ce_match_stat_basic(istate, ce, st);
 
 	/*
 	 * Within 1 second of this sequence:
@@ -722,6 +744,9 @@ int add_to_index(struct index_state *istate, const char *path, struct stat *st, 
 			  (intent_only ? ADD_CACHE_NEW_ONLY : 0));
 	unsigned hash_flags = pretend ? 0 : INDEX_WRITE_OBJECT;
 
+	struct repository *repo = (istate && istate->repo) ? istate->repo : the_repository;
+	struct repo_config_values *cfg = repo_config_values(repo);
+
 	if (flags & ADD_CACHE_RENORMALIZE)
 		hash_flags |= INDEX_RENORMALIZE;
 
@@ -742,7 +767,7 @@ int add_to_index(struct index_state *istate, const char *path, struct stat *st, 
 		ce->ce_flags |= CE_INTENT_TO_ADD;
 
 
-	if (trust_executable_bit && has_symlinks) {
+	if (cfg->trust_executable_bit && has_symlinks) {
 		ce->ce_mode = create_ce_mode(st_mode);
 	} else {
 		/* If there is an existing entry, pick the mode bits and type
@@ -752,7 +777,7 @@ int add_to_index(struct index_state *istate, const char *path, struct stat *st, 
 		int pos = index_name_pos_also_unmerged(istate, path, namelen);
 
 		ent = (0 <= pos) ? istate->cache[pos] : NULL;
-		ce->ce_mode = ce_mode_from_stat(ent, st_mode);
+		ce->ce_mode = ce_mode_from_stat(istate, ent, st_mode);
 	}
 
 	/* When core.ignorecase=true, determine if a directory of the same name but differing
@@ -2575,7 +2600,7 @@ static void ce_smudge_racily_clean_entry(struct index_state *istate,
 
 	if (lstat(ce->name, &st) < 0)
 		return;
-	if (ce_match_stat_basic(ce, &st))
+	if (ce_match_stat_basic(istate, ce, &st))
 		return;
 	if (ce_modified_check_fs(istate, ce, &st)) {
 		/* This is "racily clean"; smudge it.  Note that this

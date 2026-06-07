@@ -90,6 +90,7 @@ struct repository;
 struct repo_config_values {
 	/* section "core" config values */
 	char *attributes_file;
+	int trust_executable_bit;
 	int apply_sparse_checkout;
 	int trust_ctime;
 	int check_stat;
@@ -162,7 +163,6 @@ int is_bare_repository(void);
 extern char *git_work_tree_cfg;
 
 /* Environment bits from configuration mechanism */
-extern int trust_executable_bit;
 extern int has_symlinks;
 extern int minimum_abbrev, default_abbrev;
 extern int ignore_case;
