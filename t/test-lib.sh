@@ -1299,10 +1299,10 @@ test_done () {
 			error "Tests passed but trash directory already removed before test cleanup; aborting"
 
 			cd "$TRASH_DIRECTORY/.." &&
-			rm -fr "$TRASH_DIRECTORY" || {
+			rm -fr "$TRASH_DIRECTORY" 2>/dev/null || {
 				# try again in a bit
 				sleep 5;
-				rm -fr "$TRASH_DIRECTORY"
+				rm -fr "$TRASH_DIRECTORY" 2>/dev/null
 			} ||
 			error "Tests passed but test cleanup failed; aborting"
 		fi
@@ -1530,6 +1530,12 @@ test -d "$GIT_TEMPLATE_DIR" || {
 if ! test -x "$GIT_BUILD_DIR"/t/helper/test-tool$X
 then
 	BAIL_OUT 'You need to build test-tool; Run "make t/helper/test-tool" in the source (toplevel) directory'
+fi
+
+if test -n "$HARNESS_ACTIVE"
+then
+	say "TAP version 13"
+	say "pragma +strict"
 fi
 
 # Are we running this test at all?
