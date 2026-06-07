@@ -99,6 +99,8 @@ struct repo_config_values {
 	int precomposed_unicode;
 	int core_sparse_checkout_cone;
 	int warn_on_object_refname_ambiguity;
+	int protect_hfs;
+	int protect_ntfs;
 
 	/* section "sparse" config values */
 	int sparse_expect_files_outside_of_patterns;
@@ -170,9 +172,6 @@ extern int assume_unchanged;
 extern char *apply_default_whitespace;
 extern char *apply_default_ignorewhitespace;
 extern unsigned long pack_size_limit_cfg;
-
-extern int protect_hfs;
-extern int protect_ntfs;
 
 enum rebase_setup_type {
 	AUTOREBASE_NEVER = 0,

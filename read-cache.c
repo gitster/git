@@ -1027,7 +1027,7 @@ static enum verify_path_result verify_path_internal(const char *path,
 			return PATH_OK;
 		if (is_dir_sep(c)) {
 inside:
-			if (protect_hfs) {
+			if ((the_repository->gitdir ? repo_config_values(the_repository)->protect_hfs : 0)) {
 
 				if (is_hfs_dotgit(path))
 					return PATH_INVALID;
@@ -1036,7 +1036,7 @@ inside:
 						return PATH_INVALID;
 				}
 			}
-			if (protect_ntfs) {
+			if ((the_repository->gitdir ? repo_config_values(the_repository)->protect_ntfs : 1)) {
 #if defined GIT_WINDOWS_NATIVE || defined __CYGWIN__
 				if (c == '\\')
 					return PATH_INVALID;
@@ -1060,7 +1060,8 @@ inside:
 			if (c == '\0')
 				return S_ISDIR(mode) ? PATH_DIR_WITH_SEP :
 						       PATH_INVALID;
-		} else if (c == '\\' && protect_ntfs) {
+		} else if (c == '\\' &&
+			   (the_repository->gitdir ? repo_config_values(the_repository)->protect_ntfs : 1)) {
 			if (is_ntfs_dotgit(path))
 				return PATH_INVALID;
 			if (S_ISLNK(mode)) {

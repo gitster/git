@@ -3405,7 +3405,7 @@ int is_valid_win32_path(const char *path, int allow_literal_nul)
 	const char *p = path;
 	int preceding_space_or_period = 0, i = 0, periods = 0;
 
-	if (!protect_ntfs)
+	if (!(the_repository->gitdir ? repo_config_values(the_repository)->protect_ntfs : 1))
 		return 1;
 
 	skip_dos_drive_prefix((char **)&path);
