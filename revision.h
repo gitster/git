@@ -310,6 +310,8 @@ struct rev_info {
 	/* special limits */
 	int skip_count;
 	int max_count;
+	unsigned int max_count_type:1;
+	unsigned int max_count_stage:1;
 	timestamp_t max_age;
 	timestamp_t max_age_as_filter;
 	timestamp_t min_age;
