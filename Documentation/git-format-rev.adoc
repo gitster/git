@@ -33,7 +33,7 @@ OPTIONS
 The argument `rev` is also accepted.
 
 `text`;; Formats all commit object names found in freeform text. These
-	must the full object names, i.e. abbreviated hexidecimal object
+	must be full object names, i.e. abbreviated hexadecimal object
 	names will not be interpreted.
 +
 Anything that is parsed as an object name but that is not found to be a
