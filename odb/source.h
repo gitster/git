@@ -347,7 +347,7 @@ static inline int odb_source_read_object_stream(struct odb_read_stream **out,
  * are only iterated over once.
  *
  * The optional `request` structure serves as a template for retrieving the
- * object info for each indvidual iterated object and will be populated as if
+ * object info for each individual iterated object and will be populated as if
  * `odb_source_read_object_info()` was called on the object. It will not be
  * modified, the callback will instead be invoked with a separate `struct
  * object_info` for every object. Object info will not be read when passing a

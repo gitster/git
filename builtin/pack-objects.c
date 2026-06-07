@@ -1351,7 +1351,7 @@ static void write_pack_file(void)
 			 * length of them as buffer length.
 			 *
 			 * Note that we need to subtract one though to
-			 * accomodate for the sideband byte.
+			 * accommodate for the sideband byte.
 			 */
 			struct hashfd_options opts = {
 				.progress = progress_state,

@@ -1461,7 +1461,7 @@ static int write_midx_internal(struct write_midx_opts *opts)
 
 		/*
 		 * Attempt opening the pack index to populate num_objects.
-		 * Ignore failiures as they can be expected and are not
+		 * Ignore failures as they can be expected and are not
 		 * fatal during this selection time.
 		 */
 		open_pack_index(oldest);
