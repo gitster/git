@@ -40,7 +40,7 @@ struct object_database {
 	struct repository *repo;
 
 	/*
-	 * State of current current object database transaction. Only one
+	 * State of current object database transaction. Only one
 	 * transaction may be pending at a time. Is NULL when no transaction is
 	 * configured.
 	 */
