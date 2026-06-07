@@ -27,7 +27,7 @@ test_expect_success 'bad setup: invalid .git file format' '
 test_expect_success 'bad setup: invalid .git file path' '
 	echo "gitdir: $REAL.not" >.git &&
 	test_must_fail git rev-parse 2>.err &&
-	test_grep "not a git repository" .err
+	test_grep "not a git repository: $REAL.not" .err
 '
 
 test_expect_success 'final setup + check rev-parse --git-dir' '
