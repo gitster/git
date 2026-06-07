@@ -433,6 +433,12 @@ static void free_base_data(struct base_data *c)
 	}
 }
 
+static int base_data_has_remaining_direct_children(struct base_data *c)
+{
+	return c->ref_first <= c->ref_last ||
+	       c->ofs_first <= c->ofs_last;
+}
+
 static void prune_base_data(struct base_data *retain)
 {
 	struct list_head *pos;
@@ -1201,8 +1207,12 @@ static void *threaded_second_pass(void *data)
 		}
 
 		work_lock();
-		if (parent)
+		if (parent) {
 			parent->retain_data--;
+			if (!parent->retain_data &&
+			    !base_data_has_remaining_direct_children(parent))
+				free_base_data(parent);
+		}
 
 		if (child && child->data) {
 			/*
@@ -1212,7 +1222,6 @@ static void *threaded_second_pass(void *data)
 			list_add(&child->list, &work_head);
 			base_cache_used += child->size;
 			prune_base_data(NULL);
-			free_base_data(child);
 		} else if (child) {
 			/*
 			 * This child does not have its own children. It may be
