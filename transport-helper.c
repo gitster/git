@@ -1361,24 +1361,16 @@ int transport_helper_init(struct transport *transport, const char *name)
 /* This should be enough to hold debugging message. */
 #define PBUFFERSIZE 8192
 
+static int transfer_debug_enabled = -1;
+
 /* Print bidirectional transfer loop debug message. */
 __attribute__((format (printf, 1, 2)))
 static void transfer_debug(const char *fmt, ...)
 {
-	/*
-	 * NEEDSWORK: This function is sometimes used from multiple threads, and
-	 * we end up using debug_enabled racily. That "should not matter" since
-	 * we always write the same value, but it's still wrong. This function
-	 * is listed in .tsan-suppressions for the time being.
-	 */
-
 	va_list args;
 	char msgbuf[PBUFFERSIZE];
-	static int debug_enabled = -1;
 
-	if (debug_enabled < 0)
-		debug_enabled = getenv("GIT_TRANSLOOP_DEBUG") ? 1 : 0;
-	if (!debug_enabled)
+	if (transfer_debug_enabled <= 0)
 		return;
 
 	va_start(args, fmt);
@@ -1647,6 +1639,9 @@ static int tloop_spawnwait_tasks(struct bidirectional_transfer_state *s)
 int bidirectional_transfer_loop(int input, int output)
 {
 	struct bidirectional_transfer_state state;
+
+	if (transfer_debug_enabled < 0)
+		transfer_debug_enabled = getenv("GIT_TRANSLOOP_DEBUG") ? 1 : 0;
 
 	/* Fill the state fields. */
 	state.ptg.src = input;
