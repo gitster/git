@@ -409,8 +409,11 @@ test_expect_success 'GIT_CONFIG_INCLUDES=0 disables include.path and includeIf' 
 		git config get foo.baz &&
 		test_must_fail env GIT_CONFIG_INCLUDES=0 git config get foo.bar &&
 		test_must_fail env GIT_CONFIG_INCLUDES=0 git config get foo.baz &&
+		test_must_fail git --no-includes config get foo.bar &&
+		test_must_fail git --no-includes config get foo.baz &&
 		git config get --includes foo.bar &&
-		test_must_fail env GIT_CONFIG_INCLUDES=0 git config get --includes foo.bar
+		test_must_fail env GIT_CONFIG_INCLUDES=0 git config get --includes foo.bar &&
+		test_must_fail git --no-includes config get --includes foo.bar
 	)
 '
 
@@ -423,7 +426,8 @@ test_expect_success 'GIT_CONFIG_INCLUDES=0 blocks included alias override' '
 		git config set include.path config.inc &&
 		git config set -f .git/config.inc alias.test status &&
 		git test &&
-		test_must_fail env GIT_CONFIG_INCLUDES=0 git test
+		test_must_fail env GIT_CONFIG_INCLUDES=0 git test &&
+		test_must_fail git --no-includes test
 	)
 '
 
