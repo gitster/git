@@ -53,6 +53,12 @@
 #define GIT_ADVICE_ENVIRONMENT "GIT_ADVICE"
 
 /*
+ * Environment variable used to prevent following include.path or includeIf.*
+ * config directives.
+ */
+#define CONFIG_INCLUDES_ENVIRONMENT "GIT_CONFIG_INCLUDES"
+
+/*
  * Environment variable used in handshaking the wire protocol.
  * Contains a colon ':' separated list of keys with optional values
  * 'key[=value]'.  Presence of unknown keys and values must be

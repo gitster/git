@@ -1586,9 +1586,14 @@ int config_with_options(config_fn_t fn, void *data,
 			const struct config_options *opts)
 {
 	struct config_include_data inc = CONFIG_INCLUDE_INIT;
+	int respect_includes = opts->respect_includes;
 	int ret;
 
-	if (opts->respect_includes) {
+	if (respect_includes &&
+	    !git_env_bool(CONFIG_INCLUDES_ENVIRONMENT, 1))
+		respect_includes = 0;
+
+	if (respect_includes) {
 		inc.fn = fn;
 		inc.data = data;
 		inc.opts = opts;

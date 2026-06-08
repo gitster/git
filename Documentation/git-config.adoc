@@ -502,6 +502,11 @@ GIT_CONFIG::
 	historical compatibility; there is generally no reason to use it
 	instead of the `--file` option.
 
+GIT_CONFIG_INCLUDES::
+	If GIT_CONFIG_INCLUDES is set to 0, then Git will not follow
+	`include.path` or `includeIf.*.path` directives when reading
+	configuration files.
+
 [[EXAMPLES]]
 EXAMPLES
 --------

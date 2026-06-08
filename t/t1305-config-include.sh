@@ -396,4 +396,35 @@ test_expect_success 'onbranch without repository but explicit nonexistent Git di
 	test_must_fail nongit git --git-dir=nonexistent config get foo.bar
 '
 
+test_expect_success 'GIT_CONFIG_INCLUDES=0 disables include.path and includeIf' '
+	test_when_finished "rm -rf repo" &&
+	git init repo &&
+	(
+		cd repo &&
+		git config set include.path config.inc &&
+		git config set "includeIf.gitdir:*.path" config2.inc &&
+		git config set -f .git/config.inc foo.bar from-include &&
+		git config set -f .git/config2.inc foo.baz from-includeif &&
+		git config get foo.bar &&
+		git config get foo.baz &&
+		test_must_fail env GIT_CONFIG_INCLUDES=0 git config get foo.bar &&
+		test_must_fail env GIT_CONFIG_INCLUDES=0 git config get foo.baz &&
+		git config get --includes foo.bar &&
+		test_must_fail env GIT_CONFIG_INCLUDES=0 git config get --includes foo.bar
+	)
+'
+
+test_expect_success 'GIT_CONFIG_INCLUDES=0 blocks included alias override' '
+	test_when_finished "rm -rf repo" &&
+	git init repo &&
+	(
+		cd repo &&
+		git config set alias.test false &&
+		git config set include.path config.inc &&
+		git config set -f .git/config.inc alias.test status &&
+		git test &&
+		test_must_fail env GIT_CONFIG_INCLUDES=0 git test
+	)
+'
+
 test_done
