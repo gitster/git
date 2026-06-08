@@ -470,8 +470,8 @@ static int fetch_refs_via_pack(struct transport *transport,
 	args.reject_shallow_remote = transport->smart_options->reject_shallow;
 	args.object_info = transport->smart_options->object_info;
 
-	if (transport->smart_options->object_info
-	    && transport->smart_options->object_info_oids->nr > 0) {
+	if (transport->smart_options->object_info &&
+	    transport->smart_options->object_info_oids->nr > 0) {
 		struct packet_reader reader;
 		struct object_info_args obj_info_args = { 0 };
 
