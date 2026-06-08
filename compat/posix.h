@@ -22,6 +22,15 @@
  #define GIT_GNUC_PREREQ(maj, min) 0
 #endif
 
+/* Similar for Clang. */
+#if defined(__clang__) && defined(__clang_minor__) && defined(__clang_major__)
+# define GIT_CLANG_PREREQ(maj, min) \
+	((__clang_major__ > (maj)) || \
+	 (__clang_major__ == (maj) && __clang_minor__ >= (min)))
+#else
+# define GIT_CLANG_PREREQ(maj, min) 0
+#endif
+
 /*
  * UNUSED marks a function parameter that is always unused.  It also
  * can be used to annotate a function, a variable, or a type that is
@@ -35,7 +44,7 @@
  * When a parameter may be used or unused, depending on conditional
  * compilation, consider using MAYBE_UNUSED instead.
  */
-#if GIT_GNUC_PREREQ(4, 5)
+#if GIT_GNUC_PREREQ(4, 5) || GIT_CLANG_PREREQ(2, 9)
 #define UNUSED __attribute__((unused)) \
 	__attribute__((deprecated ("parameter declared as UNUSED")))
 #elif defined(__GNUC__)
