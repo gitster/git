@@ -9,7 +9,7 @@
  * A store that manages packfiles for a given object database.
  */
 struct odb_source_packed {
-	struct odb_source *source;
+	struct odb_source_files *files;
 
 	/*
 	 * The list of packfiles in the order in which they have been most
@@ -67,6 +67,6 @@ struct odb_source_packed {
  * Allocate and initialize a new empty packfile store for the given object
  * database source.
  */
-struct odb_source_packed *odb_source_packed_new(struct odb_source *source);
+struct odb_source_packed *odb_source_packed_new(struct odb_source_files *parent);
 
 #endif

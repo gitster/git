@@ -802,7 +802,7 @@ struct packed_git *packfile_store_load_pack(struct odb_source_packed *store,
 
 	p = strmap_get(&store->packs_by_path, key.buf);
 	if (!p) {
-		p = add_packed_git(store->source->odb->repo, idx_path,
+		p = add_packed_git(store->files->base.odb->repo, idx_path,
 				   strlen(idx_path), local);
 		if (p)
 			packfile_store_add_pack(store, p);
@@ -990,8 +990,8 @@ void packfile_store_prepare(struct odb_source_packed *store)
 	if (store->initialized)
 		return;
 
-	prepare_multi_pack_index_one(store->source);
-	prepare_packed_git_one(store->source);
+	prepare_multi_pack_index_one(&store->files->base);
+	prepare_packed_git_one(&store->files->base);
 
 	sort_packs(&store->packs.head, sort_pack);
 	for (struct packfile_list_entry *e = store->packs.head; e; e = e->next)
@@ -1029,7 +1029,7 @@ int packfile_store_count_objects(struct odb_source_packed *store,
 	unsigned long count = 0;
 	int ret;
 
-	m = get_multi_pack_index(store->source);
+	m = get_multi_pack_index(&store->files->base);
 	if (m)
 		count += m->num_objects + m->num_objects_in_base;
 
@@ -2450,7 +2450,7 @@ static int packfile_store_for_each_prefixed_object(
 
 	store->skip_mru_updates = true;
 
-	m = get_multi_pack_index(store->source);
+	m = get_multi_pack_index(&store->files->base);
 	if (m) {
 		ret = for_each_prefixed_object_in_midx(store, m, opts, data);
 		if (ret)
@@ -2632,7 +2632,7 @@ int packfile_store_find_abbrev_len(struct odb_source_packed *store,
 	struct packfile_list_entry *e;
 	struct multi_pack_index *m;
 
-	m = get_multi_pack_index(store->source);
+	m = get_multi_pack_index(&store->files->base);
 	if (m)
 		find_abbrev_len_for_midx(m, oid, min_len, &min_len);
 
