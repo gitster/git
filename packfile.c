@@ -2049,14 +2049,12 @@ struct packed_git **packfile_store_get_kept_pack_cache(struct odb_source_packed 
 int has_object_pack(struct repository *r, const struct object_id *oid)
 {
 	struct odb_source *source;
-	struct pack_entry e;
 
 	odb_prepare_alternates(r->objects);
 	for (source = r->objects->sources; source; source = source->next) {
 		struct odb_source_files *files = odb_source_files_downcast(source);
-		int ret = find_pack_entry(files->packed, oid, &e);
-		if (ret)
-			return ret;
+		if (!packfile_store_read_object_info(files->packed, oid, NULL, 0))
+			return 1;
 	}
 
 	return 0;
