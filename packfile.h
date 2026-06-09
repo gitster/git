@@ -56,12 +56,6 @@ struct packed_git {
 };
 
 /*
- * Close all packfiles associated with this store. The packfiles won't be
- * free'd, so they can be re-opened at a later point in time.
- */
-void packfile_store_close(struct odb_source_packed *store);
-
-/*
  * Prepare the packfile store by loading packfiles and multi-pack indices for
  * all alternates. This becomes a no-op if the store is already prepared.
  *
