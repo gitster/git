@@ -741,6 +741,8 @@ static int prune_merged_branches(int argc, const char **argv,
 		const char *short_name;
 		struct branch *branch;
 		const char *upstream, *push;
+		struct strbuf key = STRBUF_INIT;
+		int opt_out;
 
 		if (!skip_prefix(full_name, "refs/heads/", &short_name))
 			continue;
@@ -754,6 +756,18 @@ static int prune_merged_branches(int argc, const char **argv,
 		push = branch ? branch_get_push(branch, NULL) : NULL;
 		if (!push || !strcmp(push, upstream))
 			continue;
+
+		strbuf_addf(&key, "branch.%s.prunemerged", short_name);
+		if (!repo_config_get_bool(the_repository, key.buf, &opt_out) &&
+		    !opt_out) {
+			if (!quiet)
+				fprintf(stderr,
+					_("Skipping '%s' (branch.%s.pruneMerged is false)\n"),
+					short_name, short_name);
+			strbuf_release(&key);
+			continue;
+		}
+		strbuf_release(&key);
 
 		strvec_push(&deletable, short_name);
 	}
