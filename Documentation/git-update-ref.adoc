@@ -9,6 +9,7 @@ SYNOPSIS
 --------
 [synopsis]
 git update-ref [-m <reason>] [--no-deref] -d <ref> [<old-oid>]
+git update-ref [-m <reason>] --rename <old-refname> <new-refname>
 git update-ref [-m <reason>] [--no-deref] [--create-reflog] <ref> <new-oid> [<old-oid>]
 git update-ref [-m <reason>] [--no-deref] --stdin [-z] [--batch-updates]
 
@@ -38,6 +39,14 @@ the result of following the symbolic pointers.
 
 With `-d`, it deletes the named <ref> after verifying that it
 still contains <old-oid>.
+
+With `--rename`, it renames <old-refname> together with its reflog to
+<new-refname>.  The command fails if <old-refname> does not exist, or
+if <new-refname> already exists.  The command does not update any
+symbolic references pointing to the renamed reference, and neither
+does it update `.git/config` tracking settings. It is thus not
+recommended to use it for renaming local branches. Use `git branch -m`
+instead.
 
 With `--stdin`, update-ref reads instructions from standard input and
 performs all modifications together.  Specify commands of the form:

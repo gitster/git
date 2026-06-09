@@ -2455,4 +2455,28 @@ test_expect_success 'dangling symref overwritten without old oid' '
 	test_must_fail git rev-parse --verify refs/heads/does-not-exist
 '
 
+test_expect_success '--rename fails if old-refname does not exist' '
+	test_must_fail git update-ref --rename refs/tags/no-such-ref refs/tags/new-ref 2>err &&
+	test_grep "no ref named .refs/tags/no-such-ref." err
+'
+
+test_expect_success '--rename fails if new-refname does exist' '
+	git update-ref refs/tags/existing HEAD &&
+	git update-ref refs/tags/old-ref HEAD &&
+	test_must_fail git update-ref --rename refs/tags/old-ref refs/tags/existing 2>err &&
+	test_grep "ref .refs/tags/existing. already exists" err
+'
+
+test_expect_success '--rename moves old-refname and its reflog to new-refname' '
+	test_config core.logallrefupdates always &&
+	git update-ref -m "old tag" refs/tags/old-tag HEAD &&
+	git update-ref -m "to new" --rename refs/tags/old-tag refs/tags/new-tag 2>err &&
+	test_must_be_empty err &&
+	git show-ref --exists refs/tags/new-tag &&
+	test_must_fail git show-ref --exists refs/tags/old-tag &&
+	git log -g refs/tags/new-tag >output &&
+	test_grep "old tag" output &&
+	test_grep "to new" output
+'
+
 test_done
