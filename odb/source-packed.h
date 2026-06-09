@@ -9,6 +9,7 @@
  * A store that manages packfiles for a given object database.
  */
 struct odb_source_packed {
+	struct odb_source base;
 	struct odb_source_files *files;
 
 	/*
@@ -68,5 +69,16 @@ struct odb_source_packed {
  * database source.
  */
 struct odb_source_packed *odb_source_packed_new(struct odb_source_files *parent);
+
+/*
+ * Cast the given object database source to the packed backend. This will cause
+ * a BUG in case the source doesn't use this backend.
+ */
+static inline struct odb_source_packed *odb_source_packed_downcast(struct odb_source *source)
+{
+	if (source->type != ODB_SOURCE_PACKED)
+		BUG("trying to downcast source of type '%d' to packed", source->type);
+	return container_of(source, struct odb_source_packed, base);
+}
 
 #endif

@@ -56,12 +56,6 @@ struct packed_git {
 };
 
 /*
- * Free the packfile store and all its associated state. All packfiles
- * tracked by the store will be closed.
- */
-void packfile_store_free(struct odb_source_packed *store);
-
-/*
  * Close all packfiles associated with this store. The packfiles won't be
  * free'd, so they can be re-opened at a later point in time.
  */
