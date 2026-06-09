@@ -133,7 +133,7 @@ static int odb_source_files_find_abbrev_len(struct odb_source *source,
 	unsigned len = min_len;
 	int ret;
 
-	ret = packfile_store_find_abbrev_len(files->packed, oid, len, &len);
+	ret = odb_source_find_abbrev_len(&files->packed->base, oid, len, &len);
 	if (ret < 0)
 		goto out;
 

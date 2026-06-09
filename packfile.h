@@ -217,11 +217,6 @@ int for_each_object_in_pack(struct packed_git *p,
 			    each_packed_object_fn, void *data,
 			    enum odb_for_each_object_flags flags);
 
-int packfile_store_find_abbrev_len(struct odb_source_packed *store,
-				   const struct object_id *oid,
-				   unsigned min_len,
-				   unsigned *out);
-
 /* A hook to report invalid files in pack directory */
 #define PACKDIR_FILE_PACK 1
 #define PACKDIR_FILE_IDX 2
