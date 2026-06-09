@@ -2749,15 +2749,6 @@ int parse_pack_header_option(const char *in, unsigned char *out, unsigned int *l
 	return 0;
 }
 
-struct odb_source_packed *packfile_store_new(struct odb_source *source)
-{
-	struct odb_source_packed *store;
-	CALLOC_ARRAY(store, 1);
-	store->source = source;
-	strmap_init(&store->packs_by_path);
-	return store;
-}
-
 void packfile_store_free(struct odb_source_packed *store)
 {
 	for (struct packfile_list_entry *e = store->packs.head; e; e = e->next)
