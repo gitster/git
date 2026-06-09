@@ -45,7 +45,7 @@ static void odb_source_files_reprepare(struct odb_source *source)
 {
 	struct odb_source_files *files = odb_source_files_downcast(source);
 	odb_source_reprepare(&files->loose->base);
-	packfile_store_reprepare(files->packed);
+	odb_source_reprepare(&files->packed->base);
 }
 
 static int odb_source_files_read_object_info(struct odb_source *source,
