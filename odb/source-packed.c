@@ -501,6 +501,43 @@ static int odb_source_packed_freshen_object(struct odb_source *source,
 	return 1;
 }
 
+static int odb_source_packed_write_object(struct odb_source *source UNUSED,
+					  const void *buf UNUSED,
+					  unsigned long len UNUSED,
+					  enum object_type type UNUSED,
+					  struct object_id *oid UNUSED,
+					  struct object_id *compat_oid UNUSED,
+					  unsigned flags UNUSED)
+{
+	return error("packed backend cannot write objects");
+}
+
+static int odb_source_packed_write_object_stream(struct odb_source *source UNUSED,
+						 struct odb_write_stream *stream UNUSED,
+						 size_t len UNUSED,
+						 struct object_id *oid UNUSED)
+{
+	return error("packed backend cannot write object streams");
+}
+
+static int odb_source_packed_begin_transaction(struct odb_source *source UNUSED,
+					       struct odb_transaction **out UNUSED)
+{
+	return error("packed backend cannot begin transactions");
+}
+
+static int odb_source_packed_read_alternates(struct odb_source *source UNUSED,
+					     struct strvec *out UNUSED)
+{
+	return 0;
+}
+
+static int odb_source_packed_write_alternate(struct odb_source *source UNUSED,
+					     const char *alternate UNUSED)
+{
+	return error("packed backend cannot write alternates");
+}
+
 void (*report_garbage)(unsigned seen_bits, const char *path);
 
 static void report_helper(const struct string_list *list,
@@ -715,6 +752,11 @@ struct odb_source_packed *odb_source_packed_new(struct odb_source_files *parent)
 	packed->base.count_objects = odb_source_packed_count_objects;
 	packed->base.find_abbrev_len = odb_source_packed_find_abbrev_len;
 	packed->base.freshen_object = odb_source_packed_freshen_object;
+	packed->base.write_object = odb_source_packed_write_object;
+	packed->base.write_object_stream = odb_source_packed_write_object_stream;
+	packed->base.begin_transaction = odb_source_packed_begin_transaction;
+	packed->base.read_alternates = odb_source_packed_read_alternates;
+	packed->base.write_alternate = odb_source_packed_write_alternate;
 
 	if (!is_absolute_path(parent->base.path))
 		chdir_notify_register(NULL, odb_source_packed_reparent, packed);
