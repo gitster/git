@@ -79,6 +79,13 @@ enum contains_result {
 
 define_commit_slab(contains_cache, enum contains_result);
 
+/*
+ * Return whether "commit" is a descendant of any commit in "list". An empty
+ * list matches.
+ *
+ * The memoized traversal records answers in "cache" for one fixed "list".
+ * Clear it before changing the list.
+ */
 int commit_contains(struct ref_filter *filter, struct commit *commit,
 		    struct commit_list *list, struct contains_cache *cache);
 
