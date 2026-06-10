@@ -474,7 +474,10 @@ These are the common trailers in use:
 
 While you can also create your own trailer if the situation warrants it, we
 encourage you to instead use one of the common trailers in this project
-highlighted above.
+highlighted above. A trailer that credits someone might be more likely
+to be accepted since these are the most common ones. But another kind of
+trailer might be relevant, for example to link to an issue tracker
+belonging to a downstream project that is affected by a bug in Git.
 
 Only capitalize the very first letter of the trailer, i.e. favor
 "Signed-off-by" over "Signed-Off-By" and "Acked-by:" over "Acked-By".
