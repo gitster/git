@@ -443,8 +443,16 @@ identifying, and not misleading.
 The goal of this policy is to allow us to have sufficient information to contact
 you if questions arise about your contribution.
 
+=== Commit trailers
 [[commit-trailers]]
-If you like, you can put extra trailers at the end:
+It is polite to credit people who have helped with your work to a
+substantial enough degree. This project uses commit trailers for that,
+where the credited person is written out like a Git author, i.e. with
+both their name and their email address. Note that the threshold to
+credit someone is a judgement call, and crediting someone for simple
+review work is certainly not necessary.
+
+These are the common trailers in use:
 
 . `Reported-by:` is used to credit someone who found the bug that
   the patch attempts to fix.
@@ -562,8 +570,8 @@ when the maintainer did not heavily participate in the discussion and
 instead left the review to trusted others.
 
 Do not forget to add trailers such as `Acked-by:`, `Reviewed-by:` and
-`Tested-by:` lines as necessary to credit people who helped your
-patch, and "cc:" them when sending such a final version for inclusion.
+`Tested-by:` (see <<commit-trailers,Commit trailers>>), and "cc:" them
+when sending such a final version for inclusion.
 
 ==== `format-patch` and `send-email`
 
