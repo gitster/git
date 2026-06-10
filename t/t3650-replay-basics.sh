@@ -565,4 +565,30 @@ test_expect_success '--onto with --ref rejects multiple revision ranges' '
 	test_grep "cannot be used with multiple revision ranges" err
 '
 
+test_expect_success 'replay merge commit fails' '
+	echo "fatal: replaying merge commits is not supported yet!" >expect &&
+	test_must_fail git replay --ref-action=print --onto main I..P 2>actual &&
+	test_cmp expect actual
+'
+
+test_expect_success 'replay to rebase merge commit with --linearize' '
+	git replay --ref-action=print --linearize --onto main I..topic-with-merge >result &&
+
+	test_line_count = 1 result &&
+
+	git log --format=%s $(cut -f 3 -d " " result) >actual &&
+	test_write_lines O N J M L B A >expect &&
+	test_cmp expect actual
+'
+
+test_expect_success 'replay to rebase merge commit with --linearize down to root commit' '
+	git replay --ref-action=print --linearize --onto main A..topic-with-merge >result &&
+
+	test_line_count = 1 result &&
+
+	git log --format=%s $(cut -f 3 -d " " result) >actual &&
+	test_write_lines O N J I M L B A >expect &&
+	test_cmp expect actual
+'
+
 test_done
