@@ -203,6 +203,26 @@ void fill_stat_cache_info(struct index_state *istate, struct cache_entry *ce, st
 	}
 }
 
+/*
+ * Determine the appropriate index mode for a file based on its stat()
+ * information and the existing cache entry (if any).
+ *
+ * This function handles degradation for filesystems that lack
+ * symlink support or reliable executable bits.
+ */
+unsigned int ce_mode_from_stat(const struct cache_entry *ce, unsigned int mode)
+{
+	if (!has_symlinks && S_ISREG(mode) &&
+	    ce && S_ISLNK(ce->ce_mode))
+		return ce->ce_mode;
+	if (!trust_executable_bit && S_ISREG(mode)) {
+		if (ce && S_ISREG(ce->ce_mode))
+			return ce->ce_mode;
+		return create_ce_mode(0666);
+	}
+	return create_ce_mode(mode);
+}
+
 static unsigned int st_mode_from_ce(const struct cache_entry *ce)
 {
 	switch (ce->ce_mode & S_IFMT) {
