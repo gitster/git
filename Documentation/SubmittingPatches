@@ -490,6 +490,11 @@ particular are not used in this project.
 Only capitalize the very first letter of the trailer, i.e. favor
 `Signed-off-by:` over `Signed-Off-By:` and `Acked-by:` over `Acked-By:`.
 
+Note that these trailers should come before your `Signed-off-by:`
+trailer. You are signing off to the patch as well as the message. This
+also makes it clear who added trailers when multiple people have signed
+off on a patch.
+
 [[ai]]
 === Use of Artificial Intelligence (AI)
 
