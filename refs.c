@@ -3579,15 +3579,16 @@ void refs_compute_filesystem_location(const char *gitdir, const char *payload,
 		 * worktree path, as the 'gitdir' here is already the worktree
 		 * path and is different from 'commondir' denoted by 'ref_common_dir'.
 		 */
+		strbuf_reset(refdir);
 		strbuf_addstr(refdir, gitdir);
-		return;
+		goto out;
 	}
 
 	if (!is_absolute_path(payload)) {
 		strbuf_addf(ref_common_dir, "/%s", payload);
-		strbuf_realpath(ref_common_dir, ref_common_dir->buf, 1);
 	} else {
-		strbuf_realpath(ref_common_dir, payload, 1);
+		strbuf_reset(ref_common_dir);
+		strbuf_addstr(ref_common_dir, payload);
 	}
 
 	strbuf_addbuf(refdir, ref_common_dir);
@@ -3598,4 +3599,8 @@ void refs_compute_filesystem_location(const char *gitdir, const char *payload,
 			BUG("worktree path does not contain slash");
 		strbuf_addf(refdir, "/worktrees/%s", wt_id + 1);
 	}
+
+out:
+	strbuf_realpath(ref_common_dir, ref_common_dir->buf, 1);
+	strbuf_realpath(refdir, refdir->buf, 1);
 }

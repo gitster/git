@@ -145,7 +145,8 @@ do
 				test_commit 3 &&
 
 				git refs migrate --dry-run --ref-format=$to_format >out &&
-				BACKEND_PATH="$dir/$(sed "s/.* ${SQ}.git\/\(.*\)${SQ}/\1/" out)" &&
+				BACKEND_PATH=$(sed "s/.* the result can be found at ${SQ}\(.*\)${SQ}$/\1/" out) &&
+				test_path_is_dir "$BACKEND_PATH" &&
 				test_refs_backend . $from_format "$to_format://$BACKEND_PATH" "$method"
 			)
 		'
@@ -160,7 +161,8 @@ do
 				test_commit 3 &&
 
 				git refs migrate --dry-run --ref-format=$to_format >out &&
-				BACKEND_PATH="$dir/$(sed "s/.* ${SQ}.git\/\(.*\)${SQ}/\1/" out)" &&
+				BACKEND_PATH=$(sed "s/.* the result can be found at ${SQ}\(.*\)${SQ}$/\1/" out) &&
+				test_path_is_dir "$BACKEND_PATH" &&
 
 				test_refs_backend . $from_format "$to_format://$BACKEND_PATH" "$method" &&
 
@@ -187,7 +189,8 @@ do
 				test_commit 3 &&
 
 				git refs migrate --dry-run --ref-format=$to_format >out &&
-				BACKEND_PATH="$dir/$(sed "s/.* ${SQ}.git\/\(.*\)${SQ}/\1/" out)" &&
+				BACKEND_PATH=$(sed "s/.* the result can be found at ${SQ}\(.*\)${SQ}$/\1/" out) &&
+				test_path_is_dir "$BACKEND_PATH" &&
 
 				run_with_uri . "$from_format" "$to_format://$BACKEND_PATH" \
 					"worktree add ../wt 2" "$method" &&

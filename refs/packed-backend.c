@@ -13,7 +13,6 @@
 #include "packed-backend.h"
 #include "../iterator.h"
 #include "../lockfile.h"
-#include "../chdir-notify.h"
 #include "../statinfo.h"
 #include "../worktree.h"
 #include "../wrapper.h"
@@ -211,19 +210,6 @@ static size_t snapshot_hexsz(const struct snapshot *snapshot)
 	return snapshot->refs->base.repo->hash_algo->hexsz;
 }
 
-static void packed_ref_store_reparent(const char *name UNUSED,
-				      const char *old_cwd,
-				      const char *new_cwd,
-				      void *payload)
-{
-	struct packed_ref_store *refs = payload;
-	char *tmp;
-
-	tmp = reparent_relative_path(old_cwd, new_cwd, refs->path);
-	free(refs->path);
-	refs->path = tmp;
-}
-
 /*
  * Since packed-refs is only stored in the common dir, don't parse the
  * payload and rely on the files-backend to set 'gitdir' correctly.
@@ -239,10 +225,9 @@ struct ref_store *packed_ref_store_init(struct repository *repo,
 
 	base_ref_store_init(ref_store, repo, gitdir, &refs_be_packed);
 	refs->store_flags = opts->access_flags;
-
 	strbuf_addf(&sb, "%s/packed-refs", gitdir);
 	refs->path = strbuf_detach(&sb, NULL);
-	chdir_notify_register(NULL, packed_ref_store_reparent, refs);
+
 	return ref_store;
 }
 
@@ -287,7 +272,6 @@ static void packed_ref_store_release(struct ref_store *ref_store)
 	clear_snapshot(refs);
 	rollback_lock_file(&refs->lock);
 	delete_tempfile(&refs->tempfile);
-	chdir_notify_unregister(NULL, packed_ref_store_reparent, refs);
 	free(refs->path);
 }
 
