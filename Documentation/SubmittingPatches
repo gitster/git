@@ -374,7 +374,7 @@ or, on an older version of Git without support for --pretty=reference:
 ....
 
 [[sign-off]]
-=== Certify your work by adding your `Signed-off-by` trailer
+=== Certify your work by adding your `Signed-off-by:` trailer
 
 To improve tracking of who did what, we ask you to certify that you
 wrote the patch or have the right to pass it on under the same license
@@ -411,7 +411,7 @@ d. I understand and agree that this project and the contribution
    this project or the open source license(s) involved.
 ____
 
-you add a "Signed-off-by" trailer to your commit, that looks like
+you add a `Signed-off-by:` trailer to your commit, that looks like
 this:
 
 ....
@@ -421,7 +421,7 @@ this:
 This line can be added by Git if you run the git-commit command with
 the -s option.
 
-Notice that you can place your own `Signed-off-by` trailer when
+Notice that you can place your own `Signed-off-by:` trailer when
 forwarding somebody else's patch with the above rules for
 D-C-O.  Indeed you are encouraged to do so.  Do not forget to
 place an in-body "From: " line at the beginning to properly attribute
@@ -433,7 +433,7 @@ your patch differs from project to project, so it may be different
 from that of the project you are accustomed to.
 
 [[real-name]]
-Please use a known identity in the `Signed-off-by` trailer, since we cannot
+Please use a known identity in the `Signed-off-by:` trailer, since we cannot
 accept anonymous contributions. It is common, but not required, to use some form
 of your real name. We realize that some contributors are not comfortable doing
 so or prefer to contribute under a pseudonym or preferred name and we can accept
@@ -488,7 +488,7 @@ Other projects might regularly refer to other kinds of data, like
 particular are not used in this project.
 
 Only capitalize the very first letter of the trailer, i.e. favor
-"Signed-off-by" over "Signed-Off-By" and "Acked-by:" over "Acked-By".
+`Signed-off-by:` over `Signed-Off-By:` and `Acked-by:` over `Acked-By:`.
 
 [[ai]]
 === Use of Artificial Intelligence (AI)
@@ -610,7 +610,7 @@ Here is a link:MyFirstContribution.html#v2-git-send-email[step-by-step guide] on
 how to submit updated versions of a patch series.
 
 If your log message (including your name on the
-`Signed-off-by` trailer) is not writable in ASCII, make sure that
+`Signed-off-by:` trailer) is not writable in ASCII, make sure that
 you send off a message in the correct encoding.
 
 WARNING: Be wary of your MUAs word-wrap
@@ -630,7 +630,7 @@ previously sent.
 The `git format-patch` command follows the best current practice to
 format the body of an e-mail message.  At the beginning of the
 patch should come your commit message, ending with the
-`Signed-off-by` trailers, and a line that consists of three dashes,
+`Signed-off-by:` trailers, and a line that consists of three dashes,
 followed by the diffstat information and the patch itself.  If
 you are forwarding a patch from somebody else, optionally, at
 the beginning of the e-mail message just before the commit
