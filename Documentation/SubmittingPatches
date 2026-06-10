@@ -465,6 +465,10 @@ These are the common trailers in use:
   and found it to have the desired effect.
 . `Co-authored-by:` is used to indicate that people exchanged drafts
    of a patch before submitting it.
+. `Based-on-patch-by:` can be used when someone else authored parts of
+  the patch that you are submitting. This might be relevant if someone
+  sent a patch to the mailing list without a commit message or a
+  `Signed-off-by:` and you have picked it up.
 . `Helped-by:` is used to credit someone who suggested ideas for
   changes without providing the precise changes in patch form.
 . `Mentored-by:` is used to credit someone with helping develop a
