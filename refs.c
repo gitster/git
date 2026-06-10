@@ -2351,15 +2351,31 @@ void ref_store_release(struct ref_store *ref_store)
 
 struct ref_store *get_main_ref_store(struct repository *r)
 {
+	enum ref_storage_format format;
+
 	if (r->refs_private)
 		return r->refs_private;
 
 	if (!r->gitdir)
 		BUG("attempting to get main_ref_store outside of repository");
 
-	r->refs_private = ref_store_init(r, r->ref_storage_format,
-					 r->gitdir, REF_STORE_ALL_CAPS);
+	/*
+	 * When constructing the reference backend we'll end up reading the Git
+	 * configuration. This means we'll also try to evaluate "onbranch"
+	 * conditions.
+	 *
+	 * We cannot read branches when constructing the refdb, so it is not
+	 * possible to evaluate those conditions in the first place. To gate
+	 * their evaluation we check whether or not the reference storage
+	 * format has been configured -- we thus have to temporarily set it to
+	 * UNKNOWN here so that we don't end up recursing.
+	 */
+	format = r->ref_storage_format;
+	r->ref_storage_format = REF_STORAGE_FORMAT_UNKNOWN;
+	r->refs_private = ref_store_init(r, format, r->gitdir, REF_STORE_ALL_CAPS);
 	r->refs_private = maybe_debug_wrap_ref_store(r->gitdir, r->refs_private);
+	r->ref_storage_format = format;
+
 	return r->refs_private;
 }
 
