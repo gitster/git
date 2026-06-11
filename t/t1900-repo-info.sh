@@ -155,4 +155,44 @@ test_expect_success 'git repo info -h shows only repo info usage' '
 	test_grep ! "git repo structure" actual
 '
 
+test_repo_info_path () {
+	field_name=$1
+	expect_absolute_eval=$2
+	expect_relative=$3
+	env_prefix=$4
+
+	test_expect_success "query individual key: path.$field_name.absolute${env_prefix:+ ($env_prefix)}" '
+		(
+			cd test-repo/sub &&
+			expect_absolute=$(eval "$expect_absolute_eval") &&
+			echo "path.$field_name.absolute=$expect_absolute" >expect &&
+			eval "${env_prefix:+$env_prefix }git repo info \"path.$field_name.absolute\"" >actual &&
+			test_cmp expect actual
+		)
+	'
+
+	test_expect_success "query individual key: path.$field_name.relative${env_prefix:+ ($env_prefix)}" '
+		(
+			cd test-repo/sub &&
+			echo "path.$field_name.relative=$expect_relative" >expect &&
+			eval "${env_prefix:+$env_prefix }git repo info \"path.$field_name.relative\"" >actual &&
+			test_cmp expect actual
+		)
+	'
+}
+
+test_expect_success 'setup test repository layout for path fields' '
+	git init test-repo &&
+	mkdir -p test-repo/sub
+'
+
+test_expect_success 'setup custom-common for commondir tests' '
+	git init --bare test-repo/custom-common
+'
+
+test_repo_info_path 'commondir' 'echo "$(cd .. && pwd)/.git"' '../.git'
+test_repo_info_path 'commondir' 'echo "$(cd .. && pwd)/custom-common"' '../custom-common' 'GIT_COMMON_DIR="$(cd .. && pwd)/custom-common" GIT_DIR=../.git'
+test_repo_info_path 'commondir' 'echo "$(cd .. && pwd)/.git"' '../.git' 'GIT_DIR=../.git'
+test_repo_info_path 'gitdir' 'echo "$(cd .. && pwd)/.git"' '../.git'
+
 test_done
