@@ -904,4 +904,65 @@ test_expect_success 'pending objects are repacked appropriately' '
 	)
 '
 
+test_expect_success 'check one .promisor file content after repack' '
+	test_when_finished rm -rf prom_test prom_before_repack &&
+	git init prom_test &&
+	path=prom_test/.git/objects/pack &&
+
+	(
+		# Create 1 pack
+		test_commit_bulk -C prom_test 1 &&
+
+		# Simulate .promisor file by creating it manually
+		prom=$(find $path -name "*.pack" | sed "s/.pack$/.promisor/") &&
+		oid=$(git -C prom_test rev-parse HEAD) &&
+		echo "$oid ref" >"$prom" &&
+
+		# Repack, and check if correct
+		git -C prom_test repack -a -d -f &&
+		prom=$(find $path -name "*.promisor") &&
+		# $prom should contain "$oid ref <time>"
+		test_grep "$oid ref " "$prom" &&
+
+		# Save the current .promisor content, repack, and check if correct
+		cp "$prom" prom_before_repack &&
+		git -C prom_test repack -a -d -f &&
+		prom=$(find $path -name "*.promisor") &&
+		# $prom should be exactly the same as prom_before_repack
+		test_cmp prom_before_repack "$prom"
+	)
+'
+
+test_expect_success 'check multiple .promisor file content after repack' '
+	test_when_finished rm -rf prom_test prom_before_repack &&
+	git init prom_test &&
+	path=prom_test/.git/objects/pack &&
+
+	(
+		# Create 2 packs and simulate .promisor files by creating them manually
+		test_commit_bulk -C prom_test 1 &&
+		prom=$(find $path -name "*.pack" | sed "s/.pack$/.promisor/") &&
+		oid1=$(git -C prom_test rev-parse HEAD) &&
+		echo "$oid1 ref1" >"$prom" &&
+		test_commit_bulk -C prom_test 1 &&
+		prom=$(find $path -name "*.pack" | sed "s/.pack$/.promisor/; \|$prom|d") &&
+		oid2=$(git -C prom_test rev-parse HEAD) &&
+		echo "$oid2 ref2" >"$prom" &&
+
+		# Repack, and check if correct
+		git -C prom_test repack -a -d -f &&
+		prom=$(find $path -name "*.promisor") &&
+		# $prom should contain "$oid1 ref1 <time>" & "$oid2 ref2 <time>"
+		test_grep "$oid1 ref1 " "$prom" &&
+		test_grep "$oid2 ref2 " "$prom" &&
+
+		# Save the current .promisor content, repack, and check if correct
+		cp "$prom" prom_before_repack &&
+		git -C prom_test repack -a -d -f &&
+		prom=$(find $path -name "*.promisor") &&
+		# $prom should be exactly the same as prom_before_repack
+		test_cmp prom_before_repack "$prom"
+	)
+'
+
 test_done
