@@ -740,13 +740,13 @@ static struct commit_graph *prepare_commit_graph(struct repository *r)
 	struct odb_source *source;
 
 	/*
-	 * Early return if there is no git dir or if the commit graph is
+	 * Early return if there is no object database or if the commit graph is
 	 * disabled.
 	 *
 	 * This must come before the "already attempted?" check below, because
 	 * we want to disable even an already-loaded graph file.
 	 */
-	if (!r->gitdir || r->commit_graph_disabled)
+	if (!r->objects || r->commit_graph_disabled)
 		return NULL;
 
 	if (r->objects->commit_graph_attempted)
