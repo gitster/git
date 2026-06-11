@@ -60,6 +60,12 @@ struct column {
 	 * index into column_colors.
 	 */
 	unsigned short color;
+	/*
+	 * A placeholder column keeps the column of a parentless commit filled
+	 * for one extra row, avoiding a next unrelated commit to be printed
+	 * in the same column.
+	 */
+	unsigned is_placeholder:1;
 };
 
 enum graph_state {
@@ -572,6 +578,7 @@ static void graph_insert_into_new_columns(struct git_graph *graph,
 		i = graph->num_new_columns++;
 		graph->new_columns[i].commit = commit;
 		graph->new_columns[i].color = graph_find_commit_color(graph, commit);
+		graph->new_columns[i].is_placeholder = 0;
 	}
 
 	if (graph->num_parents > 1 && idx > -1 && graph->merge_layout == -1) {
@@ -616,7 +623,7 @@ static void graph_update_columns(struct git_graph *graph)
 {
 	struct commit_list *parent;
 	int max_new_columns;
-	int i, seen_this, is_commit_in_columns;
+	int i, seen_this, is_commit_in_columns, is_parentless;
 
 	/*
 	 * Swap graph->columns with graph->new_columns
@@ -663,6 +670,26 @@ static void graph_update_columns(struct git_graph *graph)
 	 */
 	seen_this = 0;
 	is_commit_in_columns = 1;
+	/*
+	 * A commit is "parentless" (is a visual root that starts a new column)
+	 * only if has no visible parents AND it's not a boundary commit.
+	 *
+	 * Boundary commits also have no visible parents, but they are
+	 * NOT a visual root:
+	 *
+	 * 1. A boundary only appears in the output because an included commit
+	 *    is its child. Children are always above, and the renderer draws an
+	 *    edge down to the boundary from that child. Rather than starting
+	 *    a column like a visual root would do, it "inherits" its child
+	 *    column.
+	 *
+	 * 2. Included commit CAN'T appear below a boundary. Boundaries are
+	 *    ancestors of the exclusion point; if an included commit were an
+	 *    ancestor of the boundary it would be excluded and not rendered.
+	 *    Boundaries therefore always sink to the bottom.
+	 */
+	is_parentless = graph->num_parents == 0 &&
+			!(graph->commit->object.flags & BOUNDARY);
 	for (i = 0; i <= graph->num_columns; i++) {
 		struct commit *col_commit;
 		if (i == graph->num_columns) {
@@ -697,11 +724,46 @@ static void graph_update_columns(struct git_graph *graph)
 			 * least 2, even if it has no interesting parents.
 			 * The current commit always takes up at least 2
 			 * spaces.
+			 *
+			 * Check for the commit to seem like a root, no parents
+			 * rendered and that it is not a boundary commit. If so,
+			 * add a placeholder to keep that column filled for
+			 * at least one row.
+			 *
+			 * Prevents the next commit from being inserted
+			 * just below and making the graph confusing.
 			 */
-			if (graph->num_parents == 0)
+			if (is_parentless) {
+				graph_insert_into_new_columns(graph, graph->commit, i);
+				graph->new_columns[graph->num_new_columns - 1]
+							    .is_placeholder = 1;
+			} else if (graph->num_parents == 0) {
 				graph->width += 2;
+			}
 		} else {
-			graph_insert_into_new_columns(graph, col_commit, -1);
+			if (graph->columns[i].is_placeholder) {
+				/*
+				 * Keep the placeholders if the next commit is
+				 * parentless also, making the indentation cascade.
+				 */
+				if (!seen_this && is_parentless) {
+					graph_insert_into_new_columns(graph,
+							graph->columns[i].commit, i);
+					graph->new_columns[graph->num_new_columns - 1]
+							.is_placeholder = 1;
+				} else if (!seen_this) {
+					graph->mapping[graph->width] = -1;
+					graph->width += 2;
+				}
+				/*
+				 * seen_this && is_placeholder means that this
+				 * line is the one after the indented one, the
+				 * placeholder is no longer needed, gets
+				 * dropped and the columns collapses naturally.
+				 */
+			} else {
+				graph_insert_into_new_columns(graph, col_commit, -1);
+			}
 		}
 	}
 
@@ -872,7 +934,10 @@ static void graph_output_padding_line(struct git_graph *graph,
 			graph_line_addstr(line, "~ ");
 			break;
 		}
-		graph_line_write_column(line, &graph->new_columns[i], '|');
+		if (graph->new_columns[i].is_placeholder)
+			graph_line_write_column(line, &graph->new_columns[i], ' ');
+		else
+			graph_line_write_column(line, &graph->new_columns[i], '|');
 		graph_line_addch(line, ' ');
 	}
 }
@@ -1106,7 +1171,34 @@ static void graph_output_commit_line(struct git_graph *graph, struct graph_line 
 			   graph->mapping[2 * i] < i) {
 			graph_line_write_column(line, col, '/');
 		} else {
-			graph_line_write_column(line, col, '|');
+			if (col->is_placeholder) {
+				/*
+				 * When the indented commit is a merge commit,
+				 * the placeholder column adds unwanted padding
+				 * between the commit and its subject.
+				 *
+				 *   * parentless commit
+				 *     * merge commit
+				 *    /|
+				 *   | * parent A
+				 *   *   parent B
+				 *     ^^ unwanted padding
+				 *
+				 * Once the current commit has been seen, don't
+				 * let placeholder columns to be rendered:
+				 *
+				 *   * parentless commit
+				 *     * merge commit
+				 *    /|
+				 *   | * parent A
+				 *   * parent B
+				 */
+				if (seen_this)
+					continue;
+				graph_line_write_column(line, col, ' ');
+			} else {
+				graph_line_write_column(line, col, '|');
+			}
 		}
 		graph_line_addch(line, ' ');
 	}
@@ -1250,7 +1342,18 @@ static void graph_output_post_merge_line(struct git_graph *graph, struct graph_l
 			if (!graph_needs_truncation(graph, i + 1))
 				graph_line_addch(line, ' ');
 		} else {
-			graph_line_write_column(line, col, '|');
+			if (col->is_placeholder) {
+				/*
+				 * Same placeholder handling as in
+				 * graph_output_commit_line().
+				 */
+				if (seen_this)
+					continue;
+				graph_line_write_column(line, col, ' ');
+			} else {
+				graph_line_write_column(line, col, '|');
+			}
+
 			if (graph->merge_layout != 0 || i != graph->commit_index - 1) {
 				if (parent_col)
 					graph_line_write_column(
