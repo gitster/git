@@ -1214,6 +1214,7 @@ N_("it took %.2f seconds to check forced updates; you can use\n"
    "to avoid this check\n");
 
 static int store_updated_refs(struct display_state *display_state,
+			      struct transport *transport,
 			      int connectivity_checked,
 			      struct ref_transaction *transaction, struct ref *ref_map,
 			      struct fetch_head *fetch_head,
@@ -1229,6 +1230,7 @@ static int store_updated_refs(struct display_state *display_state,
 	if (!connectivity_checked) {
 		struct check_connected_options opt = CHECK_CONNECTED_INIT;
 
+		opt.transport = transport;
 		opt.exclude_hidden_refs_section = "fetch";
 		rm = ref_map;
 		if (check_connected(iterate_ref_map, &rm, &opt)) {
@@ -1433,7 +1435,7 @@ static int fetch_and_consume_refs(struct display_state *display_state,
 	}
 
 	trace2_region_enter("fetch", "consume_refs", the_repository);
-	ret = store_updated_refs(display_state, connectivity_checked,
+	ret = store_updated_refs(display_state, transport, connectivity_checked,
 				 transaction, ref_map, fetch_head, config,
 				 display_array);
 	trace2_region_leave("fetch", "consume_refs", the_repository);
