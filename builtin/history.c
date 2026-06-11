@@ -1150,7 +1150,7 @@ static int cmd_history_drop(int argc,
 	 * inconsistent repository state. So we first perform a dry-run merge
 	 * here before updating refs.
 	 */
-	if (!is_bare_repository()) {
+	if (!is_bare_repository(repo)) {
 		ret = find_head_tree_change(repo, &result, &old_head,
 					    &new_head, &head_moves);
 		if (ret < 0)
