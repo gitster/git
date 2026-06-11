@@ -1074,7 +1074,7 @@ void datestamp(struct strbuf *out)
  *
  * The tm->tm_mday field has an additional logic of using negative values
  * for date adjustments: -2 means yesterday and -3 the day before that,
- * and so on.  The idea is to deref such adjustments until we are sure
+ * and so on.  The idea is to defer such adjustments until we are sure
  * there's no explicit mday specification in the approxidate string.
  */
 static time_t update_tm(struct tm *tm, struct tm *now, time_t sec)

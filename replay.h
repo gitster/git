@@ -32,7 +32,7 @@ struct replay_revisions_options {
 
 	/*
 	 * Starting point at which to create the new commits; must be a
-	 * committish. References pointing at decendants of `onto` will be
+	 * committish. References pointing at descendants of `onto` will be
 	 * updated to point to the new commits.
 	 */
 	const char *onto;
