@@ -73,11 +73,19 @@ int ref_newer(const struct object_id *new_oid, const struct object_id *old_oid);
 enum contains_result {
 	CONTAINS_UNKNOWN = 0,
 	CONTAINS_NO,
-	CONTAINS_YES
+	CONTAINS_YES,
+	CONTAINS_IN_PROGRESS
 };
 
 define_commit_slab(contains_cache, enum contains_result);
 
+/*
+ * Return whether "commit" is a descendant of any commit in "list". An empty
+ * list matches.
+ *
+ * The memoized traversal records answers in "cache" for one fixed "list".
+ * Clear it before changing the list.
+ */
 int commit_contains(struct ref_filter *filter, struct commit *commit,
 		    struct commit_list *list, struct contains_cache *cache);
 

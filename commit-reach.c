@@ -757,7 +757,8 @@ static int in_commit_list(const struct commit_list *want, struct commit *c)
 
 /*
  * Test whether the candidate is contained in the list.
- * Do not recurse to find out, though, but return -1 if inconclusive.
+ * Do not recurse to find out, though, but return CONTAINS_UNKNOWN if
+ * inconclusive.
  */
 static enum contains_result contains_test(struct commit *candidate,
 					  const struct commit_list *want,
@@ -793,7 +794,7 @@ static void push_to_contains_stack(struct commit *candidate, struct contains_sta
 }
 
 static enum contains_result contains_tag_algo(struct commit *candidate,
-					      const struct commit_list *want,
+					      struct commit_list *want,
 					      struct contains_cache *cache)
 {
 	struct contains_stack contains_stack = { 0, 0, NULL };
@@ -814,6 +815,7 @@ static enum contains_result contains_tag_algo(struct commit *candidate,
 	if (result != CONTAINS_UNKNOWN)
 		return result;
 
+	*contains_cache_at(cache, candidate) = CONTAINS_IN_PROGRESS;
 	push_to_contains_stack(candidate, &contains_stack);
 	while (contains_stack.nr) {
 		struct contains_stack_entry *entry = &contains_stack.contains_stack[contains_stack.nr - 1];
@@ -825,8 +827,8 @@ static enum contains_result contains_tag_algo(struct commit *candidate,
 			contains_stack.nr--;
 		}
 		/*
-		 * If we just popped the stack, parents->item has been marked,
-		 * therefore contains_test will return a meaningful yes/no.
+		 * A parent may have just been popped and marked, or may still
+		 * be active when replacement refs create a cycle.
 		 */
 		else switch (contains_test(parents->item, want, cache, cutoff)) {
 		case CONTAINS_YES:
@@ -836,21 +838,50 @@ static enum contains_result contains_tag_algo(struct commit *candidate,
 		case CONTAINS_NO:
 			entry->parents = parents->next;
 			break;
+		case CONTAINS_IN_PROGRESS:
+			/*
+			 * Partial negative answers are not safe across a cycle.
+			 * Discard them and use the cycle-safe reachability walk.
+			 */
+			goto cycle;
 		case CONTAINS_UNKNOWN:
+			*contains_cache_at(cache, parents->item) =
+				CONTAINS_IN_PROGRESS;
 			push_to_contains_stack(parents->item, &contains_stack);
 			break;
 		}
 	}
 	free(contains_stack.contains_stack);
 	return contains_test(candidate, want, cache, cutoff);
+
+cycle:
+	free(contains_stack.contains_stack);
+	clear_contains_cache(cache);
+	init_contains_cache(cache);
+
+	result = repo_is_descendant_of(the_repository, candidate, want);
+	if (result < 0)
+		exit(128);
+	*contains_cache_at(cache, candidate) =
+		result ? CONTAINS_YES : CONTAINS_NO;
+	return result ? CONTAINS_YES : CONTAINS_NO;
 }
 
 int commit_contains(struct ref_filter *filter, struct commit *commit,
 		    struct commit_list *list, struct contains_cache *cache)
 {
-	if (filter->with_commit_tag_algo)
+	int result;
+
+	if (!list)
+		return 1;
+	if (filter->with_commit_tag_algo ||
+	    generation_numbers_enabled(the_repository))
 		return contains_tag_algo(commit, list, cache) == CONTAINS_YES;
-	return repo_is_descendant_of(the_repository, commit, list);
+
+	result = repo_is_descendant_of(the_repository, commit, list);
+	if (result < 0)
+		exit(128);
+	return result;
 }
 
 int can_all_from_reach_with_flag(struct object_array *from,
