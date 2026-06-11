@@ -92,7 +92,7 @@ input and avoids unnecessary churn from many rapid iterations.
   topic are appropriate, so such an incremental updates are limited to
   small corrections and polishing.  After a topic cooks for some time
   (like 7 calendar days) in 'next' without needing further tweaks on
-  top, it gets merged to the 'master' branch and wait to become part
+  top, it gets merged to the 'master' branch and waits to become part
   of the next major release.
 
 In the following sections, many techniques and conventions are listed
