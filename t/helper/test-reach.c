@@ -7,6 +7,7 @@
 #include "hex.h"
 #include "object-name.h"
 #include "ref-filter.h"
+#include "revision.h"
 #include "setup.h"
 #include "string-list.h"
 #include "tag.h"
@@ -149,30 +150,26 @@ int cmd__reach(int ac, const char **av)
 
 		printf("%s(_,A,X,_):%d\n", av[1], commit_contains(&filter, A, X, &cache));
 		clear_contains_cache(&cache);
-	} else if (!strcmp(av[1], "get_reachable_subset")) {
-		const int reachable_flag = 1;
-		int count = 0;
-		struct commit_list *current;
-		struct commit_list *list = get_reachable_subset(X_stack.items, X_stack.nr,
-								Y_stack.items, Y_stack.nr,
-								reachable_flag);
-		printf("get_reachable_subset(X,Y)\n");
-		for (current = list; current; current = current->next) {
-			if (!(list->item->object.flags & reachable_flag))
-				die(_("commit %s is not marked reachable"),
-				    oid_to_hex(&list->item->object.oid));
-			count++;
-		}
+	} else if (!strcmp(av[1], "tips_reachable_from_bases")) {
+		struct commit_list *bases = NULL;
+		struct commit_list *result = NULL;
+
+		for (size_t i = 0; i < X_stack.nr; i++)
+			commit_list_insert(X_stack.items[i], &bases);
+		tips_reachable_from_bases(the_repository,
+					 bases, Y_stack.items,
+					 Y_stack.nr, TMP_MARK);
+		commit_list_free(bases);
+
+		printf("tips_reachable_from_bases(X,Y)\n");
 		for (size_t i = 0; i < Y_stack.nr; i++) {
-			if (Y_stack.items[i]->object.flags & reachable_flag)
-				count--;
+			if (Y_stack.items[i]->object.flags & TMP_MARK)
+				commit_list_insert(Y_stack.items[i], &result);
 		}
+		print_sorted_commit_ids(result);
 
-		if (count < 0)
-			die(_("too many commits marked reachable"));
-
-		print_sorted_commit_ids(list);
-		commit_list_free(list);
+		clear_commit_marks_many(Y_stack.nr, Y_stack.items, TMP_MARK);
+		commit_list_free(result);
 	}
 
 	object_array_clear(&X_obj);

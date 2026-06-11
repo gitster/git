@@ -1459,9 +1459,8 @@ static void add_missing_tags(struct ref *src, struct ref **dst, struct ref ***ds
 	 * sent to the other side.
 	 */
 	if (sent_tips.nr) {
-		const int reachable_flag = 1;
-		struct commit_list *found_commits;
 		struct commit_stack src_commits = COMMIT_STACK_INIT;
+		struct commit_list *bases = NULL;
 
 		for_each_string_list_item(item, &src_tag) {
 			struct ref *ref = item->util;
@@ -1479,11 +1478,12 @@ static void add_missing_tags(struct ref *src, struct ref **dst, struct ref ***ds
 			commit_stack_push(&src_commits, commit);
 		}
 
-		found_commits = get_reachable_subset(sent_tips.items,
-						     sent_tips.nr,
-						     src_commits.items,
-						     src_commits.nr,
-						     reachable_flag);
+		for (size_t i = 0; i < sent_tips.nr; i++)
+			commit_list_insert(sent_tips.items[i], &bases);
+		tips_reachable_from_bases(the_repository,
+					 bases, src_commits.items,
+					 src_commits.nr, TMP_MARK);
+		commit_list_free(bases);
 
 		for_each_string_list_item(item, &src_tag) {
 			struct ref *dst_ref;
@@ -1503,7 +1503,7 @@ static void add_missing_tags(struct ref *src, struct ref **dst, struct ref ***ds
 			 * Is this tag, which they do not have, reachable from
 			 * any of the commits we are sending?
 			 */
-			if (!(commit->object.flags & reachable_flag))
+			if (!(commit->object.flags & TMP_MARK))
 				continue;
 
 			/* Add it in */
@@ -1513,9 +1513,8 @@ static void add_missing_tags(struct ref *src, struct ref **dst, struct ref ***ds
 		}
 
 		clear_commit_marks_many(src_commits.nr, src_commits.items,
-					reachable_flag);
+					TMP_MARK);
 		commit_stack_clear(&src_commits);
-		commit_list_free(found_commits);
 	}
 
 	string_list_clear(&src_tag, 0);
