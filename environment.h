@@ -98,6 +98,7 @@ struct repo_config_values {
 	int precomposed_unicode;
 	int core_sparse_checkout_cone;
 	int warn_on_object_refname_ambiguity;
+	int trust_executable_bit;
 
 	/* section "sparse" config values */
 	int sparse_expect_files_outside_of_patterns;
@@ -133,6 +134,13 @@ int git_default_config(const char *, const char *,
 int git_default_core_config(const char *var, const char *value,
 			    const struct config_context *ctx, void *cb);
 
+/*
+ * Getters for the `repo_trust_executable_bit` fields of `struct repo_config_values`.
+ * They check `repo->gitdir` to prevent calling repo_config_values()
+ * before the configuration is loaded or in bare environments.
+ */
+int repo_trust_executable_bit(struct repository *repo);
+
 void repo_config_values_init(struct repo_config_values *cfg);
 
 /*
@@ -162,7 +170,6 @@ int is_bare_repository(void);
 extern char *git_work_tree_cfg;
 
 /* Environment bits from configuration mechanism */
-extern int trust_executable_bit;
 extern int has_symlinks;
 extern int minimum_abbrev, default_abbrev;
 extern int ignore_case;
