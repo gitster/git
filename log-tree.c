@@ -3,6 +3,7 @@
 
 #include "git-compat-util.h"
 #include "commit-reach.h"
+#include "commit-slab.h"
 #include "config.h"
 #include "diff.h"
 #include "diffcore.h"
@@ -1089,6 +1090,104 @@ static int do_remerge_diff(struct rev_info *opt,
 	return !opt->loginfo;
 }
 
+/* Per-commit paths storage for --follow across merges */
+define_commit_slab(follow_pathspec_slab, struct string_list);
+
+static const char *pathspec_single_path(const struct pathspec *ps)
+{
+	if (ps->nr != 1)
+		return NULL;
+	return ps->items[0].match;
+}
+
+static void set_pathspec_to_paths(struct pathspec *ps,
+				  const struct string_list *paths)
+{
+	const char **argv;
+	struct string_list_item *item;
+	int i = 0;
+
+	clear_pathspec(ps);
+	if (!paths->nr)
+		return;
+	ALLOC_ARRAY(argv, paths->nr + 1);
+	for_each_string_list_item(item, paths)
+		argv[i++] = item->string;
+	argv[i] = NULL;
+	parse_pathspec(ps,
+		       PATHSPEC_ALL_MAGIC & ~PATHSPEC_LITERAL,
+		       PATHSPEC_LITERAL_PATH, "", argv);
+	free(argv);
+}
+
+static struct string_list *get_follow_pathspec_at(struct rev_info *opt,
+						  struct commit *c)
+{
+	struct string_list *list;
+
+	if (!opt->follow_pathspec_slab) {
+		opt->follow_pathspec_slab = xmalloc(sizeof(*opt->follow_pathspec_slab));
+		init_follow_pathspec_slab(opt->follow_pathspec_slab);
+	}
+	list = follow_pathspec_slab_at(opt->follow_pathspec_slab, c);
+	if (!list->strdup_strings)
+		list->strdup_strings = 1;
+	return list;
+}
+
+static void remember_follow_pathspec(struct rev_info *opt,
+				     struct commit *c, const char *path)
+{
+	if (!path)
+		return;
+	string_list_insert(get_follow_pathspec_at(opt, c), path);
+}
+
+static void free_follow_pathspec_slot(struct string_list *slot)
+{
+	string_list_clear(slot, 0);
+}
+
+void release_follow_pathspec_slab(struct rev_info *opt)
+{
+	if (!opt->follow_pathspec_slab)
+		return;
+	deep_clear_follow_pathspec_slab(opt->follow_pathspec_slab,
+					free_follow_pathspec_slot);
+	FREE_AND_NULL(opt->follow_pathspec_slab);
+}
+
+/* Compute a path to follow in parent, if there is one */
+static void propagate_follow_pathspec_to_parent(struct rev_info *opt,
+						const char *path,
+						struct commit *commit,
+						struct commit *parent)
+{
+	struct diff_options diff_opts;
+	const char *paths[2] = { path, NULL };
+	const char *out_path;
+
+	parse_commit_or_die(parent);
+	repo_diff_setup(opt->diffopt.repo, &diff_opts);
+	parse_pathspec(&diff_opts.pathspec,
+		       PATHSPEC_ALL_MAGIC & ~PATHSPEC_LITERAL,
+		       PATHSPEC_LITERAL_PATH, "", paths);
+	diff_opts.flags.recursive = 1;
+	diff_opts.flags.follow_renames = 1;
+	diff_opts.output_format = DIFF_FORMAT_NO_OUTPUT;
+	diff_setup_done(&diff_opts);
+	diff_tree_oid(get_commit_tree_oid(parent),
+		      get_commit_tree_oid(commit),
+		      "", &diff_opts);
+
+	out_path = pathspec_single_path(&diff_opts.pathspec);
+	if (out_path)
+		remember_follow_pathspec(opt, parent, out_path);
+
+	diff_queue_clear(&diff_queued_diff);
+	diff_free(&diff_opts);
+}
+
 /*
  * Show the diff of a commit.
  *
@@ -1173,11 +1272,29 @@ int log_tree_commit(struct rev_info *opt, struct commit *commit)
 	int shown;
 	/* maybe called by e.g. cmd_log_walk(), maybe stand-alone */
 	int no_free = opt->diffopt.no_free;
+	int saved_follow_renames = 0;
+	struct string_list *paths = NULL;
 
 	log.commit = commit;
 	log.parent = NULL;
 	opt->loginfo = &log;
 	opt->diffopt.no_free = 1;
+
+	/* Any recorded paths for this commit? If so, restore it */
+	if (opt->diffopt.flags.follow_renames) {
+		paths = get_follow_pathspec_at(opt, commit);
+		if (!paths->nr) {
+			const char *path = pathspec_single_path(&opt->diffopt.pathspec);
+			if (path)
+				string_list_insert(paths, path);
+		}
+		set_pathspec_to_paths(&opt->diffopt.pathspec, paths);
+		if (paths->nr > 1) {
+			/* diff_check_follow_pathspec() doesn't handle multiple paths */
+			saved_follow_renames = opt->diffopt.flags.follow_renames;
+			opt->diffopt.flags.follow_renames = 0;
+		}
+	}
 
 	/* NEEDSWORK: no restoring of no_free?  Why? */
 	if (opt->line_level_traverse)
@@ -1195,6 +1312,22 @@ int log_tree_commit(struct rev_info *opt, struct commit *commit)
 		fprintf(opt->diffopt.file, "\n%s\n", opt->break_bar);
 	if (shown)
 		show_diff_of_diff(opt);
+
+	if (saved_follow_renames)
+		opt->diffopt.flags.follow_renames = saved_follow_renames;
+
+	/* Record what paths each parent of this commit should use */
+	if (opt->diffopt.flags.follow_renames && paths) {
+		struct commit_list *parents = get_saved_parents(opt, commit);
+		struct commit_list *p;
+		struct string_list_item *item;
+		for (p = parents; p; p = p->next) {
+			for_each_string_list_item(item, paths)
+				propagate_follow_pathspec_to_parent(opt,
+					item->string, commit, p->item);
+		}
+	}
+
 	opt->loginfo = NULL;
 	maybe_flush_or_die(opt->diffopt.file, "stdout");
 	opt->diffopt.no_free = no_free;
