@@ -96,19 +96,6 @@ int can_all_from_reach_with_flag(struct object_array *from,
 int can_all_from_reach(struct commit_list *from, struct commit_list *to,
 		       int commit_date_cutoff);
 
-
-/*
- * Return a list of commits containing the commits in the 'to' array
- * that are reachable from at least one commit in the 'from' array.
- * Also add the given 'flag' to each of the commits in the returned list.
- *
- * This method uses the PARENT1 and PARENT2 flags during its operation,
- * so be sure these flags are not set before calling the method.
- */
-struct commit_list *get_reachable_subset(struct commit **from, size_t nr_from,
-					 struct commit **to, size_t nr_to,
-					 unsigned int reachable_flag);
-
 struct ahead_behind_count {
 	/**
 	 * As input, the *_index members indicate which positions in
@@ -144,10 +131,14 @@ void ahead_behind(struct repository *r,
  * For all tip commits, add 'mark' to their flags if and only if they
  * are reachable from one of the commits in 'bases'.
  */
+enum tips_reachable_mode {
+	TIPS_REACHABLE_DFS,
+	TIPS_REACHABLE_PQ,
+};
 void tips_reachable_from_bases(struct repository *r,
 			       struct commit_list *bases,
 			       struct commit **tips, size_t tips_nr,
-			       int mark);
+			       int mark, enum tips_reachable_mode mode);
 
 /*
  * Given a 'tip' commit and a list potential 'bases', return the index 'i' that

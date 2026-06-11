@@ -3157,7 +3157,7 @@ static void reach_filter(struct ref_array *array,
 	tips_reachable_from_bases(the_repository,
 				  *check_reachable,
 				  to_clear, array->nr,
-				  UNINTERESTING);
+				  UNINTERESTING, TIPS_REACHABLE_DFS);
 
 	old_nr = array->nr;
 	array->nr = 0;
