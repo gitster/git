@@ -952,8 +952,14 @@ void read_gitfile_error_die(int error_code, const char *path, const char *dir)
  * will be set to an error code and NULL will be returned. If
  * return_error_code is NULL the function will die instead (for most
  * cases).
+ *
+ * If the code is READ_GITFILE_ERR_NOT_A_REPO and return_error_dir is
+ * non-NULL, the directory to which the gitfile points will be returned
+ * there. The caller is responsible for freeing the resulting string.
  */
-const char *read_gitfile_gently(const char *path, int *return_error_code)
+const char *read_gitfile_gently_with_error_dir(const char *path,
+					       int *return_error_code,
+					       char **return_error_dir)
 {
 	const int max_file_size = 1 << 20;  /* 1MB */
 	int error_code = 0;
@@ -1018,6 +1024,8 @@ const char *read_gitfile_gently(const char *path, int *return_error_code)
 	}
 	if (!is_git_directory(dir)) {
 		error_code = READ_GITFILE_ERR_NOT_A_REPO;
+		if (return_error_dir)
+			*return_error_dir = xstrdup(dir);
 		goto cleanup_return;
 	}
 
@@ -1601,11 +1609,12 @@ static enum discovery_result setup_git_directory_gently_1(struct strbuf *dir,
 		int offset = dir->len, error_code = 0;
 		char *gitdir_path = NULL;
 		char *gitfile = NULL;
+		char *error_dst = NULL;
 
 		if (offset > min_offset)
 			strbuf_addch(dir, '/');
 		strbuf_addstr(dir, DEFAULT_GIT_DIR_ENVIRONMENT);
-		gitdirenv = read_gitfile_gently(dir->buf, &error_code);
+		gitdirenv = read_gitfile_gently_with_error_dir(dir->buf, &error_code, &error_dst);
 		if (!gitdirenv) {
 			switch (error_code) {
 			case READ_GITFILE_ERR_MISSING:
@@ -1629,9 +1638,11 @@ static enum discovery_result setup_git_directory_gently_1(struct strbuf *dir,
 					return GIT_DIR_INVALID_GITFILE;
 			default:
 				if (die_on_error)
-					read_gitfile_error_die(error_code, dir->buf, NULL);
-				else
+					read_gitfile_error_die(error_code, dir->buf, error_dst);
+				else {
+					free(error_dst);
 					return GIT_DIR_INVALID_GITFILE;
+				}
 			}
 		} else {
 			gitfile = xstrdup(dir->buf);
