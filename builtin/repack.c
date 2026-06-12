@@ -629,7 +629,7 @@ int cmd_repack(int argc,
 		unsigned flags = 0;
 		if (git_env_bool(GIT_TEST_MULTI_PACK_INDEX_WRITE_INCREMENTAL, 0))
 			flags |= MIDX_WRITE_INCREMENTAL;
-		write_midx_file(existing.source, NULL, NULL, flags);
+		write_midx_file(existing.source, NULL, NULL, NULL, flags);
 	}
 
 cleanup:

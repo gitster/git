@@ -1850,12 +1850,14 @@ cleanup:
 int write_midx_file(struct odb_source *source,
 		    const char *preferred_pack_name,
 		    const char *refs_snapshot,
+		    const char *incremental_base,
 		    unsigned flags)
 {
 	struct write_midx_opts opts = {
 		.source = source,
 		.preferred_pack_name = preferred_pack_name,
 		.refs_snapshot = refs_snapshot,
+		.incremental_base = incremental_base,
 		.flags = flags,
 	};
 
