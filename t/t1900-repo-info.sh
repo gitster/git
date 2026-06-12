@@ -216,4 +216,11 @@ test_repo_info_path 'commondir with only GIT_DIR' 'commondir' \
 	'commondir-only-gitdir' '.git' '../.git' \
 	'GIT_DIR="../.git" && export GIT_DIR'
 
+test_repo_info_path 'gitdir standard' 'gitdir' 'gitdir-std' \
+	'.git' '../.git'
+
+test_repo_info_path 'gitdir with explicit GIT_DIR' 'gitdir' \
+	'gitdir-env' '.git' '../.git' \
+	'GIT_DIR="../.git" && export GIT_DIR'
+
 test_done
