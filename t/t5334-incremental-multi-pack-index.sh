@@ -119,7 +119,7 @@ test_expect_success 'write MIDX layer with --base without --no-write-chain-file'
 	test_grep "cannot use --base without --no-write-chain-file" err
 '
 
-test_expect_failure 'write MIDX layer with --base=none and --no-write-chain-file' '
+test_expect_success 'write MIDX layer with --base=none and --no-write-chain-file' '
 	test_commit base-none &&
 	git repack -d &&
 
@@ -136,7 +136,7 @@ test_expect_failure 'write MIDX layer with --base=none and --no-write-chain-file
 	cp "$midx_chain.bak" "$midx_chain"
 '
 
-test_expect_failure 'write MIDX layer with --base=<hash> and --no-write-chain-file' '
+test_expect_success 'write MIDX layer with --base=<hash> and --no-write-chain-file' '
 	test_commit base-hash &&
 	git repack -d &&
 
