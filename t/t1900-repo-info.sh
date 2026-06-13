@@ -155,4 +155,72 @@ test_expect_success 'git repo info -h shows only repo info usage' '
 	test_grep ! "git repo structure" actual
 '
 
+# Helper function to test path keys in both absolute and relative formats.
+# $1: label for the test
+# $2: field_name (e.g., commondir)
+# $3: unique repo name for isolation
+# $4: expect_absolute (suffix appended to repo root)
+# $5: expect_relative (the relative path string expected)
+# $6: init_command (extra setup like exporting env vars)
+test_repo_info_path () {
+	label=$1
+	field_name=$2
+	repo_name=$3
+	expect_absolute_suffix=$4
+	expect_relative=$5
+	init_command=$6
+
+	absolute_root="$repo_name-absolute"
+	relative_root="$repo_name-relative"
+
+	test_expect_success "setup: $label" '
+		git init "$absolute_root" &&
+		git init "$relative_root" &&
+		mkdir -p "$absolute_root/sub" "$relative_root/sub"
+	'
+
+	test_expect_success "absolute: $label" '
+		(
+			cd "$absolute_root/sub" &&
+			ROOT="$(test-tool path-utils real_path "..")" && export ROOT &&
+			eval "$init_command" &&
+			expect_path="$ROOT${expect_absolute_suffix:+/$expect_absolute_suffix}" &&
+			echo "path.$field_name.absolute=$expect_path" >expect &&
+			git repo info "path.$field_name.absolute" >actual &&
+			test_cmp expect actual
+		)
+	'
+
+	test_expect_success "relative: $label" '
+		(
+			cd "$relative_root/sub" &&
+			ROOT="$(test-tool path-utils real_path "..")" && export ROOT &&
+			eval "$init_command" &&
+			echo "path.$field_name.relative=$expect_relative" >expect &&
+			git repo info "path.$field_name.relative" >actual &&
+			test_cmp expect actual
+		)
+	'
+}
+
+test_repo_info_path 'commondir standard' 'commondir' 'commondir-std' \
+	'.git' '../.git'
+
+test_repo_info_path 'commondir with GIT_COMMON_DIR and GIT_DIR' 'commondir' \
+	'commondir-envs' 'custom-common' '../custom-common' \
+	'GIT_COMMON_DIR="$ROOT/custom-common" && export GIT_COMMON_DIR &&
+	 GIT_DIR="../.git" && export GIT_DIR &&
+	 git init --bare "$ROOT/custom-common"'
+
+test_repo_info_path 'commondir with only GIT_DIR' 'commondir' \
+	'commondir-only-gitdir' '.git' '../.git' \
+	'GIT_DIR="../.git" && export GIT_DIR'
+
+test_repo_info_path 'gitdir standard' 'gitdir' 'gitdir-std' \
+	'.git' '../.git'
+
+test_repo_info_path 'gitdir with explicit GIT_DIR' 'gitdir' \
+	'gitdir-env' '.git' '../.git' \
+	'GIT_DIR="../.git" && export GIT_DIR'
+
 test_done
