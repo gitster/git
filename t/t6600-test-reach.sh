@@ -391,7 +391,7 @@ test_expect_success 'rev-list: symmetric difference topo-order' '
 	run_all_modes git rev-list --topo-order commit-3-8...commit-6-6
 '
 
-test_expect_success 'get_reachable_subset:all' '
+test_expect_success 'tips_reachable_from_bases:all' '
 	cat >input <<-\EOF &&
 	X:commit-9-1
 	X:commit-8-3
@@ -403,15 +403,16 @@ test_expect_success 'get_reachable_subset:all' '
 	Y:commit-5-6
 	EOF
 	(
-		echo "get_reachable_subset(X,Y)" &&
+		echo "tips_reachable_from_bases(X,Y)" &&
 		git rev-parse commit-3-3 \
 			      commit-1-7 \
 			      commit-5-6 | sort
 	) >expect &&
-	test_all_modes get_reachable_subset
+	test_all_modes tips_reachable_from_bases &&
+	test_all_modes tips_reachable_from_bases_pq
 '
 
-test_expect_success 'get_reachable_subset:some' '
+test_expect_success 'tips_reachable_from_bases:some' '
 	cat >input <<-\EOF &&
 	X:commit-9-1
 	X:commit-8-3
@@ -422,14 +423,15 @@ test_expect_success 'get_reachable_subset:some' '
 	Y:commit-5-6
 	EOF
 	(
-		echo "get_reachable_subset(X,Y)" &&
+		echo "tips_reachable_from_bases(X,Y)" &&
 		git rev-parse commit-3-3 \
 			      commit-1-7 | sort
 	) >expect &&
-	test_all_modes get_reachable_subset
+	test_all_modes tips_reachable_from_bases &&
+	test_all_modes tips_reachable_from_bases_pq
 '
 
-test_expect_success 'get_reachable_subset:none' '
+test_expect_success 'tips_reachable_from_bases:none' '
 	cat >input <<-\EOF &&
 	X:commit-9-1
 	X:commit-8-3
@@ -439,8 +441,9 @@ test_expect_success 'get_reachable_subset:none' '
 	Y:commit-7-6
 	Y:commit-2-8
 	EOF
-	echo "get_reachable_subset(X,Y)" >expect &&
-	test_all_modes get_reachable_subset
+	echo "tips_reachable_from_bases(X,Y)" >expect &&
+	test_all_modes tips_reachable_from_bases &&
+	test_all_modes tips_reachable_from_bases_pq
 '
 
 test_expect_success 'for-each-ref ahead-behind:linear' '
@@ -654,6 +657,50 @@ test_expect_success 'for-each-ref merged:duplicate at min generation' '
 	refs/heads/dup-d
 	EOF
 	run_all_modes git for-each-ref --merged=commit-5-5 \
+		--format="%(refname)" --stdin
+'
+
+test_expect_success 'for-each-ref merged:all reachable commits' '
+	for x in $(test_seq 1 10)
+	do
+		for y in $(test_seq 1 10)
+		do
+			echo "refs/heads/commit-$x-$y" || return 1
+		done
+	done >input &&
+	for x in $(test_seq 1 5)
+	do
+		for y in $(test_seq 1 5)
+		do
+			echo "refs/heads/commit-$x-$y" || return 1
+		done
+	done | sort >expect &&
+	run_all_modes git for-each-ref --merged=commit-5-5 \
+		--format="%(refname)" --stdin
+'
+
+test_expect_success 'for-each-ref merged:all reachable, multibase' '
+	for x in $(test_seq 1 10)
+	do
+		for y in $(test_seq 1 10)
+		do
+			echo "refs/heads/commit-$x-$y" || return 1
+		done
+	done >input &&
+	for x in $(test_seq 1 10)
+	do
+		for y in $(test_seq 1 10)
+		do
+			if { test $x -le 3 && test $y -le 7; } ||
+			   { test $x -le 7 && test $y -le 3; }
+			then
+				echo "refs/heads/commit-$x-$y" || return 1
+			fi
+		done
+	done | sort >expect &&
+	run_all_modes git for-each-ref \
+		--merged=commit-3-7 \
+		--merged=commit-7-3 \
 		--format="%(refname)" --stdin
 '
 
