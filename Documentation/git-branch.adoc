@@ -13,6 +13,7 @@ git branch [--color[=<when>] | --no-color] [--show-current]
 	   [--column[=<options>] | --no-column] [--sort=<key>]
 	   [--merged [<commit>]] [--no-merged [<commit>]]
 	   [--contains [<commit>]] [--no-contains [<commit>]]
+	   [(--forked <branch>)...]
 	   [--points-at <object>] [--format=<format>]
 	   [(-r|--remotes) | (-a|--all)]
 	   [--list] [<pattern>...]
@@ -24,6 +25,7 @@ git branch (-m|-M) [<old-branch>] <new-branch>
 git branch (-c|-C) [<old-branch>] <new-branch>
 git branch (-d|-D) [-r] <branch-name>...
 git branch --edit-description [<branch-name>]
+git branch [--dry-run] --prune-merged <branch>...
 
 DESCRIPTION
 -----------
@@ -51,7 +53,8 @@ merged into the named commit (i.e. the branches whose tip commits are
 reachable from the named commit) will be listed.  With `--no-merged` only
 branches not merged into the named commit will be listed.  If the _<commit>_
 argument is missing it defaults to `HEAD` (i.e. the tip of the current
-branch).
+branch).  With `--forked`, only branches whose configured upstream matches
+the given branch or pattern will be listed.
 
 The command's second form creates a new branch head named _<branch-name>_
 which points to the current `HEAD`, or _<start-point>_ if given. As a
@@ -199,6 +202,36 @@ This option is only applicable in non-verbose mode.
 	Print the name of the current branch. In detached `HEAD` state,
 	nothing is printed.
 
+`--prune-merged <branch>...`::
+	Delete the local branches that `--forked` would list for the
+	given _<branch>_ arguments, but only those whose tip is
+	reachable from their configured upstream. In other words, the
+	work on the branch has already landed on the upstream it
+	tracks, so the local copy is no longer needed. Several
+	_<branch>_ patterns may be given, e.g. `git branch
+	--prune-merged origin/main 'feature*'`.
++
+Reachability is checked against whatever the upstream refs say
+locally; nothing is fetched. Run `git fetch` first if you want
+the upstream refs refreshed.
++
+A branch is left alone if any of the following holds:
+its upstream no longer resolves locally; it is checked out in any
+worktree; its push destination (`<branch>@{push}`) equals its
+upstream (`<branch>@{upstream}`), so it cannot be distinguished
+from a freshly pulled trunk that just looks "fully merged"; or
+`branch.<name>.pruneMerged` is set to `false`.
++
+Branches refused by the "fully merged" safety check are listed as
+warnings and skipped; pass them to `git branch -D` explicitly if
+you want them gone.
+
+`--dry-run`::
+	With `--prune-merged`, print which branches would be
+	deleted and exit without touching any ref.  Useful for
+	sanity-checking a wide pattern like `'origin/*'` before
+	committing to the deletion.
+
 `-v`::
 `-vv`::
 `--verbose`::
@@ -310,6 +343,12 @@ superproject's "origin/main", but tracks the submodule's "origin/main".
 `--no-merged [<commit>]`::
 	Only list branches whose tips are not reachable from
 	_<commit>_ (`HEAD` if not specified). Implies `--list`.
+
+`--forked <branch>`::
+	Only list branches whose configured upstream matches
+	_<branch>_. The argument can be a ref (e.g. `origin/main`,
+	`master`) or a shell-style glob (e.g. `'origin/*'`). The
+	option can be repeated to widen the filter. Implies `--list`.
 
 `--points-at <object>`::
 	Only list branches of _<object>_.
