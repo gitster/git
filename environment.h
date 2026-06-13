@@ -130,13 +130,6 @@ void repo_config_values_init(struct repo_config_values *cfg);
  * `the_repository`. We should eventually get rid of these and make the
  * dependency on a repository explicit:
  *
- *   - `setup_git_env()` ideally shouldn't exist as it modifies global state,
- *     namely the environment. The current process shouldn't ever access that
- *     state via envvars though, but should instead consult a `struct
- *     repository`. When spawning new processes, we would ideally also pass a
- *     `struct repository` and then set up the environment variables for the
- *     child process, only.
- *
  *   - `have_git_dir()` should not have to exist at all. Instead, we should
  *     decide on whether or not we have a `struct repository`.
  *
@@ -147,6 +140,7 @@ void repo_config_values_init(struct repo_config_values *cfg);
  * Please do not add new global config variables here.
  */
 # ifdef USE_THE_REPOSITORY_VARIABLE
+
 /*
  * Returns true iff we have a configured git repository (either via
  * setup_git_directory, or in the environment via $GIT_DIR).
