@@ -13,7 +13,7 @@ sideband.allowControlCharacters::
 		Allow control sequences that move the cursor. This is
 		disabled by default.
 	`erase`::
-		Allow control sequences that erase charactrs. This is
+		Allow control sequences that erase characters. This is
 		disabled by default.
 	`false`::
 		Mask all control characters other than line feeds and
