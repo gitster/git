@@ -13,7 +13,6 @@
 #include "packed-backend.h"
 #include "../iterator.h"
 #include "../lockfile.h"
-#include "../chdir-notify.h"
 #include "../statinfo.h"
 #include "../worktree.h"
 #include "../wrapper.h"
@@ -226,10 +225,9 @@ struct ref_store *packed_ref_store_init(struct repository *repo,
 
 	base_ref_store_init(ref_store, repo, gitdir, &refs_be_packed);
 	refs->store_flags = opts->access_flags;
-
 	strbuf_addf(&sb, "%s/packed-refs", gitdir);
 	refs->path = strbuf_detach(&sb, NULL);
-	chdir_notify_reparent("packed-refs", &refs->path);
+
 	return ref_store;
 }
 

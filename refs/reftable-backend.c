@@ -1,6 +1,5 @@
 #include "../git-compat-util.h"
 #include "../abspath.h"
-#include "../chdir-notify.h"
 #include "../config.h"
 #include "../dir.h"
 #include "../environment.h"
@@ -444,8 +443,6 @@ static struct ref_store *reftable_be_init(struct repository *repo,
 		if (refs->err)
 			goto done;
 	}
-
-	chdir_notify_reparent("reftables-backend $GIT_DIR", &refs->base.gitdir);
 
 done:
 	assert(refs->err != REFTABLE_API_ERROR);

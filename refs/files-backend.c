@@ -21,7 +21,6 @@
 #include "../lockfile.h"
 #include "../path.h"
 #include "../dir.h"
-#include "../chdir-notify.h"
 #include "../setup.h"
 #include "../worktree.h"
 #include "../wrapper.h"
@@ -128,12 +127,7 @@ static struct ref_store *files_ref_store_init(struct repository *repo,
 
 	repo_config_get_bool(repo, "core.prefersymlinkrefs", &refs->prefer_symlink_refs);
 
-	chdir_notify_reparent("files-backend $GIT_DIR", &refs->base.gitdir);
-	chdir_notify_reparent("files-backend $GIT_COMMONDIR",
-			      &refs->gitcommondir);
-
 	strbuf_release(&refdir);
-
 	return ref_store;
 }
 
