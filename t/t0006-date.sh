@@ -138,6 +138,13 @@ check_parse '1969-12-31 23:59:59 Z' bad
 check_parse '1969-12-31 23:59:59 +11' bad
 check_parse '1969-12-31 23:59:59 -11' bad
 
+# pathologically small timestamps requiring `@` prefix
+check_parse '@0 +0000' '1970-01-01 00:00:00 +0000'
+check_parse '@99999999 +0000' '1973-03-03 09:46:39 +0000'
+check_parse '99999999 +0000' bad
+check_parse '@100000000 +0000' '1973-03-03 09:46:40 +0000'
+check_parse '100000000 +0000' '1973-03-03 09:46:40 +0000'
+
 REQUIRE_64BIT_TIME=HAVE_64BIT_TIME
 check_parse '2099-12-31 23:59:59' '2099-12-31 23:59:59 +0000'
 check_parse '2099-12-31 23:59:59 +00' '2099-12-31 23:59:59 +0000'
@@ -236,6 +243,10 @@ check_approxidate '6AM, June 7, 2009' '2009-06-07 06:00:00'
 
 check_approxidate '2008-12-01' '2008-12-01 19:20:00'
 check_approxidate '2009-12-01' '2009-12-01 19:20:00'
+
+# ambiguous raw timestamp
+check_approxidate '2000 +0000' '2000-08-30 19:20:00'
+check_approxidate '@2000 +0000' '1970-01-01 00:33:20'
 
 check_date_format_human() {
 	t=$(($GIT_TEST_DATE_NOW - $1))
