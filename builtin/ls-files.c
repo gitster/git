@@ -453,6 +453,17 @@ static void show_files(struct repository *repo, struct dir_struct *dir)
 			continue;
 		if (ce_skip_worktree(ce))
 			continue;
+		/*
+		 * match_pathspec() is linear in pathspec.nr, so prefilter only
+		 * the single-pathspec case. Only entries shown by show_ce()
+		 * satisfy --error-unmatch.
+		 */
+		if (pathspec.nr == 1 &&
+		    !match_pathspec(repo->index, &pathspec, fullname.buf,
+				    fullname.len, max_prefix_len, NULL,
+				    S_ISDIR(ce->ce_mode) ||
+				    S_ISGITLINK(ce->ce_mode)))
+			continue;
 		stat_err = lstat(fullname.buf, &st);
 		if (stat_err && (errno != ENOENT && errno != ENOTDIR))
 			error_errno("cannot lstat '%s'", fullname.buf);
