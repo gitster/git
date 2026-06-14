@@ -1212,7 +1212,6 @@ static void *threaded_second_pass(void *data)
 			list_add(&child->list, &work_head);
 			base_cache_used += child->size;
 			prune_base_data(NULL);
-			free_base_data(child);
 		} else if (child) {
 			/*
 			 * This child does not have its own children. It may be
