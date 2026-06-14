@@ -1624,6 +1624,7 @@ test_expect_success 'transaction cannot restart ongoing transaction' '
 '
 
 test_expect_success PIPE 'transaction flushes status updates' '
+	test_when_finished "rm -f in out" &&
 	mkfifo in out &&
 	(git update-ref --stdin <in >out &) &&
 
