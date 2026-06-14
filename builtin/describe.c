@@ -712,13 +712,25 @@ int cmd_describe(int argc,
 			     NULL);
 		if (always)
 			strvec_push(&args, "--always");
-		if (!all) {
+		if (!all)
 			strvec_push(&args, "--tags");
+
+		for_each_string_list_item(item, &patterns)
+			strvec_pushf(&args, "--refs=refs/tags/%s", item->string);
+		for_each_string_list_item(item, &exclude_patterns)
+			strvec_pushf(&args, "--exclude=refs/tags/%s", item->string);
+
+		if (all) {
 			for_each_string_list_item(item, &patterns)
-				strvec_pushf(&args, "--refs=refs/tags/%s", item->string);
+				strvec_pushf(&args, "--refs=refs/heads/%s", item->string);
 			for_each_string_list_item(item, &exclude_patterns)
-				strvec_pushf(&args, "--exclude=refs/tags/%s", item->string);
+				strvec_pushf(&args, "--exclude=refs/heads/%s", item->string);
+			for_each_string_list_item(item, &patterns)
+				strvec_pushf(&args, "--refs=refs/remotes/%s", item->string);
+			for_each_string_list_item(item, &exclude_patterns)
+				strvec_pushf(&args, "--exclude=refs/remotes/%s", item->string);
 		}
+
 		if (argc)
 			strvec_pushv(&args, argv);
 		else
