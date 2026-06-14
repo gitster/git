@@ -1013,79 +1013,6 @@ int can_all_from_reach(struct commit_list *from, struct commit_list *to,
 	return result;
 }
 
-struct commit_list *get_reachable_subset(struct commit **from, size_t nr_from,
-					 struct commit **to, size_t nr_to,
-					 unsigned int reachable_flag)
-{
-	struct commit **item;
-	struct commit *current;
-	struct commit_list *found_commits = NULL;
-	struct commit **to_last = to + nr_to;
-	struct commit **from_last = from + nr_from;
-	timestamp_t min_generation = GENERATION_NUMBER_INFINITY;
-	int num_to_find = 0;
-
-	struct prio_queue queue = { compare_commits_by_gen_then_commit_date };
-
-	for (item = to; item < to_last; item++) {
-		timestamp_t generation;
-		struct commit *c = *item;
-
-		repo_parse_commit(the_repository, c);
-		generation = commit_graph_generation(c);
-		if (generation < min_generation)
-			min_generation = generation;
-
-		if (!(c->object.flags & PARENT1)) {
-			c->object.flags |= PARENT1;
-			num_to_find++;
-		}
-	}
-
-	for (item = from; item < from_last; item++) {
-		struct commit *c = *item;
-		if (!(c->object.flags & PARENT2)) {
-			c->object.flags |= PARENT2;
-			repo_parse_commit(the_repository, c);
-
-			prio_queue_put(&queue, *item);
-		}
-	}
-
-	while (num_to_find && (current = prio_queue_get(&queue)) != NULL) {
-		struct commit_list *parents;
-
-		if (current->object.flags & PARENT1) {
-			current->object.flags &= ~PARENT1;
-			current->object.flags |= reachable_flag;
-			commit_list_insert(current, &found_commits);
-			num_to_find--;
-		}
-
-		for (parents = current->parents; parents; parents = parents->next) {
-			struct commit *p = parents->item;
-
-			repo_parse_commit(the_repository, p);
-
-			if (commit_graph_generation(p) < min_generation)
-				continue;
-
-			if (p->object.flags & PARENT2)
-				continue;
-
-			p->object.flags |= PARENT2;
-			prio_queue_put(&queue, p);
-		}
-	}
-
-	clear_prio_queue(&queue);
-
-	clear_commit_marks_many(nr_to, to, PARENT1);
-	clear_commit_marks_many(nr_from, from, PARENT2);
-
-	return found_commits;
-}
-
 define_commit_slab(bit_arrays, struct bitmap *);
 static struct bit_arrays bit_arrays;
 
@@ -1213,22 +1140,26 @@ static int compare_commit_and_index_by_generation(const void *va, const void *vb
 void tips_reachable_from_bases(struct repository *r,
 			       struct commit_list *bases,
 			       struct commit **tips, size_t tips_nr,
-			       int mark)
+			       int mark, enum tips_reachable_mode mode)
 {
 	struct commit_and_index *commits;
+	struct commit_list *p;
+	struct commit *c;
 	size_t min_generation_index = 0;
 	timestamp_t min_generation;
-	struct commit_list *stack = NULL;
+	struct prio_queue queue = { NULL };
 
 	if (!bases || !tips || !tips_nr)
 		return;
 
 	/*
-	 * Do a depth-first search starting at 'bases' to search for the
-	 * tips. Stop at the lowest (un-found) generation number. When
-	 * finding the lowest commit, increase the minimum generation
-	 * number to the next lowest (un-found) generation number.
+	 * Search starting at 'bases' looking for the tips. Stop at the
+	 * lowest un-found generation number, raising the floor as tips
+	 * are found. Use DFS by default; with TIPS_REACHABLE_PQ,
+	 * use a priority queue ordered by generation then commit date.
 	 */
+	if (mode == TIPS_REACHABLE_PQ)
+		queue.compare = compare_commits_by_gen_then_commit_date;
 
 	CALLOC_ARRAY(commits, tips_nr);
 
@@ -1246,14 +1177,19 @@ void tips_reachable_from_bases(struct repository *r,
 
 	while (bases) {
 		repo_parse_commit(r, bases->item);
-		commit_list_insert(bases->item, &stack);
+		bases->item->object.flags |= SEEN;
+		prio_queue_put(&queue, bases->item);
 		bases = bases->next;
 	}
 
-	while (stack) {
-		int explored_all_parents = 1;
-		struct commit_list *p;
-		struct commit *c = stack->item;
+	while ((c = prio_queue_get(&queue))) {
+		struct commit *first_parent = NULL;
+
+		repo_parse_commit(r, c);
+
+		/* Skip if below the current generation floor. */
+		if (commit_graph_generation(c) < min_generation)
+			continue;
 
 		/* Does it match any of our tips? */
 		{
@@ -1277,25 +1213,26 @@ void tips_reachable_from_bases(struct repository *r,
 		}
 
 		for (p = c->parents; p; p = p->next) {
-			repo_parse_commit(r, p->item);
-
 			/* Have we already explored this parent? */
 			if (p->item->object.flags & SEEN)
 				continue;
 
-			/* Is it below the current minimum generation? */
-			if (commit_graph_generation(p->item) < min_generation)
-				continue;
-
 			/* Ok, we will explore from here on. */
 			p->item->object.flags |= SEEN;
-			explored_all_parents = 0;
-			commit_list_insert(p->item, &stack);
-			break;
+			/* Parse before pushing in PQ mode for ordering. */
+			if (mode == TIPS_REACHABLE_PQ)
+				repo_parse_commit(r, p->item);
+			if (!first_parent)
+				first_parent = p->item;
+			else
+				prio_queue_put(&queue, p->item);
 		}
-
-		if (explored_all_parents)
-			pop_commit(&stack);
+		/*
+		 * Add the first parent last so that it is on top of
+		 * the LIFO queue, maintaining first-parent DFS order.
+		 */
+		if (first_parent)
+			prio_queue_put(&queue, first_parent);
 	}
 
 done:
@@ -1303,7 +1240,7 @@ done:
 		commits[i].commit->object.flags &= ~RESULT;
 	free(commits);
 	repo_clear_commit_marks(r, SEEN);
-	commit_list_free(stack);
+	clear_prio_queue(&queue);
 }
 
 /*
