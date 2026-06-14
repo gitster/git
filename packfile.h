@@ -124,7 +124,7 @@ struct packfile_store {
 	 * that packs that contain a lot of accessed objects will be located
 	 * towards the front.
 	 *
-	 * This is usually desireable, but there are exceptions. One exception
+	 * This is usually desirable, but there are exceptions. One exception
 	 * is when the looking up multiple objects in a loop for each packfile.
 	 * In that case, we may easily end up with an infinite loop as the
 	 * packfiles get reordered to the front repeatedly.
