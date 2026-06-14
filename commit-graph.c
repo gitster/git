@@ -1669,7 +1669,7 @@ static void compute_reachable_generation_numbers(
 			struct commit *current = list->item;
 			struct commit_list *parent;
 			int all_parents_computed = 1;
-			uint32_t max_gen = 0;
+			timestamp_t max_gen = 0;
 
 			for (parent = current->parents; parent; parent = parent->next) {
 				repo_parse_commit(info->r, parent->item);
