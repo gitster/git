@@ -752,6 +752,9 @@ int cmd_describe(int argc,
 		return ret;
 	}
 
+	if (!all)
+		for_each_ref_opts.prefix = "refs/tags/";
+
 	hashmap_init(&names, commit_name_neq, NULL, 0);
 	refs_for_each_ref_ext(get_main_ref_store(the_repository),
 			      get_name, NULL, &for_each_ref_opts);
