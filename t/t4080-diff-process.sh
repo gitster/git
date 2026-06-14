@@ -295,6 +295,22 @@ test_expect_success 'diff process bypassed by --diff-algorithm' '
 	test_path_is_missing backend.log
 '
 
+test_expect_success 'diff process bypassed by --no-ext-diff' '
+	test_when_finished "rm -f backend.log" &&
+	git -c diff.cdiff.process="$BACKEND --log=backend.log" \
+		diff --no-ext-diff worddiff.c >actual &&
+	test_grep "return 999" actual &&
+	test_path_is_missing backend.log
+'
+
+test_expect_success 'diff process not used by format-patch' '
+	test_when_finished "rm -f backend.log" &&
+	git -c diff.cdiff.process="$BACKEND --log=backend.log" \
+		format-patch -1 --stdout -- logtest.c >actual &&
+	test_grep "return 2" actual &&
+	test_path_is_missing backend.log
+'
+
 test_expect_success 'diff process not used by --stat' '
 	test_when_finished "rm -f backend.log" &&
 	git -c diff.cdiff.process="$BACKEND --log=backend.log" \
