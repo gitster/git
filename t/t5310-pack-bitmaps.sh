@@ -602,7 +602,7 @@ test_expect_success 'path-walk repack can write and use bitmap indexes' '
 			git -c pack.allowPackReuse=$reuse pack-objects \
 				--stdout --revs --path-walk --use-bitmap-index \
 				<in >out.pack &&
-			grep "\"category\":\"bitmap\",\"key\":\"bitmap/hits\"" trace.txt &&
+			test_grep "\"category\":\"bitmap\",\"key\":\"bitmap/hits\"" trace.txt &&
 
 			git index-pack out.pack &&
 
