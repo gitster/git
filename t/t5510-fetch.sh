@@ -251,6 +251,7 @@ test_expect_success 'followRemoteHEAD does not kick in with refspecs' '
 '
 
 test_expect_success 'followRemoteHEAD create does not overwrite dangling symref' '
+	test_when_finished "git -C two remote remove custom-head" &&
 	git -C two remote add -m does-not-exist custom-head ../one &&
 	test_config -C two remote.custom-head.followRemoteHEAD create &&
 	git -C two fetch custom-head &&
