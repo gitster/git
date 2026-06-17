@@ -24,6 +24,9 @@
 #define REFS_DELETE_USAGE \
 	N_("git refs delete [--message=<reason>] [--no-deref] <ref> [<old-value>]")
 
+#define REFS_UPDATE_USAGE \
+	N_("git refs update [--message=<reason>] [--no-deref] [--create-reflog] <ref> <new-value> [<old-value>]")
+
 static int cmd_refs_migrate(int argc, const char **argv, const char *prefix,
 			    struct repository *repo)
 {
@@ -224,6 +227,56 @@ static int cmd_refs_delete(int argc, const char **argv, const char *prefix,
 	return ret;
 }
 
+static int cmd_refs_update(int argc, const char **argv, const char *prefix,
+			   struct repository *repo)
+{
+	static char const * const refs_update_usage[] = {
+		REFS_UPDATE_USAGE,
+		NULL
+	};
+	const char *message = NULL;
+	unsigned flags = 0;
+	struct option opts[] = {
+		OPT_STRING(0, "message", &message, N_("reason"),
+			   N_("reason of the update")),
+		OPT_BIT(0 ,"no-deref", &flags,
+			N_("update <refname> not the one it points to"),
+			REF_NO_DEREF),
+		OPT_BIT(0, "create-reflog", &flags, N_("create a reflog"),
+			REF_FORCE_CREATE_REFLOG),
+		OPT_END(),
+	};
+	struct object_id newoid, oldoid;
+	const char *refname;
+	int ret;
+
+	argc = parse_options(argc, argv, prefix, opts, refs_update_usage, 0);
+	if (argc < 2 || argc > 3)
+		usage(_("update requires reference name, new value and an optional old value"));
+
+	if (message && !*message)
+		die(_("refusing to perform update with empty message"));
+
+	repo_config(repo, git_default_config, NULL);
+
+	refname = argv[0];
+	if (repo_get_oid_with_flags(repo, argv[1], &newoid,
+				    GET_OID_SKIP_AMBIGUITY_CHECK))
+		die(_("invalid new object ID: '%s'"), argv[1]);
+	if (argc == 3 &&
+	    repo_get_oid_with_flags(repo, argv[2], &oldoid,
+				    GET_OID_SKIP_AMBIGUITY_CHECK))
+		die(_("invalid old object ID: '%s'"), argv[2]);
+
+	ret = refs_update_ref(get_main_ref_store(repo), message, refname,
+			      &newoid, argc == 3 ? &oldoid : NULL, flags,
+			      UPDATE_REFS_MSG_ON_ERR);
+
+	if (ret < 0)
+		ret = 1;
+	return ret;
+}
+
 int cmd_refs(int argc,
 	     const char **argv,
 	     const char *prefix,
@@ -236,6 +289,7 @@ int cmd_refs(int argc,
 		REFS_EXISTS_USAGE,
 		REFS_OPTIMIZE_USAGE,
 		REFS_DELETE_USAGE,
+		REFS_UPDATE_USAGE,
 		NULL,
 	};
 	parse_opt_subcommand_fn *fn = NULL;
@@ -246,6 +300,7 @@ int cmd_refs(int argc,
 		OPT_SUBCOMMAND("exists", &fn, cmd_refs_exists),
 		OPT_SUBCOMMAND("optimize", &fn, cmd_refs_optimize),
 		OPT_SUBCOMMAND("delete", &fn, cmd_refs_delete),
+		OPT_SUBCOMMAND("update", &fn, cmd_refs_update),
 		OPT_END(),
 	};
 
