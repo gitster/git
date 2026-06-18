@@ -1018,4 +1018,96 @@ test_expect_success '--summary shows new file on root commit' '
 	test_grep "create mode 100644 file.c" actual
 '
 
+test_expect_success 'setup for --check test' '
+	git checkout --orphan check-test &&
+	git reset --hard &&
+	cat >check.c <<-\EOF &&
+	void tracked()
+	{
+	    return;
+	}
+
+	void other()
+	{
+	    return;
+	}
+	EOF
+	git add check.c &&
+	test_tick &&
+	git commit -m "add check.c" &&
+	# Introduce trailing whitespace errors in both functions
+	sed "s/return;/return; /" check.c >check.c.tmp &&
+	mv check.c.tmp check.c &&
+	git commit -a -m "introduce trailing whitespace"
+'
+
+test_expect_success '--check scoped to tracked range with correct file line' '
+	# tracked() trailing whitespace is at check.c:3; report it with the
+	# real file line number, not a count from the start of the range
+	# hunk.  other() at check.c:8 is outside the range and is excluded.
+	test_must_fail git log -L:tracked:check.c --check --format= >actual &&
+	test_grep "check.c:3: trailing whitespace" actual &&
+	test_grep ! "check.c:8:" actual
+'
+
+test_expect_success '--check reports each of several tracked ranges' '
+	# Track both functions as separate ranges.  Each range is flushed
+	# as its own hunk, so the second error must report its real file
+	# line (check.c:8), not continue the numbering from the first
+	# range (check.c:3).
+	test_must_fail git log -L:tracked:check.c -L:other:check.c \
+		--check --format= >actual &&
+	test_grep "check.c:3: trailing whitespace" actual &&
+	test_grep "check.c:8: trailing whitespace" actual
+'
+
+test_expect_success '--check line numbers stay correct across a gap in one range' '
+	git checkout --orphan check-gap &&
+	git reset --hard &&
+	cat >gap.c <<-\EOF &&
+	void tracked()
+	{
+	    int a = 1;
+	    int b = 2;
+	    int c = 3;
+	    int d = 4;
+	    int e = 5;
+	    int g = 7;
+	    return;
+	}
+	EOF
+	git add gap.c &&
+	test_tick &&
+	git commit -m "add gap.c" &&
+	# Two trailing-whitespace errors within one tracked range,
+	# separated by clean lines.  ctxlen is inflated to the range span,
+	# so they land in a single xdiff hunk with the gap as context;
+	# both must report their real file line number, with the context
+	# lines between them counted.
+	sed -e "s/int a = 1;/int a = 1; /" -e "s/int g = 7;/int g = 7; /" gap.c >tmp &&
+	mv tmp gap.c &&
+	git commit -a -m "ws errors with a gap" &&
+	test_must_fail git log -L:tracked:gap.c --check --format= >actual &&
+	test_grep "gap.c:3: trailing whitespace" actual &&
+	test_grep "gap.c:8: trailing whitespace" actual
+'
+
+test_expect_success '--check does not report blank-at-eof outside the range' '
+	git checkout --orphan check-eof &&
+	git reset --hard &&
+	printf "void tracked()\n{\n    return;\n}\n\nint tail = 1;\n" >eof.c &&
+	git add eof.c &&
+	test_tick &&
+	git commit -m "add eof.c" &&
+	# One commit introduces a trailing-whitespace error inside tracked()
+	# (line 3) and a blank line at end of file (line 7, outside the
+	# range).  The blank-at-eof check scans the whole file, so it must be
+	# scoped: report the in-range error, not the out-of-range EOF blank.
+	printf "void tracked()\n{\n    return; \n}\n\nint tail = 1;\n\n" >eof.c &&
+	git commit -a -m "ws in range, blank at eof out of range" &&
+	test_must_fail git log -L:tracked:eof.c --check --format= >actual &&
+	test_grep "eof.c:3: trailing whitespace" actual &&
+	test_grep ! "blank line at EOF" actual
+'
+
 test_done
