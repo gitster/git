@@ -3692,6 +3692,44 @@ static unsigned int count_explore_walked;
 static unsigned int count_indegree_walked;
 static unsigned int count_topo_walked;
 
+struct commit *revision_peek_next_commit (struct rev_info *revs)
+{
+	struct topo_walk_info *info = revs->topo_walk_info;
+
+	if (info)
+		return prio_queue_peek(&info->topo_queue);
+	if (revs->commits)
+		return revs->commits->item;
+
+	return NULL;
+}
+
+int revision_has_commits_after (struct rev_info *revs, int n)
+{
+	struct topo_walk_info *info = revs->topo_walk_info;
+
+	if (info) {
+		int visible = 0;
+		for (size_t i = 0; i < info->topo_queue.nr && visible < n; i++) {
+			struct commit *c = info->topo_queue.array[i].data;
+			if (get_commit_action(revs, c) == commit_show)
+				visible++;
+		}
+		return visible > n-1;
+	}
+	if (revs->commits) {
+		struct commit_list *cl;
+		int visible = 0;
+		for (cl = revs->commits; cl && visible < n; cl = cl->next) {
+			if (get_commit_action(revs, cl->item) == commit_show)
+				visible++;
+		}
+		return visible > n-1;
+	}
+
+	return 0;
+}
+
 static void trace2_topo_walk_statistics_atexit(void)
 {
 	struct json_writer jw = JSON_WRITER_INIT;
