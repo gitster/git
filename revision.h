@@ -572,4 +572,14 @@ int rewrite_parents(struct rev_info *revs,
  */
 struct commit_list *get_saved_parents(struct rev_info *revs, const struct commit *commit);
 
+/*
+ * Peek into revision's next commit without consuming it.
+ */
+struct commit *revision_peek_next_commit(struct rev_info *revs);
+
+/*
+ * Check if there are n more commits to be shown yet.
+ */
+int revision_has_commits_after(struct rev_info *revs, int n);
+
 #endif
