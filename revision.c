@@ -3724,7 +3724,7 @@ int revision_has_commits_after (struct rev_info *revs, int n)
 
 	if (info) {
 		int visible = 0;
-		for (size_t i = 0; i < info->topo_queue.nr && visible < n; i++) {
+		for (size_t i = 0; i < info->topo_queue.nr_ && visible < n; i++) {
 			struct commit *c = info->topo_queue.array[i].data;
 			if (get_commit_action(revs, c) == commit_show)
 				visible++;
