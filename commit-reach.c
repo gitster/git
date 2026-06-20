@@ -201,6 +201,19 @@ static int paint_down_to_common(struct repository *r,
 		if (queue.p1_count + queue.p2_count +
 		    queue.pending_merge_bases == 0)
 			break;
+
+		/*
+		 * Side exhaustion: a new merge-base can only form
+		 * when both PARENT1-only and PARENT2-only commits
+		 * remain in the queue.  In the finite-generation
+		 * region the queue is ordered topologically, so
+		 * no future step can add paint to visited commits
+		 * and an exhausted side cannot reappear.
+		 */
+		if (generation < GENERATION_NUMBER_INFINITY &&
+		    queue.pending_merge_bases == 0 &&
+		    (queue.p1_count == 0 || queue.p2_count == 0))
+			break;
 	}
 
 	clear_prio_queue(&queue.pq);
