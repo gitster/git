@@ -638,20 +638,23 @@ __git_ls_files_helper ()
 }
 
 
-# __git_index_files accepts 1 to 4 arguments:
+# __git_index_files accepts 1 to 3 arguments:
 # 1: Options to pass to ls-files (required).
 # 2: A directory path (optional).
 #    If provided, only files within the specified directory are listed.
 #    Sub directories are never recursed.  Path must have a trailing
 #    slash.
 # 3: List only paths matching this path component (optional).
-# 4: Hide paths whose first component starts with a dot if this is
-#    "hide-dotfiles" and the third argument is empty (optional).
+#
+# If the third argument is empty, paths that begin with a dot (dotfiles)
+# are hidden. This matches user expectations where dotfiles are considered
+# hidden configuration files/directories and shouldn't clutter default
+# completions unless explicitly requested by typing a dot.
 __git_index_files ()
 {
-	local root="$2" match="$3" hide_dotfiles="${4-}"
+	local root="$2" match="$3"
 	local hide_dotfiles_awk=0
-	if [ "$hide_dotfiles" = "hide-dotfiles" ] && [ -z "$match" ]; then
+	if [ -z "$match" ]; then
 		hide_dotfiles_awk=1
 	fi
 
@@ -661,28 +664,22 @@ __git_index_files ()
 	}
 	END {
 		for (p in paths) {
-			if (substr(p, 1, 1) != "\"") {
-				# No special characters, easy!
-				if (hide_dotfiles == 1 && substr(p, 1, 1) == ".")
+			if (substr(p, 1, 1) == "\"") {
+				# The path is quoted.
+				p = dequote(p)
+				if (p == "")
 					continue
-				print pfx p
-				continue
+
+				# Even when a directory name itself does not contain
+				# any special characters, it will still be quoted if
+				# any of its (stripped) trailing path components do.
+				# Because of this we may have seen the same directory
+				# both quoted and unquoted.
+				if (p in paths)
+					# We have seen the same directory unquoted,
+					# skip it.
+					continue
 			}
-
-			# The path is quoted.
-			p = dequote(p)
-			if (p == "")
-				continue
-
-			# Even when a directory name itself does not contain
-			# any special characters, it will still be quoted if
-			# any of its (stripped) trailing path components do.
-			# Because of this we may have seen the same directory
-			# both quoted and unquoted.
-			if (p in paths)
-				# We have seen the same directory unquoted,
-				# skip it.
-				continue
 
 			if (hide_dotfiles == 1 && substr(p, 1, 1) == ".")
 				continue
@@ -731,15 +728,13 @@ __git_index_files ()
 	}'
 }
 
-# __git_complete_index_file accepts 1 or 2 arguments:
-# 1: the options to pass to ls-file
-# 2: Hide paths whose first component starts with a dot if this is
-#    "hide-dotfiles" and the current word is empty (optional).
+# __git_complete_index_file accepts 1 argument:
+# 1: the options to pass to ls-files
 #
 # The exception is --committable, which finds the files appropriate commit.
 __git_complete_index_file ()
 {
-	local dequoted_word pfx="" cur_ hide_dotfiles="${2-}"
+	local dequoted_word pfx="" cur_
 
 	__git_dequote "$cur"
 
@@ -752,7 +747,7 @@ __git_complete_index_file ()
 		cur_="$dequoted_word"
 	esac
 
-	__gitcomp_file_direct "$(__git_index_files "$1" "$pfx" "$cur_" "$hide_dotfiles")"
+	__gitcomp_file_direct "$(__git_index_files "$1" "$pfx" "$cur_")"
 }
 
 # Lists branches from the local repository.
@@ -2176,7 +2171,7 @@ _git_ls_files ()
 
 	# XXX ignore options like --modified and always suggest all cached
 	# files.
-	__git_complete_index_file "--cached" hide-dotfiles
+	__git_complete_index_file "--cached"
 }
 
 _git_ls_remote ()
@@ -2409,9 +2404,9 @@ _git_mv ()
 	if [ $(__git_count_arguments "mv") -gt 0 ]; then
 		# We need to show both cached and untracked files (including
 		# empty directories) since this may not be the last argument.
-		__git_complete_index_file "--cached --others --directory" hide-dotfiles
+		__git_complete_index_file "--cached --others --directory"
 	else
-		__git_complete_index_file "--cached" hide-dotfiles
+		__git_complete_index_file "--cached"
 	fi
 }
 
@@ -3231,7 +3226,7 @@ _git_rm ()
 		;;
 	esac
 
-	__git_complete_index_file "--cached" hide-dotfiles
+	__git_complete_index_file "--cached"
 }
 
 _git_shortlog ()

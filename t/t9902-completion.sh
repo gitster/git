@@ -2360,6 +2360,7 @@ test_expect_success 'setup for path completion tests' '
 	      "spaces in dir" \
 	      árvíztűrő &&
 	touch simple-dir/simple-file \
+	      simple-dir/.dotfile-in-dir \
 	      "spaces in dir/spaces in file" \
 	      "árvíztűrő/Сайн яваарай" &&
 	if test_have_prereq !MINGW &&
@@ -2378,6 +2379,11 @@ test_expect_success '__git_complete_index_file - simple' '
 	test_path_completion simple simple-dir &&  # Bash is supposed to
 						   # add the trailing /.
 	test_path_completion simple-dir/simple simple-dir/simple-file
+'
+
+test_expect_success '__git_complete_index_file - dotfiles' '
+	test_path_completion "simple-dir/" "simple-dir/simple-file" &&
+	test_path_completion "simple-dir/." "simple-dir/.dotfile-in-dir"
 '
 
 test_expect_success \
@@ -2789,7 +2795,8 @@ test_expect_success 'complete files' '
 	echo "out_sorted" >> .gitignore &&
 
 	git add .gitignore &&
-	test_completion "git commit " ".gitignore" &&
+	test_completion "git commit " "" &&
+	test_completion "git commit ." ".gitignore" &&
 
 	git commit -m ignore &&
 
