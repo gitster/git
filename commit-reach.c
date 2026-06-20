@@ -1089,12 +1089,18 @@ struct commit_list *get_reachable_subset(struct commit **from, size_t nr_from,
 define_commit_slab(bit_arrays, struct bitmap *);
 static struct bit_arrays bit_arrays;
 
-static void insert_no_dup(struct nonstale_queue *queue, struct commit *c)
+static void insert_no_dup(struct prio_queue *queue,
+			  struct commit **max_nonstale,
+			  struct commit *c)
 {
 	if (c->object.flags & PARENT2)
 		return;
-	nonstale_queue_put(queue, c);
 	c->object.flags |= PARENT2;
+	prio_queue_put(queue, c);
+	if (!(c->object.flags & STALE) &&
+	    (!*max_nonstale ||
+	     queue->compare(*max_nonstale, c, queue->cb_data) <= 0))
+		*max_nonstale = c;
 }
 
 static struct bitmap *get_bit_array(struct commit *c, int width)
@@ -1118,9 +1124,10 @@ void ahead_behind(struct repository *r,
 		  struct commit **commits, size_t commits_nr,
 		  struct ahead_behind_count *counts, size_t counts_nr)
 {
-	struct nonstale_queue queue = {
-		{ .compare = compare_commits_by_gen_then_commit_date }
+	struct prio_queue queue = {
+		.compare = compare_commits_by_gen_then_commit_date
 	};
+	struct commit *max_nonstale = NULL;
 	size_t width = DIV_ROUND_UP(commits_nr, BITS_IN_EWORD);
 
 	if (!commits_nr || !counts_nr)
@@ -1140,13 +1147,16 @@ void ahead_behind(struct repository *r,
 		struct bitmap *bitmap = get_bit_array(c, width);
 
 		bitmap_set(bitmap, i);
-		insert_no_dup(&queue, c);
+		insert_no_dup(&queue, &max_nonstale, c);
 	}
 
-	while (queue.max_nonstale) {
-		struct commit *c = nonstale_queue_get(&queue);
+	while (max_nonstale) {
+		struct commit *c = prio_queue_get(&queue);
 		struct commit_list *p;
 		struct bitmap *bitmap_c = get_bit_array(c, width);
+
+		if (c == max_nonstale)
+			max_nonstale = NULL;
 
 		for (size_t i = 0; i < counts_nr; i++) {
 			int reach_from_tip = !!bitmap_get(bitmap_c, counts[i].tip_index);
@@ -1178,7 +1188,7 @@ void ahead_behind(struct repository *r,
 			if (bitmap_popcount(bitmap_p) == commits_nr)
 				p->item->object.flags |= STALE;
 
-			insert_no_dup(&queue, p->item);
+			insert_no_dup(&queue, &max_nonstale, p->item);
 		}
 
 		free_bit_array(c);
@@ -1186,10 +1196,10 @@ void ahead_behind(struct repository *r,
 
 	/* STALE is used here, PARENT2 is used by insert_no_dup(). */
 	repo_clear_commit_marks(r, PARENT2 | STALE);
-	for (size_t i = 0; i < queue.pq.nr; i++)
-		free_bit_array(queue.pq.array[i].data);
+	for (size_t i = 0; i < queue.nr; i++)
+		free_bit_array(queue.array[i].data);
 	clear_bit_arrays(&bit_arrays);
-	clear_nonstale_queue(&queue);
+	clear_prio_queue(&queue);
 }
 
 struct commit_and_index {
