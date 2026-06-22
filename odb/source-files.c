@@ -41,11 +41,12 @@ static void odb_source_files_close(struct odb_source *source)
 	odb_source_close(&files->packed->base);
 }
 
-static void odb_source_files_reprepare(struct odb_source *source)
+static void odb_source_files_prepare(struct odb_source *source,
+				     enum odb_prepare_flags flags)
 {
 	struct odb_source_files *files = odb_source_files_downcast(source);
-	odb_source_reprepare(&files->loose->base);
-	odb_source_reprepare(&files->packed->base);
+	odb_source_prepare(&files->loose->base, flags);
+	odb_source_prepare(&files->packed->base, flags);
 }
 
 static int odb_source_files_read_object_info(struct odb_source *source,
@@ -273,7 +274,7 @@ struct odb_source_files *odb_source_files_new(struct object_database *odb,
 
 	files->base.free = odb_source_files_free;
 	files->base.close = odb_source_files_close;
-	files->base.reprepare = odb_source_files_reprepare;
+	files->base.prepare = odb_source_files_prepare;
 	files->base.read_object_info = odb_source_files_read_object_info;
 	files->base.read_object_stream = odb_source_files_read_object_stream;
 	files->base.for_each_object = odb_source_files_for_each_object;
