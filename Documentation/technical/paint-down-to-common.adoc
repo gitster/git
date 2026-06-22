@@ -1,0 +1,130 @@
+Merge-Base Computation and paint_down_to_common()
+==================================================
+
+The function `paint_down_to_common()` in `commit-reach.c` computes merge
+bases by walking the commit graph backwards from two sets of tips and
+finding where their ancestry meets.
+
+Use cases
+---------
+
+Computing merge bases is used in two different ways:
+
+ 1. *Finding all merge bases* (`merge-base --all`, `merge-tree`,
+    `merge`, `rebase`). A merge base is a common ancestor that is
+    not itself an ancestor of another common ancestor.
+
+ 2. *Ancestry checks* (`in_merge_bases`, used by `merge-base
+    --is-ancestor`, `branch -d`, `fetch`). These ask: "is commit A
+    an ancestor of commit B?" If a common ancestor equals one of the
+    inputs, that input is necessarily the only merge base -- no other
+    common ancestor can be both as recent and not an ancestor of it.
+
+Both use cases share the same algorithm and implementation.
+
+Algorithm
+---------
+
+Given a commit `one` and a set of commits `twos[]`, the walk paints
+commits with two colors:
+
+  - PARENT1: reachable from `one`
+  - PARENT2: reachable from any commit in `twos[]`
+
+The walk uses a priority queue ordered by generation number (falling
+back to commit date when generation numbers are unavailable). Each
+step dequeues the highest-priority commit (this is when we say a
+commit is "visited") and propagates its paint flags to its parents,
+enqueuing them if they gained new flags. When a commit receives
+both PARENT1 and PARENT2, it is a merge-base candidate. A candidate
+gains the STALE flag so its ancestors propagate staleness -- any
+deeper common ancestor is necessarily redundant.
+
+INFINITY and finite generation regions
+--------------------------------------
+
+The commit-graph stores a generation number for each commit. Commits
+not in the commit-graph have generation `GENERATION_NUMBER_INFINITY`. The
+graph is closed under reachability: if a commit is in the graph, all
+its ancestors are too. This partitions the commit graph into two regions:
+
+....
+    +---------------------------------------+
+    |          INFINITY region              |
+    |  generation = INFINITY                |
+    |  queue order: heuristic (commit date) |
+    +---------------------------------------+
+                    |
+                    v
+    +---------------------------------------+
+    |          Finite region                |
+    |  generation = finite                  |
+    |  queue order: topological             |
+    +---------------------------------------+
+....
+
+When the commit-graph is enabled, the INFINITY region is typically
+very small -- it only contains commits added since the last
+commit-graph refresh.
+
+All reachable INFINITY-generation commits are visited before any
+finite-generation commit, because INFINITY is larger than any finite
+value. Once the walk crosses into the finite region, it stays there.
+
+In the finite region, generation ordering guarantees topological
+traversal: children are always visited before their parents. This
+means that paint on already-visited commits is final -- no future
+traversal step can add paint to them.
+
+In the INFINITY region, commit-date ordering can violate this: a
+parent with a later date can be visited before a child with an earlier
+date. Paint flags are therefore NOT final at visit time, and a
+commit visited with only one side's paint may later gain the other.
+
+Paint flags are only added, never removed. Since each flag can be set
+at most once per commit, the number of times a commit can be
+re-enqueued is bounded by the number of flag transitions.
+
+Termination
+-----------
+
+Termination happens when we can prove that no extra progress is
+possible. We are done with the main loop when one of the following
+conditions holds:
+
+  1. The queue is empty.
+  2. The queue only contains STALE entries.
+  3. Side-exhaustion: the walk has reached the finite region and one
+     of the sides is fully exhausted.
+
+The loop waits for all pending merge-base candidates to be popped
+and recorded before any early exit fires, so no separate drain phase
+is needed after termination.
+
+Stale entry condition
+~~~~~~~~~~~~~~~~~~~~~
+If all entries are stale we cannot find any new merge bases since
+that requires at least one enqueued side node meeting the other side.
+However, we could still invalidate merge bases (if there are more
+than one). This is unnecessary since `remove_redundant()` will clean
+that up as a post-process step.
+
+Side-exhaustion
+~~~~~~~~~~~~~~~
+A commit is *exclusive* to one side if it carries that side's paint
+but not the other (e.g. PARENT1 without PARENT2).
+
+If we have reached the finite region of the graph, no future
+traversal step can add paint to an already-visited commit. Thus if
+there are no exclusive PARENT2 commits in the queue, no additional
+PARENT2 paint can be introduced into the walk. Even if exclusive
+PARENT1 commits remain, no new merge-base candidates can be
+discovered. The same holds symmetrically for PARENT1.
+
+This invariant is only valid in the finite region of the graph.
+
+Related documentation
+---------------------
+
+  - `Documentation/technical/commit-graph.adoc` -- generation numbers
+    and the reachability closure property.

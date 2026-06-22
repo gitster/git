@@ -41,58 +41,75 @@ static int compare_commits_by_gen(const void *_a, const void *_b)
 }
 
 /*
- * A prio_queue with O(1) termination check.  'max_nonstale' tracks
- * the lowest-priority non-stale commit enqueued so far; once it is
- * popped, every remaining entry is known to be STALE.
+ * Priority queue with per-side commit counters for paint_down_to_common().
+ * Each non-stale queued commit occupies exactly one bucket: PARENT1-only,
+ * PARENT2-only, or both (a pending merge-base candidate).
  */
-struct nonstale_queue {
+struct paint_queue {
 	struct prio_queue pq;
-	struct commit *max_nonstale;
+	int p1_count;
+	int p2_count;
+	int pending_merge_bases;
 };
 
-static void nonstale_queue_put(struct nonstale_queue *queue,
-			       struct commit *c)
+/*
+ * Adjust per-side counters for a paint-state transition.  Non-stale
+ * commits are counted in one of three counters: PARENT1-only,
+ * PARENT2-only, or both.  Zero means "not in the queue" (used on
+ * enqueue/dequeue); stale commits are not counted at all.
+ */
+static void paint_count_transition(struct paint_queue *queue,
+				   unsigned old_flags, unsigned new_flags)
 {
-	struct commit *old = queue->max_nonstale;
+	unsigned old_paint = old_flags & (PARENT1 | PARENT2 | STALE);
+	unsigned new_paint = new_flags & (PARENT1 | PARENT2 | STALE);
 
-	prio_queue_put(&queue->pq, c);
-	if (c->object.flags & STALE)
+	if (old_paint == new_paint)
 		return;
-	if (!old || queue->pq.compare(old, c, queue->pq.cb_data) <= 0)
-		queue->max_nonstale = c;
+
+	if (!(old_paint & STALE)) {
+		switch (old_paint & (PARENT1 | PARENT2)) {
+		case 0:                  break;
+		case PARENT1:            queue->p1_count--; break;
+		case PARENT2:            queue->p2_count--; break;
+		case PARENT1 | PARENT2:  queue->pending_merge_bases--; break;
+		default:                 BUG("unexpected paint state");
+		}
+	}
+	if (!(new_paint & STALE)) {
+		switch (new_paint & (PARENT1 | PARENT2)) {
+		case 0:                  break;
+		case PARENT1:            queue->p1_count++; break;
+		case PARENT2:            queue->p2_count++; break;
+		case PARENT1 | PARENT2:  queue->pending_merge_bases++; break;
+		default:                 BUG("unexpected paint state");
+		}
+	}
 }
 
-static struct commit *nonstale_queue_get(struct nonstale_queue *queue)
+static void paint_queue_put(struct paint_queue *queue,
+			    struct commit *c, unsigned add_flags)
+{
+	unsigned old_flags = c->object.flags;
+	c->object.flags |= add_flags;
+
+	if (old_flags & ENQUEUED) {
+		paint_count_transition(queue, old_flags, c->object.flags);
+	} else {
+		c->object.flags |= ENQUEUED;
+		prio_queue_put(&queue->pq, c);
+		paint_count_transition(queue, 0, c->object.flags);
+	}
+}
+
+static struct commit *paint_queue_get(struct paint_queue *queue)
 {
 	struct commit *commit = prio_queue_get(&queue->pq);
 
-	if (commit == queue->max_nonstale)
-		queue->max_nonstale = NULL;
-
-	return commit;
-}
-
-static void clear_nonstale_queue(struct nonstale_queue *queue)
-{
-	clear_prio_queue(&queue->pq);
-	queue->max_nonstale = NULL;
-}
-
-static void nonstale_queue_put_dedup(struct nonstale_queue *queue,
-				     struct commit *c)
-{
-	if (c->object.flags & ENQUEUED)
-		return;
-	c->object.flags |= ENQUEUED;
-	nonstale_queue_put(queue, c);
-}
-
-static struct commit *nonstale_queue_get_dedup(struct nonstale_queue *queue)
-{
-	struct commit *commit = nonstale_queue_get(queue);
-
-	if (commit)
+	if (commit) {
 		commit->object.flags &= ~ENQUEUED;
+		paint_count_transition(queue, commit->object.flags, 0);
+	}
 	return commit;
 }
 
@@ -104,9 +121,10 @@ static int paint_down_to_common(struct repository *r,
 				enum merge_base_flags mb_flags,
 				struct commit_list **result)
 {
-	struct nonstale_queue queue = {
-		{ compare_commits_by_gen_then_commit_date }
+	struct paint_queue queue = {
+		.pq = { compare_commits_by_gen_then_commit_date }
 	};
+	struct commit *commit;
 	int i;
 	timestamp_t last_gen = GENERATION_NUMBER_INFINITY;
 	struct commit_list **tail = result;
@@ -119,15 +137,12 @@ static int paint_down_to_common(struct repository *r,
 		commit_list_append(one, result);
 		return 0;
 	}
-	nonstale_queue_put_dedup(&queue, one);
+	paint_queue_put(&queue, one, 0);
 
-	for (i = 0; i < n; i++) {
-		twos[i]->object.flags |= PARENT2;
-		nonstale_queue_put_dedup(&queue, twos[i]);
-	}
+	for (i = 0; i < n; i++)
+		paint_queue_put(&queue, twos[i], PARENT2);
 
-	while (queue.max_nonstale) {
-		struct commit *commit = nonstale_queue_get_dedup(&queue);
+	while ((commit = paint_queue_get(&queue))) {
 		struct commit_list *parents;
 		int flags;
 		timestamp_t generation = commit_graph_generation(commit);
@@ -165,7 +180,7 @@ static int paint_down_to_common(struct repository *r,
 			if ((p->object.flags & flags) == flags)
 				continue;
 			if (repo_parse_commit(r, p)) {
-				clear_nonstale_queue(&queue);
+				clear_prio_queue(&queue.pq);
 				commit_list_free(*result);
 				*result = NULL;
 				/*
@@ -180,12 +195,28 @@ static int paint_down_to_common(struct repository *r,
 				return error(_("could not parse commit %s"),
 					     oid_to_hex(&p->object.oid));
 			}
-			p->object.flags |= flags;
-			nonstale_queue_put_dedup(&queue, p);
+			paint_queue_put(&queue, p, flags);
 		}
+
+		if (queue.p1_count + queue.p2_count +
+		    queue.pending_merge_bases == 0)
+			break;
+
+		/*
+		 * Side exhaustion: a new merge-base can only form
+		 * when both PARENT1-only and PARENT2-only commits
+		 * remain in the queue.  In the finite-generation
+		 * region the queue is ordered topologically, so
+		 * no future step can add paint to visited commits
+		 * and an exhausted side cannot reappear.
+		 */
+		if (generation < GENERATION_NUMBER_INFINITY &&
+		    queue.pending_merge_bases == 0 &&
+		    (queue.p1_count == 0 || queue.p2_count == 0))
+			break;
 	}
 
-	clear_nonstale_queue(&queue);
+	clear_prio_queue(&queue.pq);
 	commit_list_sort_by_date(result);
 	return 0;
 }
@@ -1102,12 +1133,18 @@ struct commit_list *get_reachable_subset(struct commit **from, size_t nr_from,
 define_commit_slab(bit_arrays, struct bitmap *);
 static struct bit_arrays bit_arrays;
 
-static void insert_no_dup(struct nonstale_queue *queue, struct commit *c)
+static void insert_no_dup(struct prio_queue *queue,
+			  struct commit **max_nonstale,
+			  struct commit *c)
 {
 	if (c->object.flags & PARENT2)
 		return;
-	nonstale_queue_put(queue, c);
 	c->object.flags |= PARENT2;
+	prio_queue_put(queue, c);
+	if (!(c->object.flags & STALE) &&
+	    (!*max_nonstale ||
+	     queue->compare(*max_nonstale, c, queue->cb_data) <= 0))
+		*max_nonstale = c;
 }
 
 static struct bitmap *get_bit_array(struct commit *c, int width)
@@ -1131,10 +1168,11 @@ void ahead_behind(struct repository *r,
 		  struct commit **commits, size_t commits_nr,
 		  struct ahead_behind_count *counts, size_t counts_nr)
 {
-	struct nonstale_queue queue = {
-		{ .compare = compare_commits_by_gen_then_commit_date }
+	struct prio_queue queue = {
+		.compare = compare_commits_by_gen_then_commit_date
 	};
 	void *entry;
+	struct commit *max_nonstale = NULL;
 	size_t width = DIV_ROUND_UP(commits_nr, BITS_IN_EWORD);
 
 	if (!commits_nr || !counts_nr)
@@ -1154,13 +1192,16 @@ void ahead_behind(struct repository *r,
 		struct bitmap *bitmap = get_bit_array(c, width);
 
 		bitmap_set(bitmap, i);
-		insert_no_dup(&queue, c);
+		insert_no_dup(&queue, &max_nonstale, c);
 	}
 
-	while (queue.max_nonstale) {
-		struct commit *c = nonstale_queue_get(&queue);
+	while (max_nonstale) {
+		struct commit *c = prio_queue_get(&queue);
 		struct commit_list *p;
 		struct bitmap *bitmap_c = get_bit_array(c, width);
+
+		if (c == max_nonstale)
+			max_nonstale = NULL;
 
 		for (size_t i = 0; i < counts_nr; i++) {
 			int reach_from_tip = !!bitmap_get(bitmap_c, counts[i].tip_index);
@@ -1192,7 +1233,7 @@ void ahead_behind(struct repository *r,
 			if (bitmap_popcount(bitmap_p) == commits_nr)
 				p->item->object.flags |= STALE;
 
-			insert_no_dup(&queue, p->item);
+			insert_no_dup(&queue, &max_nonstale, p->item);
 		}
 
 		free_bit_array(c);
@@ -1200,10 +1241,10 @@ void ahead_behind(struct repository *r,
 
 	/* STALE is used here, PARENT2 is used by insert_no_dup(). */
 	repo_clear_commit_marks(r, PARENT2 | STALE);
-	prio_queue_for_each(&queue.pq, entry)
+	prio_queue_for_each(&queue, entry)
 		free_bit_array(entry);
 	clear_bit_arrays(&bit_arrays);
-	clear_nonstale_queue(&queue);
+	clear_prio_queue(&queue);
 }
 
 struct commit_and_index {
