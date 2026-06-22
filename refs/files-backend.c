@@ -84,12 +84,14 @@ struct files_ref_store {
 	unsigned int store_flags;
 
 	char *gitcommondir;
-	enum log_refs_config log_all_ref_updates;
-	int prefer_symlink_refs;
-
 	struct ref_cache *loose;
-
 	struct ref_store *packed_ref_store;
+
+	struct files_ref_store_write_options {
+		enum log_refs_config log_all_ref_updates;
+		int prefer_symlink_refs;
+		bool initialized;
+	} write_opts_lazy_loaded;
 };
 
 static void clear_loose_ref_cache(struct files_ref_store *refs)
@@ -121,15 +123,29 @@ static int files_ref_store_config(const char *var, const char *value,
 				  const struct config_context *ctx UNUSED,
 				  void *payload)
 {
-	struct files_ref_store *refs = payload;
+	struct files_ref_store_write_options *opts = payload;
 
 	if (!strcmp(var, "core.prefersymlinkrefs")) {
-		refs->prefer_symlink_refs = git_config_bool(var, value);
+		opts->prefer_symlink_refs = git_config_bool(var, value);
 	} else if (!strcmp(var, "core.logallrefupdates")) {
-		refs->log_all_ref_updates = refs_parse_log_all_ref_updates_config(value);
+		opts->log_all_ref_updates = refs_parse_log_all_ref_updates_config(value);
 	}
 
 	return 0;
+}
+
+static const struct files_ref_store_write_options *files_ref_store_write_options(struct files_ref_store *refs)
+{
+	struct files_ref_store_write_options *opts = &refs->write_opts_lazy_loaded;
+
+	if (opts->initialized)
+		return opts;
+
+	opts->log_all_ref_updates = LOG_REFS_UNSET;
+	repo_config(refs->base.repo, files_ref_store_config, opts);
+
+	opts->initialized = true;
+	return opts;
 }
 
 /*
@@ -156,9 +172,7 @@ static struct ref_store *files_ref_store_init(struct repository *repo,
 	refs->packed_ref_store =
 		packed_ref_store_init(repo, NULL, refs->gitcommondir, opts);
 	refs->store_flags = opts->access_flags;
-	refs->log_all_ref_updates = LOG_REFS_UNSET;
 
-	repo_config(repo, files_ref_store_config, refs);
 	chdir_notify_register(NULL, files_ref_store_reparent, refs);
 
 	strbuf_release(&refdir);
@@ -1890,7 +1904,7 @@ static int log_ref_setup(struct files_ref_store *refs,
 			 const char *refname, int force_create,
 			 int *logfd, struct strbuf *err)
 {
-	enum log_refs_config log_refs_cfg = refs->log_all_ref_updates;
+	enum log_refs_config log_refs_cfg = files_ref_store_write_options(refs)->log_all_ref_updates;
 	struct strbuf logfile_sb = STRBUF_INIT;
 	char *logfile;
 
@@ -3301,6 +3315,7 @@ static int files_transaction_finish(struct ref_store *ref_store,
 {
 	struct files_ref_store *refs =
 		files_downcast(ref_store, 0, "ref_transaction_finish");
+	const struct files_ref_store_write_options *write_opts = files_ref_store_write_options(refs);
 	size_t i;
 	int ret = 0;
 	struct strbuf sb = STRBUF_INIT;
@@ -3340,7 +3355,7 @@ static int files_transaction_finish(struct ref_store *ref_store,
 		 * We try creating a symlink, if that succeeds we continue to the
 		 * next update. If not, we try and create a regular symref.
 		 */
-		if (update->new_target && refs->prefer_symlink_refs)
+		if (update->new_target && write_opts->prefer_symlink_refs)
 			/*
 			 * By using the `NOT_CONSTANT()` trick, we can avoid
 			 * errors by `clang`'s `-Wunreachable` logic that would
