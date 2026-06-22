@@ -48,9 +48,9 @@ static void reftable_backend_on_reload(void *payload)
 
 static int reftable_backend_init(struct reftable_backend *be,
 				 const char *path,
-				 const struct reftable_write_options *_opts)
+				 const struct reftable_stack_options *_opts)
 {
-	struct reftable_write_options opts = *_opts;
+	struct reftable_stack_options opts = *_opts;
 	opts.on_reload = reftable_backend_on_reload;
 	opts.on_reload_payload = be;
 	return reftable_new_stack(&be->stack, path, &opts);
@@ -140,6 +140,7 @@ struct reftable_ref_store {
 	 * is populated lazily when we try to resolve `worktrees/$worktree` refs.
 	 */
 	struct strmap worktree_backends;
+	struct reftable_stack_options stack_options;
 	struct reftable_write_options write_options;
 
 	unsigned int store_flags;
@@ -190,7 +191,7 @@ static int backend_for_worktree(struct reftable_backend **out,
 
 	CALLOC_ARRAY(*out, 1);
 	store->err = ret = reftable_backend_init(*out, worktree_dir.buf,
-						 &store->write_options);
+						 &store->stack_options);
 	if (ret < 0) {
 		free(*out);
 		goto out;
@@ -404,10 +405,10 @@ static struct ref_store *reftable_be_init(struct repository *repo,
 
 	switch (repo->hash_algo->format_id) {
 	case GIT_SHA1_FORMAT_ID:
-		refs->write_options.hash_id = REFTABLE_HASH_SHA1;
+		refs->stack_options.hash_id = REFTABLE_HASH_SHA1;
 		break;
 	case GIT_SHA256_FORMAT_ID:
-		refs->write_options.hash_id = REFTABLE_HASH_SHA256;
+		refs->stack_options.hash_id = REFTABLE_HASH_SHA256;
 		break;
 	default:
 		BUG("unknown hash algorithm %d", repo->hash_algo->format_id);
@@ -441,7 +442,7 @@ static struct ref_store *reftable_be_init(struct repository *repo,
 	}
 	strbuf_addstr(&path, "/reftable");
 	refs->err = reftable_backend_init(&refs->main_backend, path.buf,
-					  &refs->write_options);
+					  &refs->stack_options);
 	if (refs->err)
 		goto done;
 
@@ -457,7 +458,7 @@ static struct ref_store *reftable_be_init(struct repository *repo,
 		strbuf_addstr(&refdir, "/reftable");
 
 		refs->err = reftable_backend_init(&refs->worktree_backend, refdir.buf,
-						  &refs->write_options);
+						  &refs->stack_options);
 		if (refs->err)
 			goto done;
 	}
@@ -997,6 +998,7 @@ static int prepare_transaction_update(struct write_transaction_table_arg **out,
 		struct reftable_addition *addition;
 
 		ret = reftable_stack_new_addition(&addition, be->stack,
+						  &refs->write_options,
 						  REFTABLE_STACK_NEW_ADDITION_RELOAD);
 		if (ret) {
 			if (ret == REFTABLE_LOCK_ERROR)
@@ -1685,9 +1687,9 @@ static int reftable_be_optimize(struct ref_store *ref_store,
 		stack = refs->main_backend.stack;
 
 	if (opts->flags & REFS_OPTIMIZE_AUTO)
-		ret = reftable_stack_auto_compact(stack);
+		ret = reftable_stack_auto_compact(stack, &refs->write_options);
 	else
-		ret = reftable_stack_compact_all(stack, NULL);
+		ret = reftable_stack_compact_all(stack, &refs->write_options, NULL);
 	if (ret < 0) {
 		ret = error(_("unable to compact stack: %s"),
 			    reftable_error_str(ret));
@@ -1721,8 +1723,8 @@ static int reftable_be_optimize_required(struct ref_store *ref_store,
 	if (opts->flags & REFS_OPTIMIZE_AUTO)
 		use_heuristics = true;
 
-	return reftable_stack_compaction_required(stack, use_heuristics,
-						  required);
+	return reftable_stack_compaction_required(stack, &refs->write_options,
+						  use_heuristics, required);
 }
 
 struct write_create_symref_arg {
@@ -1979,6 +1981,7 @@ static int reftable_be_rename_ref(struct ref_store *ref_store,
 	if (ret)
 		goto done;
 	ret = reftable_stack_add(arg.be->stack, &write_copy_table, &arg,
+				 &refs->write_options,
 				 REFTABLE_STACK_NEW_ADDITION_RELOAD);
 
 done:
@@ -2009,6 +2012,7 @@ static int reftable_be_copy_ref(struct ref_store *ref_store,
 	if (ret)
 		goto done;
 	ret = reftable_stack_add(arg.be->stack, &write_copy_table, &arg,
+				 &refs->write_options,
 				 REFTABLE_STACK_NEW_ADDITION_RELOAD);
 
 done:
@@ -2374,6 +2378,7 @@ static int reftable_be_create_reflog(struct ref_store *ref_store,
 	arg.stack = be->stack;
 
 	ret = reftable_stack_add(be->stack, &write_reflog_existence_table, &arg,
+				 &refs->write_options,
 				 REFTABLE_STACK_NEW_ADDITION_RELOAD);
 
 done:
@@ -2446,6 +2451,7 @@ static int reftable_be_delete_reflog(struct ref_store *ref_store,
 	arg.stack = be->stack;
 
 	ret = reftable_stack_add(be->stack, &write_reflog_delete_table, &arg,
+				 &refs->write_options,
 				 REFTABLE_STACK_NEW_ADDITION_RELOAD);
 
 	assert(ret != REFTABLE_API_ERROR);
@@ -2568,6 +2574,7 @@ static int reftable_be_reflog_expire(struct ref_store *ref_store,
 		goto done;
 
 	ret = reftable_stack_new_addition(&add, be->stack,
+					  &refs->write_options,
 					  REFTABLE_STACK_NEW_ADDITION_RELOAD);
 	if (ret < 0)
 		goto done;
