@@ -11,6 +11,13 @@
 #include "packfile.h"
 #include "promisor-remote.h"
 
+static int promised_object_cb(const struct object_id *oid UNUSED,
+			      struct object_info *oi UNUSED,
+			      void *payload UNUSED)
+{
+	return 1;
+}
+
 /*
  * If we feed all the commits we want to verify to this command
  *
@@ -46,6 +53,11 @@ int check_connected(oid_iterate_fn fn, void *cb_data,
 	}
 
 	if (repo_has_promisor_remote(the_repository)) {
+		struct odb_for_each_object_options opts = {
+			.flags = ODB_FOR_EACH_OBJECT_PROMISOR_ONLY,
+			.prefix_hex_len = the_repository->hash_algo->hexsz,
+		};
+
 		/*
 		 * For partial clones, we don't want to have to do a regular
 		 * connectivity check because we have to enumerate and exclude
@@ -54,31 +66,30 @@ int check_connected(oid_iterate_fn fn, void *cb_data,
 		 * object is a promisor object. Instead, just make sure we
 		 * received, in a promisor packfile, the objects pointed to by
 		 * each wanted ref.
-		 *
-		 * Before checking for promisor packs, be sure we have the
-		 * latest pack-files loaded into memory.
 		 */
-		odb_reprepare(the_repository->objects);
 		do {
-			struct packed_git *p;
+			opts.prefix = oid;
 
-			repo_for_each_pack(the_repository, p) {
-				if (!p->pack_promisor)
-					continue;
-				if (find_pack_entry_one(oid, p))
-					goto promisor_pack_found;
+			err = odb_for_each_object_ext(the_repository->objects,
+						      NULL, promised_object_cb,
+						      NULL, &opts);
+			if (err < 0)
+				break;
+			if (err > 0) {
+				err = 0;
+				continue;
 			}
+
 			/*
 			 * Fallback to rev-list with oid and the rest of the
 			 * object IDs provided by fn.
 			 */
 			goto no_promisor_pack_found;
-promisor_pack_found:
-			;
 		} while ((oid = fn(cb_data)) != NULL);
+
 		if (opt->err_fd)
 			close(opt->err_fd);
-		return 0;
+		return err;
 	}
 
 no_promisor_pack_found:
