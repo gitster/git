@@ -126,6 +126,22 @@ static int match_hash(unsigned len, const unsigned char *a, const unsigned char 
 	return 1;
 }
 
+static bool should_exclude_pack(struct packed_git *p, enum odb_for_each_object_flags flags)
+{
+	if ((flags & ODB_FOR_EACH_OBJECT_LOCAL_ONLY) && !p->pack_local)
+		return true;
+	if ((flags & ODB_FOR_EACH_OBJECT_PROMISOR_ONLY) &&
+	    !p->pack_promisor)
+		return true;
+	if ((flags & ODB_FOR_EACH_OBJECT_SKIP_IN_CORE_KEPT_PACKS) &&
+	    p->pack_keep_in_core)
+		return true;
+	if ((flags & ODB_FOR_EACH_OBJECT_SKIP_ON_DISK_KEPT_PACKS) &&
+	    p->pack_keep)
+		return true;
+	return false;
+}
+
 static int for_each_prefixed_object_in_midx(
 	struct odb_source_packed *store,
 	struct multi_pack_index *m,
@@ -306,17 +322,9 @@ static int odb_source_packed_for_each_object(struct odb_source *source,
 	for (e = packfile_store_get_packs(packed); e; e = e->next) {
 		struct packed_git *p = e->pack;
 
-		if ((opts->flags & ODB_FOR_EACH_OBJECT_LOCAL_ONLY) && !p->pack_local)
+		if (should_exclude_pack(p, opts->flags))
 			continue;
-		if ((opts->flags & ODB_FOR_EACH_OBJECT_PROMISOR_ONLY) &&
-		    !p->pack_promisor)
-			continue;
-		if ((opts->flags & ODB_FOR_EACH_OBJECT_SKIP_IN_CORE_KEPT_PACKS) &&
-		    p->pack_keep_in_core)
-			continue;
-		if ((opts->flags & ODB_FOR_EACH_OBJECT_SKIP_ON_DISK_KEPT_PACKS) &&
-		    p->pack_keep)
-			continue;
+
 		if (open_pack_index(p)) {
 			pack_errors = 1;
 			continue;
