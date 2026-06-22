@@ -141,10 +141,21 @@ struct reftable_ref_store {
 	 */
 	struct strmap worktree_backends;
 	struct reftable_stack_options stack_options;
-	struct reftable_write_options write_options;
+
+	/*
+	 * Options used when writing to or compacting the reftable stacks.
+	 * These are parsed from the configuration lazily on first use via
+	 * `reftable_be_write_options()` so that we don't have to access the
+	 * configuration when initializing the ref store. Do not access these
+	 * fields directly, but use the accessor instead.
+	 */
+	struct reftable_be_write_options {
+		struct reftable_write_options opts;
+		enum log_refs_config log_all_ref_updates;
+		bool initialized;
+	} write_opts_lazy_loaded;
 
 	unsigned int store_flags;
-	enum log_refs_config log_all_ref_updates;
 	int err;
 };
 
@@ -285,26 +296,6 @@ out:
 	return ret;
 }
 
-static int should_write_log(struct reftable_ref_store *refs, const char *refname)
-{
-	enum log_refs_config log_refs_cfg = refs->log_all_ref_updates;
-	if (log_refs_cfg == LOG_REFS_UNSET)
-		log_refs_cfg = is_bare_repository() ? LOG_REFS_NONE : LOG_REFS_NORMAL;
-
-	switch (log_refs_cfg) {
-	case LOG_REFS_NONE:
-		return refs_reflog_exists(&refs->base, refname);
-	case LOG_REFS_ALWAYS:
-		return 1;
-	case LOG_REFS_NORMAL:
-		if (should_autocreate_reflog(log_refs_cfg, refname))
-			return 1;
-		return refs_reflog_exists(&refs->base, refname);
-	default:
-		BUG("unhandled core.logAllRefUpdates value %d", log_refs_cfg);
-	}
-}
-
 static void fill_reftable_log_record(struct reftable_log_record *log, const struct ident_split *split)
 {
 	const char *tz_begin;
@@ -336,36 +327,70 @@ static int reftable_be_config(const char *var, const char *value,
 			      void *payload)
 {
 	struct reftable_ref_store *refs = payload;
+	struct reftable_be_write_options *opts = &refs->write_opts_lazy_loaded;
 
 	if (!strcmp(var, "reftable.blocksize")) {
 		unsigned long block_size = git_config_ulong(var, value, ctx->kvi);
 		if (block_size > 16777215)
 			die("reftable block size cannot exceed 16MB");
-		refs->write_options.block_size = block_size;
+		opts->opts.block_size = block_size;
 	} else if (!strcmp(var, "reftable.restartinterval")) {
 		unsigned long restart_interval = git_config_ulong(var, value, ctx->kvi);
 		if (restart_interval > UINT16_MAX)
 			die("reftable block size cannot exceed %u", (unsigned)UINT16_MAX);
-		refs->write_options.restart_interval = restart_interval;
+		opts->opts.restart_interval = restart_interval;
 	} else if (!strcmp(var, "reftable.indexobjects")) {
-		refs->write_options.skip_index_objects = !git_config_bool(var, value);
+		opts->opts.skip_index_objects = !git_config_bool(var, value);
 	} else if (!strcmp(var, "reftable.geometricfactor")) {
 		unsigned long factor = git_config_ulong(var, value, ctx->kvi);
 		if (factor > UINT8_MAX)
 			die("reftable geometric factor cannot exceed %u", (unsigned)UINT8_MAX);
-		refs->write_options.auto_compaction_factor = factor;
+		opts->opts.auto_compaction_factor = factor;
 	} else if (!strcmp(var, "reftable.locktimeout")) {
 		int64_t lock_timeout = git_config_int64(var, value, ctx->kvi);
 		if (lock_timeout > LONG_MAX)
 			die("reftable lock timeout cannot exceed %"PRIdMAX, (intmax_t)LONG_MAX);
 		if (lock_timeout < 0 && lock_timeout != -1)
 			die("reftable lock timeout does not support negative values other than -1");
-		refs->write_options.lock_timeout_ms = lock_timeout;
+		opts->opts.lock_timeout_ms = lock_timeout;
 	} else if (!strcmp(var, "core.logallrefupdates")) {
-		refs->log_all_ref_updates = refs_parse_log_all_ref_updates_config(value);
+		opts->log_all_ref_updates = refs_parse_log_all_ref_updates_config(value);
 	}
 
 	return 0;
+}
+
+static const struct reftable_be_write_options *reftable_be_write_options(struct reftable_ref_store *refs)
+{
+	struct reftable_be_write_options *opts = &refs->write_opts_lazy_loaded;
+	mode_t mask;
+
+	if (opts->initialized)
+		return opts;
+
+	mask = umask(0);
+	umask(mask);
+
+	opts->opts.default_permissions = calc_shared_perm(refs->base.repo, 0666 & ~mask);
+	opts->opts.disable_auto_compact =
+		!git_env_bool("GIT_TEST_REFTABLE_AUTOCOMPACTION", 1);
+	opts->opts.lock_timeout_ms = 100;
+	opts->log_all_ref_updates = LOG_REFS_UNSET;
+
+	repo_config(refs->base.repo, reftable_be_config, refs);
+
+	/*
+	 * It is somewhat unfortunate that we have to mirror the default block
+	 * size of the reftable library here. But given that the write options
+	 * wouldn't be updated by the library here, and given that we require
+	 * the proper block size to trim reflog message so that they fit, we
+	 * must set up a proper value here.
+	 */
+	if (!opts->opts.block_size)
+		opts->opts.block_size = 4096;
+
+	opts->initialized = true;
+	return opts;
 }
 
 static void reftable_be_reparent(const char *name UNUSED,
@@ -391,10 +416,6 @@ static struct ref_store *reftable_be_init(struct repository *repo,
 	struct strbuf refdir = STRBUF_INIT;
 	struct strbuf path = STRBUF_INIT;
 	bool is_worktree;
-	mode_t mask;
-
-	mask = umask(0);
-	umask(mask);
 
 	refs_compute_filesystem_location(gitdir, payload, &is_worktree, &refdir,
 					 &ref_common_dir);
@@ -413,23 +434,6 @@ static struct ref_store *reftable_be_init(struct repository *repo,
 	default:
 		BUG("unknown hash algorithm %d", repo->hash_algo->format_id);
 	}
-	refs->write_options.default_permissions = calc_shared_perm(repo, 0666 & ~mask);
-	refs->write_options.disable_auto_compact =
-		!git_env_bool("GIT_TEST_REFTABLE_AUTOCOMPACTION", 1);
-	refs->write_options.lock_timeout_ms = 100;
-	refs->log_all_ref_updates = LOG_REFS_UNSET;
-
-	repo_config(repo, reftable_be_config, refs);
-
-	/*
-	 * It is somewhat unfortunate that we have to mirror the default block
-	 * size of the reftable library here. But given that the write options
-	 * wouldn't be updated by the library here, and given that we require
-	 * the proper block size to trim reflog message so that they fit, we
-	 * must set up a proper value here.
-	 */
-	if (!refs->write_options.block_size)
-		refs->write_options.block_size = 4096;
 
 	/*
 	 * Set up the main reftable stack that is hosted in GIT_COMMON_DIR.
@@ -998,7 +1002,7 @@ static int prepare_transaction_update(struct write_transaction_table_arg **out,
 		struct reftable_addition *addition;
 
 		ret = reftable_stack_new_addition(&addition, be->stack,
-						  &refs->write_options,
+						  &reftable_be_write_options(refs)->opts,
 						  REFTABLE_STACK_NEW_ADDITION_RELOAD);
 		if (ret) {
 			if (ret == REFTABLE_LOCK_ERROR)
@@ -1437,6 +1441,26 @@ static int transaction_update_cmp(const void *a, const void *b)
 	return strcmp(update_a->update->refname, update_b->update->refname);
 }
 
+static int should_write_log(struct reftable_ref_store *refs, const char *refname)
+{
+	enum log_refs_config log_refs_cfg = reftable_be_write_options(refs)->log_all_ref_updates;
+	if (log_refs_cfg == LOG_REFS_UNSET)
+		log_refs_cfg = is_bare_repository() ? LOG_REFS_NONE : LOG_REFS_NORMAL;
+
+	switch (log_refs_cfg) {
+	case LOG_REFS_NONE:
+		return refs_reflog_exists(&refs->base, refname);
+	case LOG_REFS_ALWAYS:
+		return 1;
+	case LOG_REFS_NORMAL:
+		if (should_autocreate_reflog(log_refs_cfg, refname))
+			return 1;
+		return refs_reflog_exists(&refs->base, refname);
+	default:
+		BUG("unhandled core.logAllRefUpdates value %d", log_refs_cfg);
+	}
+}
+
 static int write_transaction_table(struct reftable_writer *writer, void *cb_data)
 {
 	struct write_transaction_table_arg *arg = cb_data;
@@ -1571,7 +1595,7 @@ static int write_transaction_table(struct reftable_writer *writer, void *cb_data
 				memcpy(log->value.update.old_hash,
 				       tx_update->current_oid.hash, GIT_MAX_RAWSZ);
 				log->value.update.message =
-					xstrndup(u->msg, arg->refs->write_options.block_size / 2);
+					xstrndup(u->msg, reftable_be_write_options(arg->refs)->opts.block_size / 2);
 			}
 		}
 
@@ -1687,9 +1711,9 @@ static int reftable_be_optimize(struct ref_store *ref_store,
 		stack = refs->main_backend.stack;
 
 	if (opts->flags & REFS_OPTIMIZE_AUTO)
-		ret = reftable_stack_auto_compact(stack, &refs->write_options);
+		ret = reftable_stack_auto_compact(stack, &reftable_be_write_options(refs)->opts);
 	else
-		ret = reftable_stack_compact_all(stack, &refs->write_options, NULL);
+		ret = reftable_stack_compact_all(stack, &reftable_be_write_options(refs)->opts, NULL);
 	if (ret < 0) {
 		ret = error(_("unable to compact stack: %s"),
 			    reftable_error_str(ret));
@@ -1723,7 +1747,7 @@ static int reftable_be_optimize_required(struct ref_store *ref_store,
 	if (opts->flags & REFS_OPTIMIZE_AUTO)
 		use_heuristics = true;
 
-	return reftable_stack_compaction_required(stack, &refs->write_options,
+	return reftable_stack_compaction_required(stack, &reftable_be_write_options(refs)->opts,
 						  use_heuristics, required);
 }
 
@@ -1843,7 +1867,7 @@ static int write_copy_table(struct reftable_writer *writer, void *cb_data)
 		logs[logs_nr].refname = xstrdup(arg->newname);
 		logs[logs_nr].update_index = deletion_ts;
 		logs[logs_nr].value.update.message =
-			xstrndup(arg->logmsg, arg->refs->write_options.block_size / 2);
+			xstrndup(arg->logmsg, reftable_be_write_options(arg->refs)->opts.block_size / 2);
 		memcpy(logs[logs_nr].value.update.old_hash, old_ref.value.val1, GIT_MAX_RAWSZ);
 		logs_nr++;
 
@@ -1882,7 +1906,7 @@ static int write_copy_table(struct reftable_writer *writer, void *cb_data)
 	logs[logs_nr].refname = xstrdup(arg->newname);
 	logs[logs_nr].update_index = creation_ts;
 	logs[logs_nr].value.update.message =
-		xstrndup(arg->logmsg, arg->refs->write_options.block_size / 2);
+		xstrndup(arg->logmsg, reftable_be_write_options(arg->refs)->opts.block_size / 2);
 	memcpy(logs[logs_nr].value.update.new_hash, old_ref.value.val1, GIT_MAX_RAWSZ);
 	logs_nr++;
 
@@ -1981,7 +2005,7 @@ static int reftable_be_rename_ref(struct ref_store *ref_store,
 	if (ret)
 		goto done;
 	ret = reftable_stack_add(arg.be->stack, &write_copy_table, &arg,
-				 &refs->write_options,
+				 &reftable_be_write_options(refs)->opts,
 				 REFTABLE_STACK_NEW_ADDITION_RELOAD);
 
 done:
@@ -2012,7 +2036,7 @@ static int reftable_be_copy_ref(struct ref_store *ref_store,
 	if (ret)
 		goto done;
 	ret = reftable_stack_add(arg.be->stack, &write_copy_table, &arg,
-				 &refs->write_options,
+				 &reftable_be_write_options(refs)->opts,
 				 REFTABLE_STACK_NEW_ADDITION_RELOAD);
 
 done:
@@ -2378,7 +2402,7 @@ static int reftable_be_create_reflog(struct ref_store *ref_store,
 	arg.stack = be->stack;
 
 	ret = reftable_stack_add(be->stack, &write_reflog_existence_table, &arg,
-				 &refs->write_options,
+				 &reftable_be_write_options(refs)->opts,
 				 REFTABLE_STACK_NEW_ADDITION_RELOAD);
 
 done:
@@ -2451,7 +2475,7 @@ static int reftable_be_delete_reflog(struct ref_store *ref_store,
 	arg.stack = be->stack;
 
 	ret = reftable_stack_add(be->stack, &write_reflog_delete_table, &arg,
-				 &refs->write_options,
+				 &reftable_be_write_options(refs)->opts,
 				 REFTABLE_STACK_NEW_ADDITION_RELOAD);
 
 	assert(ret != REFTABLE_API_ERROR);
@@ -2574,7 +2598,7 @@ static int reftable_be_reflog_expire(struct ref_store *ref_store,
 		goto done;
 
 	ret = reftable_stack_new_addition(&add, be->stack,
-					  &refs->write_options,
+					  &reftable_be_write_options(refs)->opts,
 					  REFTABLE_STACK_NEW_ADDITION_RELOAD);
 	if (ret < 0)
 		goto done;
