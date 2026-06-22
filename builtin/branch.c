@@ -21,6 +21,7 @@
 #include "branch.h"
 #include "path.h"
 #include "string-list.h"
+#include "strmap.h"
 #include "column.h"
 #include "utf8.h"
 #include "ref-filter.h"
@@ -38,6 +39,7 @@ static const char * const builtin_branch_usage[] = {
 	N_("git branch [<options>] (-c | -C) [<old-branch>] <new-branch>"),
 	N_("git branch [<options>] [-r | -a] [--points-at]"),
 	N_("git branch [<options>] [-r | -a] [--format]"),
+	N_("git branch [<options>] --delete-merged <branch>..."),
 	NULL
 };
 
@@ -705,6 +707,120 @@ static int parse_opt_forked(const struct option *opt, const char *arg, int unset
 	return 0;
 }
 
+static int collect_upstream(const struct reference *ref, void *cb_data)
+{
+	struct string_list *upstreams = cb_data;
+	struct branch *branch = branch_get(ref->name);
+	const char *upstream = branch_get_upstream(branch, NULL);
+
+	string_list_append(upstreams, ref->name)->util =
+		xstrdup_or_null(upstream);
+	return 0;
+}
+
+/*
+ * Keep any branch that another, surviving branch tracks as its
+ * upstream, so we never delete a branch out from under one stacked on
+ * top of it.  Sparing a branch makes it a survivor whose own upstream
+ * then needs the same protection, so repeat until nothing changes.
+ */
+static void spare_stacked_bases(struct ref_store *refs, struct strset *deletable)
+{
+	struct string_list upstreams = STRING_LIST_INIT_DUP;
+	struct string_list_item *item;
+	bool spared;
+
+	refs_for_each_branch_ref(refs, collect_upstream, &upstreams);
+	do {
+		spared = false;
+		for_each_string_list_item(item, &upstreams) {
+			const char *up = item->util, *up_short;
+
+			if (!up || strset_contains(deletable, item->string))
+				continue;
+			if (!skip_prefix(up, "refs/heads/", &up_short) ||
+			    !strset_contains(deletable, up_short))
+				continue;
+
+			strset_remove(deletable, up_short);
+			spared = true;
+		}
+	} while (spared);
+
+	string_list_clear(&upstreams, 1);
+}
+
+static int delete_merged_branches(int argc, const char **argv,
+				 unsigned int flags)
+{
+	struct ref_store *refs = get_main_ref_store(the_repository);
+	struct ref_filter filter = REF_FILTER_INIT;
+	struct ref_array candidates = { 0 };
+	struct strset deletable = STRSET_INIT;
+	struct strvec to_delete = STRVEC_INIT;
+	int i, ret = 0;
+
+	if (!argc)
+		die(_("--delete-merged requires at least one <branch>"));
+
+	for (i = 0; i < argc; i++)
+		if (ref_filter_forked_add(&filter, argv[i]) < 0)
+			die(_("'%s' is not a valid branch or pattern"), argv[i]);
+
+	filter.kind = FILTER_REFS_BRANCHES;
+	filter_refs(&candidates, &filter, filter.kind);
+
+	for (i = 0; i < candidates.nr; i++) {
+		const char *full_name = candidates.items[i]->refname;
+		const char *short_name;
+		struct branch *branch;
+		const char *upstream, *push;
+
+		if (!skip_prefix(full_name, "refs/heads/", &short_name))
+			BUG("filter returned non-branch ref '%s'", full_name);
+		if (branch_checked_out(full_name))
+			continue;
+
+		branch = branch_get(short_name);
+		upstream = branch_get_upstream(branch, NULL);
+		if (!upstream || !refs_ref_exists(refs, upstream))
+			continue;
+		push = branch_get_push(branch, NULL);
+		if (!push || !strcmp(push, upstream))
+			continue;
+		if (check_branch_commit(short_name, short_name,
+					&candidates.items[i]->objectname, NULL,
+					FILTER_REFS_BRANCHES, DELETE_BRANCH_SKIP_UNMERGED))
+			continue;
+
+		strset_add(&deletable, short_name);
+	}
+
+	spare_stacked_bases(refs, &deletable);
+
+	for (i = 0; i < candidates.nr; i++) {
+		const char *short_name;
+
+		if (skip_prefix(candidates.items[i]->refname, "refs/heads/",
+				&short_name) &&
+		    strset_contains(&deletable, short_name))
+			strvec_push(&to_delete, short_name);
+	}
+
+	if (to_delete.nr)
+		ret = delete_branches(to_delete.nr, to_delete.v,
+				      FILTER_REFS_BRANCHES,
+				      DELETE_BRANCH_SKIP_UNMERGED |
+				      DELETE_BRANCH_NO_HEAD_FALLBACK |
+				      flags);
+
+	strvec_clear(&to_delete);
+	strset_clear(&deletable);
+	ref_array_clear(&candidates);
+	ref_filter_clear(&filter);
+	return ret;
+}
+
 static GIT_PATH_FUNC(edit_description, "EDIT_DESCRIPTION")
 
 static int edit_branch_description(const char *branch_name)
@@ -746,6 +862,7 @@ int cmd_branch(int argc,
 	/* possible actions */
 	int delete = 0, rename = 0, copy = 0, list = 0,
 	    unset_upstream = 0, show_current = 0, edit_description = 0;
+	int delete_merged = 0;
 	const char *new_upstream = NULL;
 	int noncreate_actions = 0;
 	/* possible options */
@@ -799,6 +916,8 @@ int cmd_branch(int argc,
 		OPT_BOOL(0, "create-reflog", &reflog, N_("create the branch's reflog")),
 		OPT_BOOL(0, "edit-description", &edit_description,
 			 N_("edit the description for the branch")),
+		OPT_BOOL(0, "delete-merged", &delete_merged,
+			N_("delete local branches whose upstream matches <branch> and are merged")),
 		OPT__FORCE(&force, N_("force creation, move/rename, deletion"), PARSE_OPT_NOCOMPLETE),
 		OPT_MERGED(&filter, N_("print only branches that are merged")),
 		OPT_NO_MERGED(&filter, N_("print only branches that are not merged")),
@@ -846,7 +965,8 @@ int cmd_branch(int argc,
 			     0);
 
 	if (!delete && !rename && !copy && !edit_description && !new_upstream &&
-	    !show_current && !unset_upstream && argc == 0)
+	    !show_current && !unset_upstream && !delete_merged &&
+	    argc == 0)
 		list = 1;
 
 	if (filter.with_commit || filter.no_commit ||
@@ -856,7 +976,7 @@ int cmd_branch(int argc,
 
 	noncreate_actions = !!delete + !!rename + !!copy + !!new_upstream +
 			    !!show_current + !!list + !!edit_description +
-			    !!unset_upstream;
+			    !!unset_upstream + !!delete_merged;
 	if (noncreate_actions > 1)
 		usage_with_options(builtin_branch_usage, options);
 
@@ -897,6 +1017,10 @@ int cmd_branch(int argc,
 		ret = delete_branches(argc, argv, filter.kind,
 				      (delete > 1 ? DELETE_BRANCH_FORCE : 0) |
 				      (quiet ? DELETE_BRANCH_QUIET : 0));
+		goto out;
+	} else if (delete_merged) {
+		ret = delete_merged_branches(argc, argv,
+					     quiet ? DELETE_BRANCH_QUIET : 0);
 		goto out;
 	} else if (show_current) {
 		print_current_branch_name();
