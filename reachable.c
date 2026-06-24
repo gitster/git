@@ -234,7 +234,7 @@ static int add_recent_object(const struct object_id *oid,
 
 	add_pending_object(data->revs, obj, "");
 	if (data->cb) {
-		if (oi->whence == OI_PACKED)
+		if (oi->sourcep->source->type == ODB_SOURCE_PACKED)
 			data->cb(obj, oi->sourcep->u.packed.pack,
 				 oi->sourcep->u.packed.offset, *oi->mtimep);
 		else
