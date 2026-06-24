@@ -2,14 +2,20 @@
 #include "odb/source.h"
 #include "odb/transaction.h"
 
-struct odb_transaction *odb_transaction_begin(struct object_database *odb)
+int odb_transaction_begin(struct object_database *odb,
+			  struct odb_transaction **out)
 {
-	if (odb->transaction)
-		return NULL;
+	int ret;
 
-	odb_source_begin_transaction(odb->sources, &odb->transaction);
+	if (odb->transaction) {
+		*out = NULL;
+		return 0;
+	}
 
-	return odb->transaction;
+	ret = odb_source_begin_transaction(odb->sources, out);
+	odb->transaction = *out;
+
+	return ret;
 }
 
 void odb_transaction_commit(struct odb_transaction *transaction)

@@ -4042,7 +4042,7 @@ int add_files_to_cache(struct repository *repo, const char *prefix,
 	 * This function is invoked from commands other than 'add', which
 	 * may not have their own transaction active.
 	 */
-	transaction = odb_transaction_begin(repo->objects);
+	odb_transaction_begin_or_die(repo->objects, &transaction);
 	run_diff_files(&rev, DIFF_RACY_IS_MODIFIED);
 	odb_transaction_commit(transaction);
 
