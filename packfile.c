@@ -1324,7 +1324,8 @@ static void add_delta_base_cache(struct packed_git *p, off_t base_offset,
 	hashmap_add(&delta_base_cache, &ent->ent);
 }
 
-int packed_object_info_with_index_pos(struct packed_git *p, off_t obj_offset,
+int packed_object_info_with_index_pos(struct odb_source_packed *source UNUSED,
+				      struct packed_git *p, off_t obj_offset,
 				      uint32_t *maybe_index_pos, struct object_info *oi)
 {
 	struct pack_window *w_curs = NULL;
@@ -1446,10 +1447,11 @@ out:
 	return ret;
 }
 
-int packed_object_info(struct packed_git *p, off_t obj_offset,
+int packed_object_info(struct odb_source_packed *source,
+		       struct packed_git *p, off_t obj_offset,
 		       struct object_info *oi)
 {
-	return packed_object_info_with_index_pos(p, obj_offset, NULL, oi);
+	return packed_object_info_with_index_pos(source, p, obj_offset, NULL, oi);
 }
 
 static void *unpack_compressed_entry(struct packed_git *p,
