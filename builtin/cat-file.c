@@ -835,7 +835,8 @@ static int batch_one_object_oi(const struct object_id *oid,
 {
 	struct for_each_object_payload *payload = _payload;
 	if (oi && oi->whence == OI_PACKED)
-		return payload->callback(oid, oi->u.packed.pack, oi->u.packed.offset,
+		return payload->callback(oid, oi->sourcep->u.packed.pack,
+					 oi->sourcep->u.packed.offset,
 					 payload->payload);
 	return payload->callback(oid, NULL, 0, payload->payload);
 }
@@ -906,7 +907,10 @@ static void batch_each_object(struct batch_options *opt,
 						&payload, flags);
 		}
 	} else {
-		struct object_info oi = { 0 };
+		struct object_info_source oi_source;
+		struct object_info oi = {
+			.sourcep = &oi_source,
+		};
 
 		for (source = the_repository->objects->sources; source; source = source->next) {
 			struct odb_source_files *files = odb_source_files_downcast(source);

@@ -1422,22 +1422,25 @@ int packed_object_info_with_index_pos(struct odb_source_packed *source UNUSED,
 	}
 
 	oi->whence = OI_PACKED;
-	oi->u.packed.offset = obj_offset;
-	oi->u.packed.pack = p;
 
-	switch (type) {
-	case OBJ_NONE:
-		oi->u.packed.type = PACKED_OBJECT_TYPE_UNKNOWN;
-		break;
-	case OBJ_REF_DELTA:
-		oi->u.packed.type = PACKED_OBJECT_TYPE_REF_DELTA;
-		break;
-	case OBJ_OFS_DELTA:
-		oi->u.packed.type = PACKED_OBJECT_TYPE_OFS_DELTA;
-		break;
-	default:
-		oi->u.packed.type = PACKED_OBJECT_TYPE_FULL;
-		break;
+	if (oi->sourcep) {
+		oi->sourcep->u.packed.offset = obj_offset;
+		oi->sourcep->u.packed.pack = p;
+
+		switch (type) {
+		case OBJ_NONE:
+			oi->sourcep->u.packed.type = PACKED_OBJECT_TYPE_UNKNOWN;
+			break;
+		case OBJ_REF_DELTA:
+			oi->sourcep->u.packed.type = PACKED_OBJECT_TYPE_REF_DELTA;
+			break;
+		case OBJ_OFS_DELTA:
+			oi->sourcep->u.packed.type = PACKED_OBJECT_TYPE_OFS_DELTA;
+			break;
+		default:
+			oi->sourcep->u.packed.type = PACKED_OBJECT_TYPE_FULL;
+			break;
+		}
 	}
 
 	ret = 0;

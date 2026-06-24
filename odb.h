@@ -248,6 +248,38 @@ int odb_pretend_object(struct object_database *odb,
 		       void *buf, size_t len, enum object_type type,
 		       struct object_id *oid);
 
+/*
+ * Object information that can be used to uniquely identify an object and learn
+ * more about how exactly it is stored.
+ */
+struct object_info_source {
+	/*
+	 * Backend-specific information about the specific object. This can be
+	 * used for example to uniquely identify a given object in case it
+	 * exists multiple times.
+	 */
+	union {
+		/*
+		 * struct {
+		 * 	... Nothing to expose in this case
+		 * } cached;
+		 * struct {
+		 * 	... Nothing to expose in this case
+		 * } loose;
+		 */
+		struct {
+			struct packed_git *pack;
+			off_t offset;
+			enum packed_object_type {
+				PACKED_OBJECT_TYPE_UNKNOWN,
+				PACKED_OBJECT_TYPE_FULL,
+				PACKED_OBJECT_TYPE_OFS_DELTA,
+				PACKED_OBJECT_TYPE_REF_DELTA,
+			} type;
+		} packed;
+	} u;
+};
+
 struct object_info {
 	/* Request */
 	enum object_type *typep;
@@ -269,32 +301,20 @@ struct object_info {
 	 */
 	time_t *mtimep;
 
+	/*
+	 * Backend-specific information that tells the caller where exactly an
+	 * object was looked up from. This information should help disambiguate
+	 * object lookups in case the same object exists in multiple sources,
+	 * or multiple times in the same source.
+	 */
+	struct object_info_source *sourcep;
+
 	/* Response */
 	enum {
 		OI_CACHED,
 		OI_LOOSE,
 		OI_PACKED,
 	} whence;
-	union {
-		/*
-		 * struct {
-		 * 	... Nothing to expose in this case
-		 * } cached;
-		 * struct {
-		 * 	... Nothing to expose in this case
-		 * } loose;
-		 */
-		struct {
-			struct packed_git *pack;
-			off_t offset;
-			enum packed_object_type {
-				PACKED_OBJECT_TYPE_UNKNOWN,
-				PACKED_OBJECT_TYPE_FULL,
-				PACKED_OBJECT_TYPE_OFS_DELTA,
-				PACKED_OBJECT_TYPE_REF_DELTA,
-			} type;
-		} packed;
-	} u;
 };
 
 /*

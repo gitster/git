@@ -1825,11 +1825,15 @@ static void repack_local_links(void)
 
 	oidset_iter_init(&outgoing_links, &iter);
 	while ((oid = oidset_iter_next(&iter))) {
-		struct object_info info = OBJECT_INFO_INIT;
+		struct object_info_source info_source;
+		struct object_info info = {
+			.sourcep = &info_source,
+		};
+
 		if (odb_read_object_info_extended(the_repository->objects, oid, &info, 0))
 			/* Missing; assume it is a promisor object */
 			continue;
-		if (info.whence == OI_PACKED && info.u.packed.pack->pack_promisor)
+		if (info.whence == OI_PACKED && info_source.u.packed.pack->pack_promisor)
 			continue;
 
 		if (!cmd.args.nr) {

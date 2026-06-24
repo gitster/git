@@ -4491,8 +4491,9 @@ static int add_object_in_unpacked_pack(const struct object_id *oid,
 				       void *data UNUSED)
 {
 	if (cruft) {
-		add_cruft_object_entry(oid, OBJ_NONE, oi->u.packed.pack,
-				       oi->u.packed.offset, NULL, *oi->mtimep);
+		add_cruft_object_entry(oid, OBJ_NONE, oi->sourcep->u.packed.pack,
+				       oi->sourcep->u.packed.offset, NULL,
+				       *oi->mtimep);
 	} else {
 		add_object_entry(oid, OBJ_NONE, "", 0);
 	}
@@ -4509,8 +4510,10 @@ static void add_objects_in_unpacked_packs(void)
 			 ODB_FOR_EACH_OBJECT_SKIP_IN_CORE_KEPT_PACKS |
 			 ODB_FOR_EACH_OBJECT_SKIP_ON_DISK_KEPT_PACKS,
 	};
+	struct object_info_source oi_source;
 	struct object_info oi = {
 		.mtimep = &mtime,
+		.sourcep = &oi_source,
 	};
 
 	odb_prepare_alternates(to_pack.repo->objects);
@@ -5000,10 +5003,14 @@ static int option_parse_cruft_expiration(const struct option *opt UNUSED,
 
 static int is_not_in_promisor_pack_obj(struct object *obj, void *data UNUSED)
 {
-	struct object_info info = OBJECT_INFO_INIT;
+	struct object_info_source info_source;
+	struct object_info info = {
+		.sourcep = &info_source,
+	};
+
 	if (odb_read_object_info_extended(the_repository->objects, &obj->oid, &info, 0))
 		BUG("should_include_obj should only be called on existing objects");
-	return info.whence != OI_PACKED || !info.u.packed.pack->pack_promisor;
+	return info.whence != OI_PACKED || !info_source.u.packed.pack->pack_promisor;
 }
 
 static int is_not_in_promisor_pack(struct commit *commit, void *data) {
