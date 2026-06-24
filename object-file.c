@@ -497,6 +497,7 @@ struct odb_transaction_files {
 
 	struct tmp_objdir *objdir;
 	struct transaction_packfile packfile;
+	const char *prefix;
 };
 
 static int odb_transaction_files_prepare(struct odb_transaction *base)
@@ -513,7 +514,7 @@ static int odb_transaction_files_prepare(struct odb_transaction *base)
 	if (!transaction || transaction->objdir)
 		return 0;
 
-	transaction->objdir = tmp_objdir_create(base->source->odb->repo, "bulk-fsync");
+	transaction->objdir = tmp_objdir_create(base->source->odb->repo, transaction->prefix);
 	if (!transaction->objdir)
 		return -1;
 
@@ -1389,7 +1390,7 @@ int index_fd(struct index_state *istate, struct object_id *oid,
 			struct object_database *odb = the_repository->objects;
 			struct odb_transaction *transaction;
 
-			odb_transaction_begin_or_die(odb, &transaction);
+			odb_transaction_begin_or_die(odb, &transaction, 0);
 			ret = odb_transaction_write_object_stream(odb->transaction,
 								  &stream,
 								  xsize_t(st->st_size),
@@ -1700,7 +1701,8 @@ static const char **odb_transaction_files_env(struct odb_transaction *base)
 }
 
 int odb_transaction_files_begin(struct odb_source *source,
-				struct odb_transaction **out)
+				struct odb_transaction **out,
+				enum odb_transaction_flags flags)
 {
 	struct odb_transaction_files *transaction;
 	struct object_database *odb = source->odb;
@@ -1715,6 +1717,20 @@ int odb_transaction_files_begin(struct odb_source *source,
 	transaction->base.commit = odb_transaction_files_commit;
 	transaction->base.write_object_stream = odb_transaction_files_write_object_stream;
 	transaction->base.env = odb_transaction_files_env;
+
+	transaction->prefix = "bulk-fsync";
+	if (flags & ODB_TRANSACTION_RECEIVE) {
+		/*
+		 * ODB transactions for git-receive-pack(1) eagerly create a
+		 * temporary directory and use a different prefix.
+		 */
+		transaction->prefix = "incoming";
+		if (odb_transaction_files_prepare(&transaction->base)) {
+			free(transaction);
+			return -1;
+		}
+	}
+
 	*out = &transaction->base;
 
 	return 0;

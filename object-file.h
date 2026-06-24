@@ -5,6 +5,7 @@
 #include "object.h"
 #include "odb.h"
 #include "odb/source-loose.h"
+#include "odb/transaction.h"
 
 /* The maximum size for an object header. */
 #define MAX_HEADER_LEN 32
@@ -198,6 +199,7 @@ struct odb_transaction;
  * pending, out is set to NULL.
  */
 int odb_transaction_files_begin(struct odb_source *source,
-				struct odb_transaction **out);
+				struct odb_transaction **out,
+				enum odb_transaction_flags flags);
 
 #endif /* OBJECT_FILE_H */
