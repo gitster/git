@@ -283,12 +283,28 @@ struct object_info_source {
 	} u;
 };
 
+/*
+ * The object info contains the query and response that is to be used for
+ * functions that end up reading object information. Callers are expected to
+ * populate pointers whose information they want to request.
+ */
 struct object_info {
-	/* Request */
+	/* The object type. */
 	enum object_type *typep;
+
+	/* The inflated object size in bytes. */
 	size_t *sizep;
+
+	/* The object size as stored on disk. */
 	off_t *disk_sizep;
+
+	/*
+	 * The base the object is deltified against, in case it is stored as a
+	 * delta.
+	 */
 	struct object_id *delta_base_oid;
+
+	/* The object contents. Ownership of memory goes over to the caller. */
 	void **contentp;
 
 	/*
