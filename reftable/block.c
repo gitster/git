@@ -517,6 +517,10 @@ int block_iter_seek_key(struct block_iter *it, struct reftable_buf *want)
 	int err = 0;
 	size_t i;
 
+	err = reftable_record_init(&rec, reftable_block_type(it->block));
+	if (err < 0)
+		goto done;
+
 	/*
 	 * Perform a binary search over the block's restart points, which
 	 * avoids doing a linear scan over the whole block. Like this, we
@@ -557,10 +561,6 @@ int block_iter_seek_key(struct block_iter *it, struct reftable_buf *want)
 		it->next_off = block_restart_offset(it->block, i - 1);
 	else
 		it->next_off = it->block->header_off + 4;
-
-	err = reftable_record_init(&rec, reftable_block_type(it->block));
-	if (err < 0)
-		goto done;
 
 	/*
 	 * We're looking for the last entry less than the wanted key so that
