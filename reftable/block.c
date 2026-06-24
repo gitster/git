@@ -340,6 +340,15 @@ int reftable_block_init(struct reftable_block *block,
 		full_block_size = block_size;
 	}
 
+	/*
+	 * Ensure that we have sufficient data available now to satisfy the
+	 * claimed block size.
+	 */
+	if (block_size > block->block_data.len) {
+		err = REFTABLE_FORMAT_ERROR;
+		goto done;
+	}
+
 	restart_count = reftable_get_be16(block->block_data.data + block_size - 2);
 	restart_off = block_size - 2 - 3 * restart_count;
 
