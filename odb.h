@@ -311,13 +311,6 @@ struct object_info {
 	 * or multiple times in the same source.
 	 */
 	struct object_info_source *sourcep;
-
-	/* Response */
-	enum {
-		OI_CACHED,
-		OI_LOOSE,
-		OI_PACKED,
-	} whence;
 };
 
 /*

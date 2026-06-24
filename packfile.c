@@ -1421,8 +1421,6 @@ int packed_object_info_with_index_pos(struct odb_source_packed *source,
 			oidclr(oi->delta_base_oid, p->repo->hash_algo);
 	}
 
-	oi->whence = OI_PACKED;
-
 	if (oi->sourcep) {
 		if (!source)
 			BUG("cannot request source without an owning source");

@@ -54,8 +54,6 @@ static void populate_object_info(struct odb_source_inmemory *source,
 		*oi->mtimep = 0;
 	if (oi->sourcep)
 		oi->sourcep->source = &source->base;
-
-	oi->whence = OI_CACHED;
 }
 
 static int odb_source_inmemory_read_object_info(struct odb_source *source,
