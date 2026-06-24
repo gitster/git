@@ -1839,4 +1839,189 @@ test_expect_success '--forked narrows a <pattern> argument' '
 	test_cmp expect actual
 '
 
+test_expect_success '--delete-merged: setup' '
+	git init -b main upstream &&
+	(
+		cd upstream &&
+		test_commit base &&
+		git checkout -b next &&
+		test_commit next-work &&
+		git checkout main
+	) &&
+	git init -b main other &&
+	test_commit -C other other-base &&
+	git init -b main fork
+'
+
+setup_repo_for_delete_merged () {
+	rm -rf repo &&
+	git clone upstream repo &&
+	(
+		cd repo &&
+		git remote add fork ../fork &&
+		git remote add other ../other &&
+		git config remote.pushDefault fork &&
+		git config push.default current &&
+		git fetch other
+	)
+}
+
+merged_branch () {
+	(
+		cd repo &&
+		git checkout -b "$1" "$2" &&
+		git commit --allow-empty -m "$1 work" &&
+		git push origin "$1:next" &&
+		git fetch origin &&
+		git branch --set-upstream-to="$2" "$1"
+	)
+}
+
+test_expect_success '--delete-merged deletes merged branches and spares the rest' '
+	test_when_finished "rm -rf repo" &&
+	setup_repo_for_delete_merged &&
+	merged_branch merged origin/next &&
+	(
+		cd repo &&
+		git checkout -b unmerged origin/next &&
+		git commit --allow-empty -m "unmerged work" &&
+		git branch --set-upstream-to=origin/next unmerged &&
+		git checkout -b tracks-other other/main &&
+		git branch --set-upstream-to=other/main tracks-other &&
+		git checkout --detach
+	) &&
+	sha=$(git -C repo rev-parse --short merged) &&
+
+	git -C repo branch --delete-merged origin/next >actual 2>&1 &&
+
+	echo "Deleted branch merged (was $sha)." >expect &&
+	test_cmp expect actual &&
+	git -C repo for-each-ref --format="%(refname:short)" refs/heads/ >actual &&
+	cat >expect <<-\EOF &&
+	main
+	tracks-other
+	unmerged
+	EOF
+	test_cmp expect actual
+'
+
+test_expect_success '--delete-merged deletes merged branches and spares protected ones' '
+	test_when_finished "rm -rf repo" &&
+	setup_repo_for_delete_merged &&
+	merged_branch on-next origin/next &&
+	merged_branch checked-out origin/next &&
+	merged_branch upstream-gone origin/next &&
+	(
+		cd repo &&
+		git checkout -b mainline main &&
+		git checkout -b on-local mainline &&
+		git branch --set-upstream-to=mainline on-local &&
+		git update-ref refs/remotes/origin/topic refs/remotes/origin/next &&
+		git branch --set-upstream-to=origin/topic upstream-gone &&
+		git update-ref -d refs/remotes/origin/topic &&
+		git branch --set-upstream-to=origin/main main &&
+		git config branch.main.pushRemote origin &&
+		git checkout -b tracks-other other/main &&
+		git branch --set-upstream-to=other/main tracks-other &&
+		git checkout checked-out
+	) &&
+
+	git -C repo branch --delete-merged origin/next mainline &&
+
+	git -C repo for-each-ref --format="%(refname:short)" refs/heads/ >actual &&
+	cat >expect <<-\EOF &&
+	checked-out
+	main
+	mainline
+	tracks-other
+	upstream-gone
+	EOF
+	test_cmp expect actual
+'
+
+test_expect_success '--delete-merged requires at least one <branch>' '
+	test_must_fail git -C forked branch --delete-merged 2>err &&
+	test_grep "requires at least one <branch>" err
+'
+
+test_expect_success '--delete-merged keeps a branch that is an upstream' '
+	test_when_finished "rm -rf repo" &&
+	setup_repo_for_delete_merged &&
+	merged_branch feature origin/next &&
+	(
+		cd repo &&
+		git checkout -b topic feature &&
+		git commit --allow-empty -m "topic work" &&
+		git branch --set-upstream-to=feature topic &&
+		git checkout --detach
+	) &&
+
+	git -C repo branch --dry-run --delete-merged origin/next >out &&
+	test_grep ! "feature" out &&
+
+	git -C repo branch --delete-merged origin/next 2>err &&
+
+	test_must_be_empty err &&
+	git -C repo rev-parse --verify refs/heads/feature &&
+	git -C repo rev-parse --verify refs/heads/topic &&
+	echo origin/next >expect &&
+	git -C repo rev-parse --abbrev-ref feature@{upstream} >actual &&
+	test_cmp expect actual &&
+	echo feature >expect &&
+	git -C repo rev-parse --abbrev-ref topic@{upstream} >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success '--delete-merged keeps a chain of upstreams of a kept branch' '
+	test_when_finished "rm -rf repo" &&
+	setup_repo_for_delete_merged &&
+	(
+		cd repo &&
+		git branch b3 origin/next &&
+		git branch --set-upstream-to=origin/next b3 &&
+		git branch b2 origin/next &&
+		git branch --set-upstream-to=b3 b2 &&
+		git checkout -b b1 b2 &&
+		git commit --allow-empty -m "b1 work" &&
+		git branch --set-upstream-to=b2 b1 &&
+		git checkout --detach
+	) &&
+
+	git -C repo branch --delete-merged origin/next &&
+
+	git -C repo for-each-ref --format="%(refname:short)" refs/heads/ >actual &&
+	cat >expect <<-\EOF &&
+	b1
+	b2
+	b3
+	main
+	EOF
+	test_cmp expect actual
+'
+
+test_expect_success '--delete-merged clears the upstream of a kept base whose own base is deleted' '
+	test_when_finished "rm -rf repo" &&
+	setup_repo_for_delete_merged &&
+	(
+		cd repo &&
+		git branch lower origin/next &&
+		git branch --set-upstream-to=origin/next lower &&
+		git branch mid origin/next &&
+		git branch --set-upstream-to=lower mid &&
+		git checkout -b tip mid &&
+		git commit --allow-empty -m "tip work" &&
+		git branch --set-upstream-to=mid tip &&
+		git checkout --detach
+	) &&
+
+	git -C repo branch --delete-merged origin/next lower &&
+
+	test_must_fail git -C repo rev-parse --verify refs/heads/lower &&
+	git -C repo rev-parse --verify refs/heads/mid &&
+	test_must_fail git -C repo rev-parse mid@{upstream} &&
+	echo mid >expect &&
+	git -C repo rev-parse --abbrev-ref tip@{upstream} >actual &&
+	test_cmp expect actual
+'
+
 test_done
