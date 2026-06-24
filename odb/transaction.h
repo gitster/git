@@ -32,6 +32,16 @@ struct odb_transaction {
 	int (*write_object_stream)(struct odb_transaction *transaction,
 				   struct odb_write_stream *stream, size_t len,
 				   struct object_id *oid);
+
+	/*
+	 * This callback is expected to return a NULL-terminated array of
+	 * environment variables that a child process should inherit so
+	 * that its object writes participate in the transaction. The
+	 * returned array is owned by the backend and remains valid until
+	 * the transaction ends. May return NULL when the backend does not
+	 * need to expose any state to child processes.
+	 */
+	const char **(*env)(struct odb_transaction *transaction);
 };
 
 /*
@@ -64,5 +74,14 @@ int odb_transaction_commit(struct odb_transaction *transaction);
 int odb_transaction_write_object_stream(struct odb_transaction *transaction,
 					struct odb_write_stream *stream,
 					size_t len, struct object_id *oid);
+
+/*
+ * Returns a NULL-terminated array of environment variables that a child
+ * process should inherit so that its object writes participate in the
+ * transaction, suitable for passing via child_process.env. Returns NULL if
+ * the transaction is NULL or the backend does not expose any state to child
+ * processes.
+ */
+const char **odb_transaction_env(struct odb_transaction *transaction);
 
 #endif

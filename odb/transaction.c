@@ -46,3 +46,11 @@ int odb_transaction_write_object_stream(struct odb_transaction *transaction,
 {
 	return transaction->write_object_stream(transaction, stream, len, oid);
 }
+
+const char **odb_transaction_env(struct odb_transaction *transaction)
+{
+	if (!transaction)
+		return NULL;
+
+	return transaction->env(transaction);
+}
