@@ -196,6 +196,8 @@ out:
 			oi->typep = NULL;
 		if (oi->delta_base_oid)
 			oidclr(oi->delta_base_oid, loose->base.odb->repo->hash_algo);
+		if (oi->sourcep && !ret)
+			oi->sourcep->source = &loose->base;
 		if (!ret)
 			oi->whence = OI_LOOSE;
 	}

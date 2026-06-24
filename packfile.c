@@ -1324,7 +1324,7 @@ static void add_delta_base_cache(struct packed_git *p, off_t base_offset,
 	hashmap_add(&delta_base_cache, &ent->ent);
 }
 
-int packed_object_info_with_index_pos(struct odb_source_packed *source UNUSED,
+int packed_object_info_with_index_pos(struct odb_source_packed *source,
 				      struct packed_git *p, off_t obj_offset,
 				      uint32_t *maybe_index_pos, struct object_info *oi)
 {
@@ -1424,6 +1424,10 @@ int packed_object_info_with_index_pos(struct odb_source_packed *source UNUSED,
 	oi->whence = OI_PACKED;
 
 	if (oi->sourcep) {
+		if (!source)
+			BUG("cannot request source without an owning source");
+		oi->sourcep->source = &source->base;
+
 		oi->sourcep->u.packed.offset = obj_offset;
 		oi->sourcep->u.packed.pack = p;
 

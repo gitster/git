@@ -253,6 +253,9 @@ int odb_pretend_object(struct object_database *odb,
  * more about how exactly it is stored.
  */
 struct object_info_source {
+	/* The source that this object has been looked up from. */
+	struct odb_source *source;
+
 	/*
 	 * Backend-specific information about the specific object. This can be
 	 * used for example to uniquely identify a given object in case it
