@@ -16,5 +16,6 @@ foreach fuzz_program : fuzz_programs
       fuzz_program,
     ],
     dependencies: [libgit_commonmain],
+    link_args: get_option('fuzzers_link_args'),
   )
 endforeach
