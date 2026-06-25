@@ -451,8 +451,9 @@ CAVEATS
 -------
 
 Note that since %(objecttype), %(objectsize:disk) and %(deltabase) are
-currently not supported by the `remote-object-info` command, we will raise
-an error and exit when they appear in the format string.
+currently not supported by the `remote-object-info` command, they will
+return an empty string for remote queries, matching how `for-each-ref`
+behaves for known but inapplicable placeholders.
 
 Note that the sizes of objects on disk are reported accurately, but care
 should be taken in drawing conclusions about which refs or objects are
