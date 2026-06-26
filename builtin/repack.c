@@ -574,10 +574,13 @@ int cmd_repack(int argc,
 				       packtmp);
 	/* End of pack replacement. */
 
-	if (delete_redundant && pack_everything & ALL_INTO_ONE) {
+	if (delete_redundant) {
 		if (write_midx == REPACK_WRITE_MIDX_INCREMENTAL)
 			existing_packs_retain_midx_packs(&existing, &geometry);
-		existing_packs_mark_for_deletion(&existing, &names);
+		if (geometry.split_factor && !combine_cruft_below_size)
+			existing_packs_retain_all_cruft(&existing);
+		if (pack_everything & ALL_INTO_ONE || geometry.split_factor)
+			existing_packs_mark_for_deletion(&existing, &names);
 	}
 
 	if (write_midx != REPACK_WRITE_MIDX_NONE) {
@@ -609,10 +612,6 @@ int cmd_repack(int argc,
 		existing_packs_remove_redundant(&existing, packdir,
 						wrote_incremental_midx);
 
-		if (geometry.split_factor)
-			pack_geometry_remove_redundant(&geometry, &names,
-						       &existing, packdir,
-						       wrote_incremental_midx);
 		if (show_progress)
 			opts |= PRUNE_PACKED_VERBOSE;
 		prune_packed_objects(opts);

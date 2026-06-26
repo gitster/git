@@ -242,6 +242,14 @@ static struct string_list_item *locate_existing_pack(struct string_list *list,
 	return item;
 }
 
+void existing_packs_retain_all_cruft(struct existing_packs *existing)
+{
+	struct string_list_item *item;
+
+	for_each_string_list_item(item, &existing->cruft_packs)
+		existing_packs_mark_retained(item);
+}
+
 void existing_packs_retain_cruft(struct existing_packs *existing,
 				 struct packed_git *cruft)
 {

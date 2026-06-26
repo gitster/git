@@ -81,6 +81,7 @@ void existing_packs_collect(struct existing_packs *existing,
 			    const struct string_list *extra_keep);
 int existing_packs_has_non_kept(const struct existing_packs *existing);
 int existing_pack_is_marked_for_deletion(struct string_list_item *item);
+void existing_packs_retain_all_cruft(struct existing_packs *existing);
 void existing_packs_retain_cruft(struct existing_packs *existing,
 				 struct packed_git *cruft);
 void existing_packs_retain_from_geometry(struct existing_packs *existing,
