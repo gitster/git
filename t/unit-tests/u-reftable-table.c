@@ -22,7 +22,8 @@ void test_reftable_table__seek_once(void)
 	struct reftable_buf buf = REFTABLE_BUF_INIT;
 	int ret;
 
-	cl_reftable_write_to_buf(&buf, records, ARRAY_SIZE(records), NULL, 0, NULL);
+	cl_reftable_write_to_buf(&buf, records, ARRAY_SIZE(records), NULL, 0,
+				 REFTABLE_HASH_SHA1, NULL);
 	block_source_from_buf(&source, &buf);
 
 	ret = reftable_table_new(&table, &source, "name");
@@ -64,7 +65,7 @@ void test_reftable_table__reseek(void)
 	int ret;
 
 	cl_reftable_write_to_buf(&buf, records, ARRAY_SIZE(records),
-				 NULL, 0, NULL);
+				 NULL, 0, REFTABLE_HASH_SHA1, NULL);
 	block_source_from_buf(&source, &buf);
 
 	ret = reftable_table_new(&table, &source, "name");
@@ -147,7 +148,8 @@ void test_reftable_table__block_iterator(void)
 					     (uintmax_t) i);
 	}
 
-	cl_reftable_write_to_buf(&buf, records, nrecords, NULL, 0, NULL);
+	cl_reftable_write_to_buf(&buf, records, nrecords, NULL, 0,
+				 REFTABLE_HASH_SHA1, NULL);
 	block_source_from_buf(&source, &buf);
 
 	ret = reftable_table_new(&table, &source, "name");
