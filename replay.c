@@ -439,24 +439,38 @@ int replay_revisions(struct rev_info *revs,
 	while ((commit = get_revision(revs))) {
 		const struct name_decoration *decoration;
 
-		/*
-		 * pick_regular_commit() looks up the parent of `commit` in
-		 * `replayed_commits` to determine the ancestor to replay onto.
-		 * The `default_base` parameter is used when no ancestor is found,
-		 * which happens for the first commit in the revision range.
-		 * When reverting, commits are replayed in reverse order, so the
-		 * lookup never succeeds, and we need to pass `last_commit`.
-		 */
-		struct commit *base = onto;
-		if (mode == REPLAY_MODE_REVERT)
-			base = last_commit;
+		if (commit->parents && commit->parents->next) {
+			if (!opts->linearize)
+				die(_("replaying merge commits is not supported yet!"));
+			/*
+			 * Drop the merge commit: do not pick it, leave
+			 * `last_commit` unchanged, and fall through to the
+			 * rest of the loop. As a result:
+			 * - the merge commit is mapped to `last_commit` in
+			 *   `replayed_commits`, this will become the parent for
+			 *   the child commits.
+			 * - refs previously pointing to the merge commit are
+			 *   rewritten to point to the previous non-merge commit.
+			 */
+		} else {
+			/*
+			 * pick_regular_commit() looks up the parent of `commit` in
+			 * `replayed_commits` to determine the ancestor to replay onto.
+			 * The `default_base` parameter is used when no ancestor is found,
+			 * which happens for the first commit in the revision range.
+			 * When reverting, commits are replayed in reverse order, so the
+			 * lookup never succeeds, and we need to pass `last_commit`.
+			 */
+			struct commit *base = onto;
+			if (mode == REPLAY_MODE_REVERT)
+				base = last_commit;
 
-		if (commit->parents && commit->parents->next)
-			die(_("replaying merge commits is not supported yet!"));
+			last_commit = pick_regular_commit(revs->repo, commit, base,
+							  replayed_commits,
+							  &merge_opt, &result,
+							  mode, opts->empty);
+		}
 
-		last_commit = pick_regular_commit(revs->repo, commit, base,
-						  replayed_commits,
-						  &merge_opt, &result, mode, opts->empty);
 		if (!last_commit)
 			break;
 
