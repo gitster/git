@@ -79,24 +79,6 @@ static void clear_nonstale_queue(struct nonstale_queue *queue)
 	queue->max_nonstale = NULL;
 }
 
-static void nonstale_queue_put_dedup(struct nonstale_queue *queue,
-				     struct commit *c)
-{
-	if (c->object.flags & ENQUEUED)
-		return;
-	c->object.flags |= ENQUEUED;
-	nonstale_queue_put(queue, c);
-}
-
-static struct commit *nonstale_queue_get_dedup(struct nonstale_queue *queue)
-{
-	struct commit *commit = nonstale_queue_get(queue);
-
-	if (commit)
-		commit->object.flags &= ~ENQUEUED;
-	return commit;
-}
-
 /*
  * Priority queue with per-side commit counters for paint_down_to_common().
  * Each non-stale queued commit occupies exactly one bucket: PARENT1-only,
