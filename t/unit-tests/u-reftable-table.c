@@ -235,7 +235,7 @@ void test_reftable_table__seek_invalid_log_offset(void)
 	uint8_t *footer;
 
 	cl_reftable_write_to_buf(&buf, refs, ARRAY_SIZE(refs),
-				 logs, ARRAY_SIZE(logs), NULL);
+				 logs, ARRAY_SIZE(logs), REFTABLE_HASH_SHA1, NULL);
 
 	/*
 	 * Corrupt the log section offset stored in the footer so that it points
@@ -278,7 +278,8 @@ void test_reftable_table__new_with_truncated_table(void)
 	struct reftable_table *table;
 	struct reftable_buf buf = REFTABLE_BUF_INIT;
 
-	cl_reftable_write_to_buf(&buf, refs, ARRAY_SIZE(refs), NULL, 0, NULL);
+	cl_reftable_write_to_buf(&buf, refs, ARRAY_SIZE(refs), NULL, 0,
+				 REFTABLE_HASH_SHA1, NULL);
 
 	/*
 	 * Truncate the table so that it is large enough to read the header, but
