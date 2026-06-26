@@ -9,7 +9,6 @@ static void combine_small_cruft_packs(FILE *in, off_t combine_cruft_below_size,
 {
 	struct packed_git *p;
 	struct strbuf buf = STRBUF_INIT;
-	size_t i;
 
 	repo_for_each_pack(existing->repo, p) {
 		if (!(p->is_cruft && p->pack_local))
@@ -29,10 +28,6 @@ static void combine_small_cruft_packs(FILE *in, off_t combine_cruft_below_size,
 			fprintf(in, "%s\n", pack_basename(p));
 		}
 	}
-
-	for (i = 0; i < existing->non_kept_packs.nr; i++)
-		fprintf(in, "-%s.pack\n",
-			existing->non_kept_packs.items[i].string);
 
 	strbuf_release(&buf);
 }
@@ -80,15 +75,14 @@ int write_cruft_pack(const struct write_pack_opts *opts,
 	in = xfdopen(cmd.in, "w");
 	for_each_string_list_item(item, names)
 		fprintf(in, "%s-%s.pack\n", pack_prefix, item->string);
-	if (combine_cruft_below_size && !cruft_expiration) {
+	if (combine_cruft_below_size && !cruft_expiration)
 		combine_small_cruft_packs(in, combine_cruft_below_size,
 					  existing);
-	} else {
-		for_each_string_list_item(item, &existing->non_kept_packs)
-			fprintf(in, "-%s.pack\n", item->string);
+	else
 		for_each_string_list_item(item, &existing->cruft_packs)
 			fprintf(in, "-%s.pack\n", item->string);
-	}
+	for_each_string_list_item(item, &existing->non_kept_packs)
+		fprintf(in, "-%s.pack\n", item->string);
 	for_each_string_list_item(item, &existing->kept_packs)
 		fprintf(in, "%s.pack\n", item->string);
 	fclose(in);
