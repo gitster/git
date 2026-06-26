@@ -226,21 +226,32 @@ static void existing_packs_mark_for_deletion_1(const struct git_hash_algo *algop
 	}
 }
 
-void existing_packs_retain_cruft(struct existing_packs *existing,
-				 struct packed_git *cruft)
+static struct string_list_item *locate_existing_pack(struct string_list *list,
+						     struct packed_git *p)
 {
 	struct strbuf buf = STRBUF_INIT;
 	struct string_list_item *item;
 
-	strbuf_addstr(&buf, pack_basename(cruft));
+	strbuf_addstr(&buf, pack_basename(p));
 	strbuf_strip_suffix(&buf, ".pack");
 
-	item = string_list_lookup(&existing->cruft_packs, buf.buf);
+	item = string_list_lookup(list, buf.buf);
+
+	strbuf_release(&buf);
+
+	return item;
+}
+
+void existing_packs_retain_cruft(struct existing_packs *existing,
+				 struct packed_git *cruft)
+{
+	struct string_list_item *item;
+
+	item = locate_existing_pack(&existing->cruft_packs, cruft);
 	if (!item)
 		BUG("could not find cruft pack '%s'", pack_basename(cruft));
 
 	existing_packs_mark_retained(item);
-	strbuf_release(&buf);
 }
 
 void existing_packs_mark_for_deletion(struct existing_packs *existing,
