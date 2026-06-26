@@ -54,6 +54,7 @@ int finish_pack_objects_cmd(const struct git_hash_algo *algop,
 
 struct repository;
 struct packed_git;
+struct pack_geometry;
 
 struct existing_packs {
 	struct repository *repo;
@@ -82,6 +83,8 @@ int existing_packs_has_non_kept(const struct existing_packs *existing);
 int existing_pack_is_marked_for_deletion(struct string_list_item *item);
 void existing_packs_retain_cruft(struct existing_packs *existing,
 				 struct packed_git *cruft);
+void existing_packs_retain_from_geometry(struct existing_packs *existing,
+					 const struct pack_geometry *geometry);
 void existing_packs_mark_for_deletion(struct existing_packs *existing,
 				      struct string_list *names);
 void existing_packs_retain_midx_packs(struct existing_packs *existing);

@@ -254,6 +254,33 @@ void existing_packs_retain_cruft(struct existing_packs *existing,
 	existing_packs_mark_retained(item);
 }
 
+static void existing_packs_retain_non_kept(struct existing_packs *existing,
+					   struct packed_git *p)
+{
+	struct string_list_item *item;
+
+	if (!p->pack_local)
+		return;
+
+	item = locate_existing_pack(&existing->non_kept_packs, p);
+	if (!item)
+		BUG("could not find non-kept pack '%s'", pack_basename(p));
+
+	existing_packs_mark_retained(item);
+}
+
+void existing_packs_retain_from_geometry(struct existing_packs *existing,
+					 const struct pack_geometry *geometry)
+{
+	uint32_t i;
+
+	for (i = geometry->split; i < geometry->pack_nr; i++)
+		existing_packs_retain_non_kept(existing, geometry->pack[i]);
+	for (i = geometry->promisor_split; i < geometry->promisor_pack_nr; i++)
+		existing_packs_retain_non_kept(existing,
+					       geometry->promisor_pack[i]);
+}
+
 void existing_packs_mark_for_deletion(struct existing_packs *existing,
 				      struct string_list *names)
 
