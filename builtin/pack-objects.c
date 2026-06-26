@@ -219,6 +219,7 @@ static int incremental;
 static int ignore_packed_keep_on_disk;
 static int ignore_packed_keep_in_core;
 static int ignore_packed_keep_in_core_open;
+static const char *stdin_packs_refs_snapshot;
 static int ignore_packed_keep_in_core_has_cruft;
 static int allow_ofs_delta;
 static struct pack_idx_option pack_idx_opts;
@@ -4009,6 +4010,38 @@ static int add_ref_to_pending(const struct reference *ref, void *cb_data)
 	return 0;
 }
 
+static void read_refs_snapshot(const char *refs_snapshot,
+			      struct rev_info *revs)
+{
+	struct strbuf buf = STRBUF_INIT;
+	struct object_id oid;
+	FILE *f = xfopen(refs_snapshot, "r");
+
+	while (strbuf_getline(&buf, f) != EOF) {
+		struct object *object;
+		const char *hex = buf.buf;
+		const char *end = NULL;
+
+		if (*hex == '+')
+			hex++;
+
+		if (parse_oid_hex_algop(hex, &oid, &end,
+					the_repository->hash_algo) < 0)
+			die(_("could not parse line: %s"), buf.buf);
+		if (*end)
+			die(_("malformed line: %s"), buf.buf);
+
+		object = parse_object(the_repository, &oid);
+		if (!object)
+			continue;
+
+		add_pending_object(revs, object, "");
+	}
+
+	fclose(f);
+	strbuf_release(&buf);
+}
+
 static void stdin_packs_add_reachable_pack_entries(struct string_list *keys,
 						   struct rev_info *revs,
 						   int rev_list_unpacked)
@@ -4065,8 +4098,11 @@ static void stdin_packs_add_reachable_pack_entries(struct string_list *keys,
 	pre_walk.keep_pack_cache_flags |= KEPT_PACK_IN_CORE;
 	pre_walk.ignore_missing_links = 1;
 
-	refs_for_each_ref(get_main_ref_store(the_repository),
-			  add_ref_to_pending, &pre_walk);
+	if (stdin_packs_refs_snapshot)
+		read_refs_snapshot(stdin_packs_refs_snapshot, &pre_walk);
+	else
+		refs_for_each_ref(get_main_ref_store(the_repository),
+				  add_ref_to_pending, &pre_walk);
 
 	if (prepare_revision_walk(&pre_walk))
 		die(_("revision walk setup failed"));
@@ -5267,6 +5303,8 @@ int cmd_pack_objects(int argc,
 		OPT_CALLBACK_F(0, "stdin-packs", &stdin_packs, N_("mode"),
 			     N_("read packs from stdin"),
 			     PARSE_OPT_OPTARG, parse_stdin_packs_mode),
+		OPT_FILENAME(0, "refs-snapshot", &stdin_packs_refs_snapshot,
+			     N_("refs snapshot for follow-reachable traversal")),
 		OPT_BOOL(0, "stdout", &pack_to_stdout,
 			 N_("output pack to stdout")),
 		OPT_BOOL(0, "include-tag", &include_tag,
@@ -5483,6 +5521,10 @@ int cmd_pack_objects(int argc,
 
 	if (stdin_packs && use_internal_rev_list)
 		die(_("cannot use internal rev list with --stdin-packs"));
+
+	if (stdin_packs_refs_snapshot &&
+	    stdin_packs != STDIN_PACKS_MODE_FOLLOW_REACHABLE)
+		die(_("--refs-snapshot can only be used with --stdin-packs=follow-reachable"));
 
 	if (cruft) {
 		if (use_internal_rev_list)

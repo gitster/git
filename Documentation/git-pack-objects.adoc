@@ -133,6 +133,14 @@ commits and annotated tag objects.
 Incompatible with `--revs`, or options that imply `--revs` (such as
 `--all`), with the exception of `--unpacked`, which is compatible.
 
+--refs-snapshot=<path>::
+	When used with `--stdin-packs=follow-reachable`, read reference
+	tips from `<path>` instead of iterating live references. The file
+	format is one hex object ID per line, with an optional `+` prefix
+	(for preferred bitmap commits). This ensures a consistent view of
+	references when the same snapshot is shared with other tools (e.g.,
+	the MIDX bitmap writer).
+
 --cruft::
 	Packs unreachable objects into a separate "cruft" pack, denoted
 	by the existence of a `.mtimes` file. Typically used by `git
