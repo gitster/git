@@ -178,6 +178,18 @@ test_expect_success '--no-create-reflog overrides core.logAllRefUpdates=always' 
 	test_must_fail git reflog exists $outside
 '
 
+test_expect_success 'core.logAllRefUpdates can be set up via onbranch condition' '
+	test_when_finished "git update-ref -d $outside" &&
+	test_when_finished "rm -f .git/include" &&
+	cat >.git/include <<-\EOF &&
+	[core]
+		logAllRefUpdates = always
+	EOF
+	test_config includeIf.onbranch:main.path "$(pwd)/.git/include" &&
+	git update-ref $outside $A &&
+	git reflog exists $outside
+'
+
 test_expect_success "create $m (by HEAD)" '
 	git update-ref HEAD $A &&
 	test $A = $(git show-ref -s --verify $m)
