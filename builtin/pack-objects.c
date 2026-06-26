@@ -3933,30 +3933,12 @@ static int stdin_packs_include_check(struct commit *commit, void *data)
 	return stdin_packs_include_check_obj((struct object *)commit, data);
 }
 
-static void stdin_packs_add_pack_entries(struct strmap *packs,
-					 struct rev_info *revs)
+static void stdin_packs_add_all_pack_entries(struct string_list *keys,
+					     struct rev_info *revs)
 {
-	struct string_list keys = STRING_LIST_INIT_NODUP;
 	struct string_list_item *item;
-	struct hashmap_iter iter;
-	struct strmap_entry *entry;
 
-	strmap_for_each_entry(packs, &iter, entry) {
-		struct stdin_pack_info *info = entry->value;
-		if (!info->p)
-			die(_("could not find pack '%s'"), entry->key);
-
-		string_list_append(&keys, entry->key)->util = info;
-	}
-
-	/*
-	 * Order packs by ascending mtime; use QSORT directly to access the
-	 * string_list_item's ->util pointer, which string_list_sort() does not
-	 * provide.
-	 */
-	QSORT(keys.items, keys.nr, pack_mtime_cmp);
-
-	for_each_string_list_item(item, &keys) {
+	for_each_string_list_item(item, keys) {
 		struct stdin_pack_info *info = item->util;
 
 		if (info->kind & STDIN_PACK_EXCLUDE_OPEN) {
@@ -3977,6 +3959,31 @@ static void stdin_packs_add_pack_entries(struct strmap *packs,
 						revs,
 						ODB_FOR_EACH_OBJECT_PACK_ORDER);
 	}
+}
+
+static void stdin_packs_add_pack_entries(struct strmap *packs,
+					 struct rev_info *revs)
+{
+	struct string_list keys = STRING_LIST_INIT_NODUP;
+	struct hashmap_iter iter;
+	struct strmap_entry *entry;
+
+	strmap_for_each_entry(packs, &iter, entry) {
+		struct stdin_pack_info *info = entry->value;
+		if (!info->p)
+			die(_("could not find pack '%s'"), entry->key);
+
+		string_list_append(&keys, entry->key)->util = info;
+	}
+
+	/*
+	 * Order packs by ascending mtime; use QSORT directly to access the
+	 * string_list_item's ->util pointer, which string_list_sort() does not
+	 * provide.
+	 */
+	QSORT(keys.items, keys.nr, pack_mtime_cmp);
+
+	stdin_packs_add_all_pack_entries(&keys, revs);
 
 	string_list_clear(&keys, 0);
 }
