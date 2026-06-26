@@ -134,11 +134,6 @@ void pack_geometry_init(struct pack_geometry *geometry,
 			const struct pack_objects_args *args);
 void pack_geometry_split(struct pack_geometry *geometry);
 struct packed_git *pack_geometry_preferred_pack(struct pack_geometry *geometry);
-void pack_geometry_remove_redundant(struct pack_geometry *geometry,
-				    struct string_list *names,
-				    struct existing_packs *existing,
-				    const char *packdir,
-				    bool wrote_incremental_midx);
 void pack_geometry_release(struct pack_geometry *geometry);
 
 struct tempfile;
