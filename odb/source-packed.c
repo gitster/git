@@ -545,7 +545,8 @@ static int odb_source_packed_write_object_stream(struct odb_source *source UNUSE
 }
 
 static int odb_source_packed_begin_transaction(struct odb_source *source UNUSED,
-					       struct odb_transaction **out UNUSED)
+					       struct odb_transaction **out UNUSED,
+					       enum odb_transaction_flags flags UNUSED)
 {
 	return error("packed backend cannot begin transactions");
 }
