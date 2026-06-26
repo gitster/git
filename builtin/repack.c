@@ -576,7 +576,7 @@ int cmd_repack(int argc,
 
 	if (delete_redundant && pack_everything & ALL_INTO_ONE) {
 		if (write_midx == REPACK_WRITE_MIDX_INCREMENTAL)
-			existing_packs_retain_midx_packs(&existing);
+			existing_packs_retain_midx_packs(&existing, &geometry);
 		existing_packs_mark_for_deletion(&existing, &names);
 	}
 

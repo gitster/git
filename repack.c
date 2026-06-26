@@ -292,6 +292,39 @@ void existing_packs_mark_for_deletion(struct existing_packs *existing,
 					   &existing->cruft_packs);
 }
 
+static int pack_geometry_contains_pack(struct packed_git **packs,
+				       uint32_t packs_nr,
+				       const char *base)
+{
+	struct strbuf buf = STRBUF_INIT;
+	uint32_t i;
+
+	for (i = 0; i < packs_nr; i++) {
+		strbuf_reset(&buf);
+		strbuf_addstr(&buf, pack_basename(packs[i]));
+		strbuf_strip_suffix(&buf, ".pack");
+
+		if (!strcmp(buf.buf, base)) {
+			strbuf_release(&buf);
+			return 1;
+		}
+	}
+
+	strbuf_release(&buf);
+	return 0;
+}
+
+static int pack_geometry_contains_rollup(const struct pack_geometry *geometry,
+					 const char *base)
+{
+	if (!geometry || !geometry->split_factor)
+		return 0;
+
+	return pack_geometry_contains_pack(geometry->pack, geometry->split, base) ||
+	       pack_geometry_contains_pack(geometry->promisor_pack,
+					   geometry->promisor_split, base);
+}
+
 /*
  * Mark every pack that is referenced by the existing MIDX chain as
  * retained, so that a subsequent call to
@@ -300,9 +333,12 @@ void existing_packs_mark_for_deletion(struct existing_packs *existing,
  * This is used when writing an incremental MIDX layer on top of an
  * existing chain: retained layers continue to reference the same
  * packs on disk, so those packs must not be unlinked even if the
- * freshly-written pack supersedes them.
+ * freshly-written pack supersedes them. When doing a geometric repack,
+ * packs below the split are rewritten into the new MIDX tip and should
+ * remain eligible for deletion.
  */
-void existing_packs_retain_midx_packs(struct existing_packs *existing)
+void existing_packs_retain_midx_packs(struct existing_packs *existing,
+				      const struct pack_geometry *geometry)
 {
 	struct string_list_item *item;
 	struct strbuf buf = STRBUF_INIT;
@@ -314,6 +350,9 @@ void existing_packs_retain_midx_packs(struct existing_packs *existing)
 		strbuf_addstr(&buf, item->string);
 		strbuf_strip_suffix(&buf, ".pack");
 		strbuf_strip_suffix(&buf, ".idx");
+
+		if (pack_geometry_contains_rollup(geometry, buf.buf))
+			continue;
 
 		found = string_list_lookup(&existing->non_kept_packs, buf.buf);
 		if (found)

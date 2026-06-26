@@ -87,7 +87,8 @@ void existing_packs_retain_from_geometry(struct existing_packs *existing,
 					 const struct pack_geometry *geometry);
 void existing_packs_mark_for_deletion(struct existing_packs *existing,
 				      struct string_list *names);
-void existing_packs_retain_midx_packs(struct existing_packs *existing);
+void existing_packs_retain_midx_packs(struct existing_packs *existing,
+				      const struct pack_geometry *geometry);
 void existing_packs_remove_redundant(struct existing_packs *existing,
 				     const char *packdir,
 				     bool wrote_incremental_midx);
