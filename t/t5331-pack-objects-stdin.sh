@@ -520,4 +520,205 @@ test_expect_success '--stdin-packs with !-delimited pack without follow' '
 	)
 '
 
+test_expect_success '--stdin-packs=follow-reachable excludes unreachable objects' '
+	test_when_finished "rm -fr repo" &&
+
+	git init repo &&
+	(
+		cd repo &&
+		git config set maintenance.auto false &&
+
+		git branch -M main &&
+
+		# Create the following commit structure:
+		#
+		#   A <-- B <-- C     (main)
+		#         ^
+		#          \
+		#           U         (unreachable, no ref)
+		test_commit A &&
+		test_commit B &&
+		test_commit U &&
+		U_TIP="$(git rev-parse HEAD)" &&
+		git reset --hard HEAD^ &&
+		git tag -d U &&
+		git reflog expire --all --expire=all &&
+
+		test_commit C &&
+
+		A="$(echo A | git pack-objects --revs $packdir/pack)" &&
+		B="$(echo A..B | git pack-objects --revs $packdir/pack)" &&
+		C="$(echo B..C | git pack-objects --revs $packdir/pack)" &&
+		U="$(echo "$U_TIP" | git pack-objects $packdir/pack)" &&
+
+		git prune-packed &&
+
+		# Include packs A and C, exclude B as open (since B
+		# may not have closure), leave U as unknown.
+		#
+		# With follow-reachable:
+		#  - objects from A and C are included (reachable from
+		#    main, through excluded-open B, and in included
+		#    packs)
+		#  - objects from B are excluded (excluded-open)
+		#  - objects from U are NOT included (not reachable
+		#    from any ref, even though the pack exists)
+		P=$(git pack-objects --stdin-packs=follow-reachable \
+			$packdir/pack <<-EOF
+		pack-$A.pack
+		!pack-$B.pack
+		pack-$C.pack
+		EOF
+		) &&
+
+		objects_in_packs $A $C >expect &&
+		objects_in_packs $P >actual &&
+		test_cmp expect actual
+	)
+'
+
+test_expect_success '--stdin-packs=follow-reachable with open-excluded packs' '
+	test_when_finished "rm -fr repo" &&
+
+	git init repo &&
+	(
+		cd repo &&
+		git config set maintenance.auto false &&
+
+		git branch -M main &&
+
+		# Create the following commit structure:
+		#
+		#   A <-- B <-- C <-- D    (main)
+		#
+		# Pack each commit separately, then use follow-reachable
+		# with B excluded-open and A excluded-closed. Since B is
+		# open, the traversal continues through it, but since A
+		# is closed, it halts there.
+		test_commit A &&
+		test_commit B &&
+		test_commit C &&
+		test_commit D &&
+
+		A="$(echo A | git pack-objects --revs $packdir/pack)" &&
+		B="$(echo A..B | git pack-objects --revs $packdir/pack)" &&
+		C="$(echo B..C | git pack-objects --revs $packdir/pack)" &&
+		D="$(echo C..D | git pack-objects --revs $packdir/pack)" &&
+
+		git prune-packed &&
+
+		# Include C and D, B excluded-open, A excluded-closed.
+		#
+		# The traversal starts at main (D), walks:
+		#  D (included) -> C (included) -> B (open, continue
+		#  but do not include) -> A (closed, halt).
+		#
+		# Objects from C and D are in the output (reachable,
+		# included). B.t is also rescued (reachable via
+		# C^{tree} or similar). A and its objects are NOT
+		# (behind the closed boundary).
+		P=$(git pack-objects --stdin-packs=follow-reachable \
+			$packdir/pack <<-EOF
+		pack-$C.pack
+		pack-$D.pack
+		!pack-$B.pack
+		^pack-$A.pack
+		EOF
+		) &&
+
+		objects_in_packs $C $D >expect &&
+		objects_in_packs $P >actual &&
+		test_cmp expect actual
+	)
+'
+
+test_expect_success '--stdin-packs=follow-reachable with --unpacked and loose objects' '
+	test_when_finished "rm -fr repo" &&
+
+	git init repo &&
+	(
+		cd repo &&
+		git config set maintenance.auto false &&
+
+		git branch -M main &&
+
+		test_commit A &&
+		test_commit B &&
+
+		A="$(echo A | git pack-objects --revs $packdir/pack)" &&
+		B="$(echo A..B | git pack-objects --revs $packdir/pack)" &&
+
+		git prune-packed &&
+
+		# Create a reachable loose commit on top of B.
+		test_commit C &&
+
+		# Create an unreachable loose object.
+		unreachable="$(echo "unreachable" | git hash-object -w --stdin)" &&
+
+		# Include A and B, no excluded packs. With --unpacked,
+		# the reachable loose objects from C should be included
+		# in the output but the unreachable blob should not.
+		P=$(git pack-objects --stdin-packs=follow-reachable \
+			--unpacked $packdir/pack <<-EOF
+		pack-$A.pack
+		pack-$B.pack
+		EOF
+		) &&
+
+		# The output should contain objects from A, B, and C.
+		{
+			objects_in_packs $A $B &&
+			git rev-list --objects --no-object-names B..C
+		} >expect.raw &&
+		sort expect.raw >expect &&
+
+		objects_in_packs $P >actual &&
+
+		# The unreachable blob should NOT be in the output.
+		! grep $unreachable actual &&
+
+		test_cmp expect actual
+	)
+'
+
+test_expect_success '--stdin-packs=follow-reachable with --unpacked and loose annotated tag' '
+	test_when_finished "rm -fr repo" &&
+
+	git init repo &&
+	(
+		cd repo &&
+		git config set maintenance.auto false &&
+
+		git branch -M main &&
+
+		test_commit A &&
+
+		A="$(echo A | git pack-objects --revs $packdir/pack)" &&
+
+		git prune-packed &&
+
+		# Create a loose annotated tag pointing at A.
+		git tag -a -m "annotated" annotated-tag A &&
+		tag_oid="$(git rev-parse annotated-tag)" &&
+
+		P=$(git pack-objects --stdin-packs=follow-reachable \
+			--unpacked $packdir/pack <<-EOF
+		pack-$A.pack
+		EOF
+		) &&
+
+		# The output should contain objects from A plus the
+		# loose annotated tag object.
+		{
+			objects_in_packs $A &&
+			echo $tag_oid
+		} >expect.raw &&
+		sort expect.raw >expect &&
+
+		objects_in_packs $P >actual &&
+		test_cmp expect actual
+	)
+'
+
 test_done

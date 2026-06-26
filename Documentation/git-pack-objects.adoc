@@ -113,6 +113,23 @@ This mode is useful, for example, to resurrect once-unreachable
 objects found in cruft packs to generate packs which are closed under
 reachability up to the boundary set by the excluded packs.
 +
+When `mode` is "follow-reachable", the same pack prefixes are recognized
+as in "follow" (`!` for excluded-open, `^` for excluded-closed). However,
+instead of including all objects from included packs, only objects that
+are reachable from reference tips AND belong to an included pack (or are
+reachable from a commit in one) are included. Objects in excluded-open
+packs are traversed but not included; objects in excluded-closed packs
+halt the traversal.
++
+This mode is designed for geometric repacking with cruft packs, where
+the output pack should contain only reachable objects so that unreachable
+ones can be collected separately.
++
+When `--unpacked` is given alongside `--stdin-packs=follow-reachable`,
+reachable loose objects are also included in the output pack, while
+unreachable loose objects are left alone. This includes both loose
+commits and annotated tag objects.
++
 Incompatible with `--revs`, or options that imply `--revs` (such as
 `--all`), with the exception of `--unpacked`, which is compatible.
 
