@@ -169,6 +169,7 @@ int write_cruft_pack(const struct write_pack_opts *opts,
 		     const char *cruft_expiration,
 		     unsigned long combine_cruft_below_size,
 		     struct string_list *names,
-		     struct existing_packs *existing);
+		     struct existing_packs *existing,
+		     struct pack_geometry *geometry);
 
 #endif /* REPACK_H */

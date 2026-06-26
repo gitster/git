@@ -70,6 +70,11 @@ to the new separate pack will be written.
 	are packed into a separate cruft pack. Unreachable objects can
 	be pruned using the normal expiry rules with the next `git gc`
 	invocation (see linkgit:git-gc[1]). Incompatible with `-k`.
++
+When combined with `--geometric`, `--cruft` does not imply `-a`. Instead,
+the geometric repack rolls up packs as usual, and a separate cruft pack is
+written to collect unreachable objects. Only reachable objects from the
+rolled-up packs are included in the resulting geometric pack.
 
 --cruft-expiration=<approxidate>::
 	Expire unreachable objects older than `<approxidate>`
@@ -244,6 +249,12 @@ progression.
 +
 Loose objects are implicitly included in this "roll-up", without respect to
 their reachability. This is subject to change in the future.
++
+When combined with `--cruft`, only reachable objects from rolled-up packs
+are included in the geometric pack, along with any reachable loose objects.
+Unreachable objects (both from rolled-up packs and loose) are collected
+into a separate cruft pack. Existing cruft packs are retained. See
+`--cruft` above for details.
 +
 When writing a multi-pack bitmap, `git repack` selects the largest resulting
 pack as the preferred pack for object selection by the MIDX (see
