@@ -280,8 +280,8 @@ static void put_mapped_commit(kh_oid_map_t *replayed_commits,
 
 static struct commit *pick_regular_commit(struct repository *repo,
 					  struct commit *pickme,
+					  struct commit *default_base,
 					  kh_oid_map_t *replayed_commits,
-					  struct commit *onto,
 					  struct merge_options *merge_opt,
 					  struct merge_result *result,
 					  enum replay_mode mode,
@@ -298,7 +298,7 @@ static struct commit *pick_regular_commit(struct repository *repo,
 		base_tree = lookup_tree(repo, repo->hash_algo->empty_tree);
 	}
 
-	replayed_base = get_mapped_commit(replayed_commits, base, onto);
+	replayed_base = get_mapped_commit(replayed_commits, base, default_base);
 	replayed_base_tree = repo_get_commit_tree(repo, replayed_base);
 	pickme_tree = repo_get_commit_tree(repo, pickme);
 
@@ -439,11 +439,23 @@ int replay_revisions(struct rev_info *revs,
 	while ((commit = get_revision(revs))) {
 		const struct name_decoration *decoration;
 
+		/*
+		 * pick_regular_commit() looks up the parent of `commit` in
+		 * `replayed_commits` to determine the ancestor to replay onto.
+		 * The `default_base` parameter is used when no ancestor is found,
+		 * which happens for the first commit in the revision range.
+		 * When reverting, commits are replayed in reverse order, so the
+		 * lookup never succeeds, and we need to pass `last_commit`.
+		 */
+		struct commit *base = onto;
+		if (mode == REPLAY_MODE_REVERT)
+			base = last_commit;
+
 		if (commit->parents && commit->parents->next)
 			die(_("replaying merge commits is not supported yet!"));
 
-		last_commit = pick_regular_commit(revs->repo, commit, replayed_commits,
-						  mode == REPLAY_MODE_REVERT ? last_commit : onto,
+		last_commit = pick_regular_commit(revs->repo, commit, base,
+						  replayed_commits,
 						  &merge_opt, &result, mode, opts->empty);
 		if (!last_commit)
 			break;
