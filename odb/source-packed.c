@@ -15,7 +15,7 @@ static int find_pack_entry(struct odb_source_packed *store,
 {
 	struct packfile_list_entry *l;
 
-	odb_source_packed_prepare(store);
+	odb_source_prepare(&store->base, 0);
 	if (store->midx && fill_midx_entry(store->midx, oid, e))
 		return 1;
 
@@ -47,7 +47,7 @@ static int odb_source_packed_read_object_info(struct odb_source *source,
 	 * been added since the last time we have prepared the packfile store.
 	 */
 	if (flags & OBJECT_INFO_SECOND_READ)
-		odb_source_reprepare(source);
+		odb_source_prepare(source, ODB_PREPARE_FLUSH_CACHES);
 
 	if (!find_pack_entry(packed, oid, &e))
 		return 1;
@@ -692,27 +692,25 @@ static int sort_pack(const struct packfile_list_entry *a,
 	return -1;
 }
 
-void odb_source_packed_prepare(struct odb_source_packed *source)
-{
-	if (source->initialized)
-		return;
-
-	prepare_multi_pack_index_one(source);
-	prepare_packed_git_one(source);
-
-	sort_packs(&source->packs.head, sort_pack);
-	for (struct packfile_list_entry *e = source->packs.head; e; e = e->next)
-		if (!e->next)
-			source->packs.tail = e;
-
-	source->initialized = true;
-}
-
-static void odb_source_packed_reprepare(struct odb_source *source)
+static void odb_source_packed_prepare(struct odb_source *source,
+				      enum odb_prepare_flags flags)
 {
 	struct odb_source_packed *packed = odb_source_packed_downcast(source);
-	packed->initialized = false;
-	odb_source_packed_prepare(packed);
+
+	if (flags & ODB_PREPARE_FLUSH_CACHES)
+		packed->initialized = false;
+	if (packed->initialized)
+		return;
+
+	prepare_multi_pack_index_one(packed);
+	prepare_packed_git_one(packed);
+
+	sort_packs(&packed->packs.head, sort_pack);
+	for (struct packfile_list_entry *e = packed->packs.head; e; e = e->next)
+		if (!e->next)
+			packed->packs.tail = e;
+
+	packed->initialized = true;
 }
 
 static void odb_source_packed_reparent(const char *name UNUSED,
@@ -768,7 +766,7 @@ struct odb_source_packed *odb_source_packed_new(struct object_database *odb,
 
 	packed->base.free = odb_source_packed_free;
 	packed->base.close = odb_source_packed_close;
-	packed->base.reprepare = odb_source_packed_reprepare;
+	packed->base.prepare = odb_source_packed_prepare;
 	packed->base.read_object_info = odb_source_packed_read_object_info;
 	packed->base.read_object_stream = odb_source_packed_read_object_stream;
 	packed->base.for_each_object = odb_source_packed_for_each_object;
