@@ -131,6 +131,10 @@ static void paint_queue_put(struct paint_state *state,
 	}
 }
 
+/*
+ * Dequeue the next commit for the paint walk, or return NULL when
+ * no more merge bases can be discovered.
+ */
 static struct commit *paint_queue_get(struct paint_state *state)
 {
 	struct commit *commit = prio_queue_get(&state->queue);
@@ -140,9 +144,16 @@ static struct commit *paint_queue_get(struct paint_state *state)
 
 	commit->object.flags &= ~ENQUEUED;
 
-	if (!state->p1_count && !state->p2_count &&
-	    !state->pending_merge_bases)
-		return NULL;
+	if (!state->pending_merge_bases) {
+		/* only stale entries remain */
+		if (!state->p1_count && !state->p2_count)
+			return NULL;
+
+		/* one side is exhausted */
+		if ((!state->p1_count || !state->p2_count) &&
+		    commit_graph_generation(commit) < GENERATION_NUMBER_INFINITY)
+			return NULL;
+	}
 
 	paint_count_update(state, commit->object.flags, -1);
 	return commit;
@@ -188,7 +199,7 @@ static int paint_down_to_common(struct repository *r,
 		timestamp_t generation = commit_graph_generation(commit);
 		steps++;
 
-		if (min_generation && generation > last_gen)
+		if (generation > last_gen)
 			BUG("bad generation skip %"PRItime" > %"PRItime" at %s",
 			    generation, last_gen,
 			    oid_to_hex(&commit->object.oid));
