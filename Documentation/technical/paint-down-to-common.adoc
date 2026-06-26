@@ -97,6 +97,8 @@ ends when one of the following conditions holds:
   3. Side exhaustion: no pure PARENT1 or pure PARENT2 commits
      remain in the queue, no pending merge-base candidates exist,
      and the walk has entered the finite-generation region.
+  4. Generation cutoff: the dequeued commit's generation is below
+     a caller-supplied `min_generation` threshold.
 
 Stale entry condition
 ~~~~~~~~~~~~~~~~~~~~~
@@ -120,6 +122,13 @@ always visited before parents, so paint flags are final at visit
 time and an exhausted side cannot reappear. In the INFINITY region,
 commit-date ordering can violate this guarantee, so the check is
 skipped.
+
+Generation cutoff
+~~~~~~~~~~~~~~~~~
+Some callers (notably `remove_redundant()`) supply a `min_generation`
+threshold -- the minimum generation of the input commits. No merge
+base can have a generation below this threshold, so the walk
+terminates as soon as it dequeues such a commit.
 
 Related documentation
 ---------------------
