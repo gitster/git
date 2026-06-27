@@ -665,6 +665,12 @@ struct emit_callback {
  */
 struct line_range_filter {
 	xdiff_emit_line_fn orig_line_fn;
+	/*
+	 * Optional; consumers that report file line numbers (e.g.
+	 * checkdiff) need the synthetic hunk header to set their
+	 * post-image position before in-range lines are replayed.
+	 */
+	xdiff_emit_hunk_fn orig_hunk_fn;
 	void *orig_cb_data;
 	const struct range_set *ranges;	/* 0-based [start, end) */
 	unsigned int cur_range;		/* index into the range_set */
@@ -2652,6 +2658,17 @@ static void flush_range_hunk(struct line_range_filter *filter)
 			       filter->hunk.new_begin, new_count,
 			       filter->func, filter->funclen);
 
+	/*
+	 * Inform a line-numbering consumer of the post-image position
+	 * before replaying lines, mirroring the hunk callback xdiff
+	 * would have issued for a non-scoped diff.
+	 */
+	if (filter->orig_hunk_fn)
+		filter->orig_hunk_fn(filter->orig_cb_data,
+				filter->hunk.old_begin, old_count,
+				filter->hunk.new_begin, new_count,
+				filter->func, filter->funclen);
+
 	filter->ret = filter->orig_line_fn(filter->orig_cb_data, hdr.buf, hdr.len);
 	strbuf_release(&hdr);
 
@@ -4330,11 +4347,29 @@ static void builtin_diffstat(const char *name_a, const char *name_b,
 	diff_free_filespec_data(two);
 }
 
+/*
+ * Is the 0-based line index within any of the tracked ranges?
+ * (range_set ranges are 0-based, half-open [start, end).)  This is a
+ * one-shot query for a single line and scans; the streaming filter
+ * (line_range_line_fn) uses a forward cursor instead.
+ */
+static int idx_in_ranges(const struct range_set *ranges, long idx)
+{
+	unsigned int i;
+
+	for (i = 0; i < ranges->nr; i++)
+		if (idx >= ranges->ranges[i].start &&
+		    idx < ranges->ranges[i].end)
+			return 1;
+	return 0;
+}
+
 static void builtin_checkdiff(const char *name_a, const char *name_b,
 			      const char *attr_path,
 			      struct diff_filespec *one,
 			      struct diff_filespec *two,
-			      struct diff_options *o)
+			      struct diff_options *o,
+			      const struct range_set *line_ranges)
 {
 	mmfile_t mf1, mf2;
 	struct checkdiff_t data;
@@ -4374,7 +4409,19 @@ static void builtin_checkdiff(const char *name_a, const char *name_b,
 		memset(&xecfg, 0, sizeof(xecfg));
 		xecfg.ctxlen = 1; /* at least one context line */
 		xpp.flags = 0;
-		if (xdi_diff_outf(&mf1, &mf2, checkdiff_consume_hunk,
+
+		if (line_ranges) {
+			struct line_range_filter lr_filter;
+
+			line_range_filter_init(&lr_filter, line_ranges,
+					       checkdiff_consume, &data);
+			lr_filter.orig_hunk_fn = checkdiff_consume_hunk;
+
+			if (line_range_filter_diff(&lr_filter, &mf1, &mf2,
+						   &xpp, &xecfg))
+				die("unable to generate checkdiff for %s",
+				    one->path);
+		} else if (xdi_diff_outf(&mf1, &mf2, checkdiff_consume_hunk,
 				  checkdiff_consume, &data,
 				  &xpp, &xecfg))
 			die("unable to generate checkdiff for %s", one->path);
@@ -4386,6 +4433,17 @@ static void builtin_checkdiff(const char *name_a, const char *name_b,
 			ecbdata.ws_rule = data.ws_rule;
 			check_blank_at_eof(&mf1, &mf2, &ecbdata);
 			blank_at_eof = ecbdata.blank_at_eof_in_postimage;
+
+			/*
+			 * check_blank_at_eof() scans the whole file; with -L,
+			 * keep the report only when its line is in a tracked
+			 * range.  The error's location is the first trailing
+			 * blank line (blank_at_eof, 1-based; ranges 0-based), so
+			 * we scope by that line.
+			 */
+			if (blank_at_eof && line_ranges &&
+			    !idx_in_ranges(line_ranges, blank_at_eof - 1))
+				blank_at_eof = 0;
 
 			if (blank_at_eof) {
 				static char *err;
@@ -5179,7 +5237,8 @@ static void run_checkdiff(struct diff_filepair *p, struct diff_options *o)
 	diff_fill_oid_info(p->one, o->repo->index);
 	diff_fill_oid_info(p->two, o->repo->index);
 
-	builtin_checkdiff(name, other, attr_path, p->one, p->two, o);
+	builtin_checkdiff(name, other, attr_path, p->one, p->two, o,
+			  p->line_ranges);
 }
 
 void repo_diff_setup(struct repository *r, struct diff_options *options)

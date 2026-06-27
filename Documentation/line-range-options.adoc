@@ -10,7 +10,7 @@
 	You can specify this option more than once. Implies `--patch`.
 	Patch output can be suppressed using `--no-patch`.
 	The following non-patch diff formats are supported: `--raw`,
-	`--name-only`, `--name-status`, `--summary`,
+	`--name-only`, `--name-status`, `--summary`, `--check`,
 	`--stat`, `--numstat`, and `--shortstat`.
 	The stat formats count only lines within the tracked range.
 	`--dirstat` is not supported
