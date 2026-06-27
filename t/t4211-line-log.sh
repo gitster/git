@@ -176,24 +176,15 @@ test_expect_success '--name-status shows status and path' '
 	test_grep ! "^@@" actual
 '
 
-test_expect_success '--stat is not yet supported with -L' '
-	test_must_fail git log -L1,24:b.c --stat 2>err &&
-	test_grep "does not yet support" err
-'
-
-test_expect_success '--numstat is not yet supported with -L' '
-	test_must_fail git log -L1,24:b.c --numstat 2>err &&
-	test_grep "does not yet support" err
-'
-
-test_expect_success '--shortstat is not yet supported with -L' '
-	test_must_fail git log -L1,24:b.c --shortstat 2>err &&
-	test_grep "does not yet support" err
-'
-
-test_expect_success '--dirstat is not yet supported with -L' '
+test_expect_success '--dirstat is not supported with -L' '
+	# --dirstat is not supported with -L: its default mode measures
+	# whole-file change, not the tracked lines, and the
+	# --dirstat=lines variant is deferred too, so both forms are
+	# rejected like any other unsupported format.
 	test_must_fail git log -L1,24:b.c --dirstat 2>err &&
-	test_grep "does not yet support" err
+	test_grep "does not support" err &&
+	test_must_fail git log -L1,24:b.c --dirstat=lines 2>err &&
+	test_grep "does not support" err
 '
 
 test_expect_success 'setup for checking fancy rename following' '
@@ -887,9 +878,9 @@ test_expect_success '-L with -S suppresses non-matching commits' '
 	test_cmp expect actual
 '
 
-test_expect_success '--full-diff is not yet supported with -L' '
+test_expect_success '--full-diff is not supported with -L' '
 	test_must_fail git log -L1,24:b.c --full-diff 2>err &&
-	test_grep "does not yet support" err
+	test_grep "does not support" err
 '
 
 test_expect_success '-L --oneline has no extra blank line before diff' '
@@ -898,6 +889,127 @@ test_expect_success '-L --oneline has no extra blank line before diff' '
 	# Oneline header on line 1, diff starts immediately on line 2
 	sed -n 2p actual >line2 &&
 	test_grep "^diff --git" line2
+'
+
+test_expect_success 'setup for stat range-scoping tests' '
+	git checkout --orphan stat-scoping &&
+	git reset --hard &&
+	cat >file.c <<-\EOF &&
+	int func1()
+	{
+	    return F1;
+	}
+
+	int func2()
+	{
+	    return F2;
+	}
+	EOF
+	git add file.c &&
+	test_tick &&
+	git commit -m "Add func1() and func2()" &&
+
+	# Modify both functions in a single commit so that
+	# whole-file stats differ from the counts for the tracked range.
+	sed -e "s/F1/F1 + 1/" -e "s/F2/F2 + 2/" file.c >tmp &&
+	mv tmp file.c &&
+	git commit -a -m "Modify both functions"
+'
+
+test_expect_success '--numstat counts only lines in tracked range' '
+	# "Modify both functions" changes one line in func1 and one in
+	# func2.  Whole-file numstat would show 2 added, 2 deleted.
+	# numstat for func2 within the tracked range should show only 1 and 1.
+	git log -L:func2:file.c --numstat --format=%s -1 >actual &&
+	test_grep "Modify both functions" actual &&
+	test_grep "^1	1	file.c$" actual &&
+	test_grep ! "^diff --git" actual
+'
+
+test_expect_success '--numstat counts only additions for root commit' '
+	# Root commit creates both func1 (4 lines) and func2 (4 lines).
+	# Whole-file numstat would show 9 lines added.  numstat for func2
+	# within the tracked range should show only 4.
+	git log -L:func2:file.c --numstat --format=%s >actual &&
+	test_grep "Add func1() and func2()" actual &&
+	test_grep "^4	0	file.c$" actual &&
+	test_grep ! "^diff --git" actual
+'
+
+test_expect_success '--stat counts only lines in tracked range' '
+	git log -L:func2:file.c --stat --format=%s -1 >actual &&
+	test_grep "Modify both functions" actual &&
+	test_grep "file.c |" actual &&
+	test_grep "1 insertion" actual &&
+	test_grep "1 deletion" actual &&
+	test_grep ! "^diff --git" actual
+'
+
+test_expect_success '--shortstat counts only lines in tracked range' '
+	# --shortstat prints only the summary line: no per-file "file.c |"
+	# line.  Counts cover only the tracked range, as for --numstat above.
+	git log -L:func2:file.c --shortstat --format=%s -1 >actual &&
+	test_grep "Modify both functions" actual &&
+	test_grep "1 insertion" actual &&
+	test_grep "1 deletion" actual &&
+	test_grep ! "file.c |" actual &&
+	test_grep ! "^diff --git" actual
+'
+
+test_expect_success '--numstat across renames and multiple commits' '
+	# parallel-change carries the tracked function f across an a.c -> b.c
+	# rename and a merge of two parallel histories.  With -M, --numstat
+	# follows the rename and reports added/removed counts for f within
+	# the tracked range (not whole-file) per commit; the file column flips from
+	# b.c to a.c at the rename as the walk goes back in time.  Commits
+	# that do not change the range of f emit no row (the merge and the
+	# pure file-move produce nothing), so there are fewer rows than
+	# commits.
+	git checkout parallel-change &&
+	git log -M -L ":f:b.c" --format= --numstat >actual &&
+	cat >expect <<-\EOF &&
+	1	1	b.c
+	1	1	a.c
+	1	1	a.c
+	1	1	a.c
+	1	0	a.c
+	13	0	a.c
+	EOF
+	test_cmp expect actual
+'
+
+test_expect_success '-L multiple ranges with --numstat excludes untracked change' '
+	git checkout --orphan multi-range &&
+	git reset --hard &&
+	cat >m.c <<-\EOF &&
+	int func1()
+	{
+	    return F1;
+	}
+
+	int func2()
+	{
+	    return F2;
+	}
+
+	int func3()
+	{
+	    return F3;
+	}
+	EOF
+	git add m.c &&
+	test_tick &&
+	git commit -m "add m.c" &&
+	# Change all three functions but track only func1 and func2.
+	# Whole-file numstat would be 3 3; a 2 2 result proves the
+	# untracked func3 change is excluded and the two ranges just sum.
+	sed -e "s/F1/F1 + 1/" -e "s/F2/F2 + 2/" -e "s/F3/F3 + 3/" m.c >tmp &&
+	mv tmp m.c &&
+	git commit -a -m "Modify all three functions" &&
+	git log -L:func1:m.c -L:func2:m.c --numstat --format=%s -1 >actual &&
+	test_grep "Modify all three functions" actual &&
+	test_grep "^2	2	m.c$" actual &&
+	test_grep ! "^3	3	m.c$" actual
 '
 
 test_expect_success '--summary shows new file on root commit' '
