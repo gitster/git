@@ -2636,14 +2636,9 @@ static void flush_range_hunk(struct line_range_filter *filter)
 		return;
 	}
 
-	strbuf_addf(&hdr, "@@ -%ld,%ld +%ld,%ld @@",
-		    filter->hunk.old_begin, old_count,
-		    filter->hunk.new_begin, new_count);
-	if (filter->funclen > 0) {
-		strbuf_addch(&hdr, ' ');
-		strbuf_add(&hdr, filter->func, filter->funclen);
-	}
-	strbuf_addch(&hdr, '\n');
+	xdiff_emit_hunk_header(&hdr, filter->hunk.old_begin, old_count,
+			       filter->hunk.new_begin, new_count,
+			       filter->func, filter->funclen);
 
 	filter->ret = filter->orig_line_fn(filter->orig_cb_data, hdr.buf, hdr.len);
 	strbuf_release(&hdr);
@@ -2668,19 +2663,21 @@ static void flush_range_hunk(struct line_range_filter *filter)
 }
 
 static void line_range_hunk_fn(void *data,
-			       long old_begin, long old_nr UNUSED,
-			       long new_begin, long new_nr UNUSED,
+			       long old_begin, long old_nr,
+			       long new_begin, long new_nr,
 			       const char *func, long funclen)
 {
 	struct line_range_filter *filter = data;
 
 	/*
-	 * When count > 0, begin is 1-based.  When count == 0, begin is
-	 * adjusted down by 1 by xdl_emit_hunk_hdr(), but no lines of
-	 * that type will arrive, so the value is unused.
+	 * Seed the per-image line cursors from the hunk header's begins.  For
+	 * a side with no lines (count 0), xdiff's callback has already moved
+	 * its begin to the line before the change, so add one back to recover
+	 * the true 1-based start.  xdiff_emit_hunk_header() reapplies that -1
+	 * when the clipped hunk is emitted.
 	 */
-	filter->lno_in_postimage = new_begin;
-	filter->lno_in_preimage = old_begin;
+	filter->lno_in_postimage = new_nr ? new_begin : new_begin + 1;
+	filter->lno_in_preimage = old_nr ? old_begin : old_begin + 1;
 
 	if (funclen > 0) {
 		if (funclen > (long)sizeof(filter->func))
