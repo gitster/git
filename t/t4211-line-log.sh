@@ -738,6 +738,131 @@ test_expect_success '-L with -G filters to diff-text matches' '
 	grep "F2 + 2" actual
 '
 
+test_expect_success 'setup for trailing deletion test' '
+	git checkout --orphan trailing-del &&
+	git reset --hard &&
+	cat >file.c <<-\EOF &&
+	void tracked()
+	{
+	    return 1;
+	}
+	// trailing comment
+	EOF
+	git add file.c &&
+	test_tick &&
+	git commit -m "add file with trailing comment" &&
+	# Modify tracked() AND delete the trailing comment in
+	# one commit, so the commit touches the tracked range
+	# and is not filtered out by the revision walker.
+	cat >file.c <<-\EOF &&
+	void tracked()
+	{
+	    return 2;
+	}
+	EOF
+	git commit -a -m "modify tracked and delete trailing comment"
+'
+
+test_expect_success '-L does not include deletions past end of tracked range' '
+	git log -L:tracked:file.c --format= -1 -p >actual &&
+	# The trailing comment deletion is outside the tracked
+	# range and should not appear in the patch output.
+	test_grep "return 2" actual &&
+	test_grep ! "trailing comment" actual
+'
+
+test_expect_success '-L includes leading deletions resolved by in-range line' '
+	git checkout --orphan leading-del &&
+	git reset --hard &&
+	cat >file.c <<-\EOF &&
+	// leading comment
+	void tracked()
+	{
+	    return 1;
+	}
+	EOF
+	git add file.c &&
+	test_tick &&
+	git commit -m "add file with leading comment" &&
+	cat >file.c <<-\EOF &&
+	void tracked()
+	{
+	    return 2;
+	}
+	EOF
+	git commit -a -m "modify tracked and delete leading comment" &&
+	git log -L:tracked:file.c --format= -1 -p >actual &&
+	# The leading comment deletion is resolved by the next
+	# non-removal line (void tracked), which is in range: a
+	# removal is classified by the position of the following
+	# line, so it joins the range that line falls in.
+	test_grep "return 2" actual &&
+	test_grep "leading comment" actual
+'
+
+test_expect_success 'setup for line-range filter edge cases' '
+	git checkout --orphan filter-edge &&
+	git reset --hard &&
+	cat >file.c <<-\EOF &&
+	void before()
+	{
+	    return 0;
+	}
+
+	void tracked()
+	{
+	    int a = 1;
+	    int b = 2;
+	    int c = 3;
+	    return a + b + c;
+	}
+
+	void after()
+	{
+	    return 9;
+	}
+	EOF
+	git add file.c &&
+	test_tick &&
+	git commit -m "initial"
+'
+
+test_expect_success '-L change at exact first line of range' '
+	git checkout filter-edge &&
+	# Change the function signature (first line of range)
+	sed "s/void tracked/int tracked/" file.c >tmp &&
+	mv tmp file.c &&
+	git commit -a -m "change first line" &&
+	git log -L:tracked:file.c -p --format=%s -1 >actual &&
+	test_grep "change first line" actual &&
+	test_grep "+int tracked" actual &&
+	test_grep "\\-void tracked" actual
+'
+
+test_expect_success '-L change at exact last line of range' '
+	git checkout filter-edge &&
+	git reset --hard HEAD~1 &&
+	# Change the closing brace line (last line of range)
+	sed "s/^}$/} \/\/ end tracked/" file.c >tmp &&
+	mv tmp file.c &&
+	git commit -a -m "change last line" &&
+	git log -L:tracked:file.c -p --format=%s -1 >actual &&
+	test_grep "change last line" actual &&
+	test_grep "end tracked" actual
+'
+
+test_expect_success '-L pure deletion in range (no additions)' '
+	git checkout filter-edge &&
+	git reset --hard HEAD~1 &&
+	# Delete a line inside tracked() without adding anything
+	sed "/int c/d" file.c >tmp &&
+	mv tmp file.c &&
+	git commit -a -m "pure deletion" &&
+	git log -L:tracked:file.c -p --format=%s -1 >actual &&
+	test_grep "pure deletion" actual &&
+	test_grep "\\-.*int c" actual
+'
+
 test_expect_success '-L with --diff-filter=M excludes root commit' '
 	git checkout parent-oids &&
 	git log -L:func2:file.c --diff-filter=M --format=%s --no-patch >actual &&
