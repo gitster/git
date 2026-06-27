@@ -20,6 +20,9 @@
 +
 Patch formatting options such as `--word-diff`, `--color-moved`,
 `--no-prefix`, and whitespace options (`-w`, `-b`) are supported,
-as are pickaxe options (`-S`, `-G`) and `--diff-filter`.
+as are pickaxe options (`-S`, `-G`) and `--diff-filter`.  `-G` is
+scoped to the tracked range; `-S` is still evaluated over the whole
+file, so an `-S` query may select a commit for a change outside the
+range.
 +
 include::line-range-format.adoc[]

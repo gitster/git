@@ -722,9 +722,9 @@ test_expect_success '-L with -S filters to string-count changes' '
 test_expect_success '-L with -G filters to diff-text matches' '
 	git checkout parent-oids &&
 	git log -L:func2:file.c -G "F2 [+] 2" --format= >actual &&
-	# -G greps the whole-file diff text, not just the tracked range;
-	# combined with -L, this selects commits that both touch func2
-	# and have "F2 + 2" in their diff.
+	# -G greps the diff text, and under -L only the lines in the
+	# tracked range (unlike -S above, which searches the whole file);
+	# this selects commits whose change to func2 contains "F2 + 2".
 	test $(grep -c "^diff --git" actual) = 1 &&
 	grep "F2 + 2" actual
 '
@@ -1108,6 +1108,72 @@ test_expect_success '--check does not report blank-at-eof outside the range' '
 	test_must_fail git log -L:tracked:eof.c --check --format= >actual &&
 	test_grep "eof.c:3: trailing whitespace" actual &&
 	test_grep ! "blank line at EOF" actual
+'
+
+test_expect_success '-L -G is scoped to the tracked range' '
+	git checkout --orphan grep-scope &&
+	git reset --hard &&
+	cat >gp.c <<-\EOF &&
+	int func1()
+	{
+	    return ALPHA;
+	}
+
+	int func2()
+	{
+	    return BETA;
+	}
+	EOF
+	git add gp.c &&
+	test_tick &&
+	git commit -m "add gp.c" &&
+	sed -e "s/ALPHA/ALPHA2/" -e "s/BETA/BETA2/" gp.c >tmp &&
+	mv tmp gp.c &&
+	git commit -a -m "touch both functions" &&
+	# The commit changes ALPHA (func1) and BETA (func2).  Tracking func2,
+	# -G BETA matches its in-range change; -G ALPHA must not, since ALPHA
+	# changes only outside the tracked range.
+	git log -L:func2:gp.c -G BETA --format=%s >actual &&
+	test_grep "touch both functions" actual &&
+	git log -L:func2:gp.c -G ALPHA --format=%s >actual &&
+	test_grep ! "touch both functions" actual
+'
+
+test_expect_success '-L -G searches the whole file under textconv' '
+	git checkout --orphan grep-textconv &&
+	git reset --hard &&
+	cat >tc.c <<-\EOF &&
+	int func1()
+	{
+	    return F1;
+	}
+
+	int func2()
+	{
+	    return F2;
+	}
+	EOF
+	git add tc.c &&
+	test_tick &&
+	git commit -m "add tc.c" &&
+	# One commit changes func1 and func2; MAGIC lands only in the
+	# func2 change, outside func1.
+	sed -e "s/F1/F1 + 1/" -e "s/return F2/return MAGIC/" tc.c >tmp &&
+	mv tmp tc.c &&
+	git commit -a -m "change both funcs" &&
+	echo "tc.c diff=tc" >.gitattributes &&
+
+	# Without a textconv driver, -G is scoped to func1, so MAGIC (only
+	# in the func2 change) does not select the commit.
+	git log -L:func1:tc.c -G MAGIC --format=%s --no-patch >actual &&
+	test_must_be_empty actual &&
+
+	# A textconv driver makes the range (original-file line numbers)
+	# meaningless against the driver output, so -G falls back to the
+	# whole file and MAGIC now selects the commit.
+	git config diff.tc.textconv cat &&
+	git log -L:func1:tc.c -G MAGIC --format=%s --no-patch >actual &&
+	test_grep "change both funcs" actual
 '
 
 test_done
