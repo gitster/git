@@ -151,10 +151,6 @@ int reftable_writer_new(struct reftable_writer **out,
 	struct reftable_write_options opts = {0};
 	struct reftable_writer *wp;
 
-	wp = reftable_calloc(1, sizeof(*wp));
-	if (!wp)
-		return REFTABLE_OUT_OF_MEMORY_ERROR;
-
 	if (_opts)
 		opts = *_opts;
 	options_set_defaults(&opts);
@@ -163,6 +159,10 @@ int reftable_writer_new(struct reftable_writer **out,
 
 	if (!hash_id)
 		hash_id = REFTABLE_HASH_SHA1;
+
+	wp = reftable_calloc(1, sizeof(*wp));
+	if (!wp)
+		return REFTABLE_OUT_OF_MEMORY_ERROR;
 
 	reftable_buf_init(&wp->block_writer_data.last_key);
 	reftable_buf_init(&wp->last_key);
