@@ -393,6 +393,7 @@ create_tags () {
 	tag=$(perl -e "print \"bla\" x 30") &&
 	sed -e "s|^:\([^ ]*\) \(.*\)$|create refs/tags/$tag-\1 \2|" <marks >input &&
 	git update-ref --stdin <input &&
+	git pack-refs --all &&
 	rm input
 }
 
