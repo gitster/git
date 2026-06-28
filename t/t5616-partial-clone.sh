@@ -97,6 +97,30 @@ test_expect_success 'partial fetch inherits filter settings' '
 	test_line_count = 5 observed
 '
 
+test_expect_success 'partial fetch does not spawn rev-list connectivity check' '
+	test_when_finished "rm -rf connectivity-remote connectivity-client" &&
+	git init connectivity-remote &&
+	test_commit -C connectivity-remote one &&
+	git -C connectivity-remote config uploadpack.allowfilter 1 &&
+	git -C connectivity-remote config uploadpack.allowanysha1inwant 1 &&
+
+	git clone --no-checkout --filter=blob:none \
+		"file://$(pwd)/connectivity-remote" connectivity-client &&
+
+	# When doing a partial fetch where all tips are part of a promisor pack
+	# we want to skip the connectivity check, as these objects are allowed
+	# to not be fully connected.
+	test_commit -C connectivity-remote two &&
+	GIT_TRACE2_EVENT="$(pwd)/partial.trace" git -C connectivity-client fetch origin &&
+	test_subcommand_flex ! git rev-list --objects --stdin <partial.trace &&
+
+	# Otherwise, when doing a fetch where any of the tips is not part of a
+	# promisor pack, then we must run the connectivity check.
+	test_commit -C connectivity-remote three &&
+	GIT_TRACE2_EVENT="$(pwd)/full.trace" git -C connectivity-client fetch --no-filter origin &&
+	test_subcommand_flex git rev-list --objects --stdin <full.trace
+'
+
 # force dynamic object fetch using diff.
 # we should only get 1 new blob (for the file in origin/main).
 test_expect_success 'verify diff causes dynamic object fetch' '
