@@ -3974,7 +3974,7 @@ static int mark_included_pack_tip(const struct object_id *oid,
 	struct object *obj;
 
 	oi.typep = &type;
-	if (packed_object_info(p, ofs, &oi) < 0)
+	if (packed_object_info(NULL, p, ofs, &oi) < 0)
 		return 0;
 	if (type != OBJ_COMMIT && type != OBJ_TAG)
 		return 0;
