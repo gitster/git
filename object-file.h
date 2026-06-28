@@ -5,6 +5,7 @@
 #include "object.h"
 #include "odb.h"
 #include "odb/source-loose.h"
+#include "odb/transaction.h"
 
 /* The maximum size for an object header. */
 #define MAX_HEADER_LEN 32
@@ -195,8 +196,10 @@ struct odb_transaction;
  * Tell the object database to optimize for adding
  * multiple objects. odb_transaction_files_commit must be called
  * to make new objects visible. If a transaction is already
- * pending, NULL is returned.
+ * pending, out is set to NULL.
  */
-struct odb_transaction *odb_transaction_files_begin(struct odb_source *source);
+int odb_transaction_files_begin(struct odb_source *source,
+				struct odb_transaction **out,
+				enum odb_transaction_flags flags);
 
 #endif /* OBJECT_FILE_H */
