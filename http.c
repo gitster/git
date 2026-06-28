@@ -819,6 +819,8 @@ static int set_curl_proxy_type(CURL *result, const char *protocol)
 		if (has_proxy_cert_password())
 			curl_easy_setopt(result, CURLOPT_PROXY_KEYPASSWD,
 					 proxy_cert_auth.password);
+
+		return 0;
 	}
 
 	return -1;
