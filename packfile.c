@@ -855,7 +855,7 @@ void for_each_file_in_pack_dir(const char *objdir,
 
 struct packfile_list_entry *packfile_store_get_packs(struct odb_source_packed *store)
 {
-	odb_source_packed_prepare(store);
+	odb_source_prepare(&store->base, 0);
 
 	if (store->midx) {
 		struct multi_pack_index *m = store->midx;
