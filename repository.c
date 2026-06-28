@@ -389,6 +389,7 @@ void repo_clear(struct repository *repo)
 	FREE_AND_NULL(repo->parsed_objects);
 
 	repo_settings_clear(repo);
+	repo_config_values_clear(repo);
 
 	if (repo->config) {
 		git_configset_clear(repo->config);
