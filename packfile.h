@@ -320,9 +320,11 @@ extern int do_check_packed_object_crc;
  * Look up the object info for a specific offset in the packfile.
  * Returns zero on success, a negative error code otherwise.
  */
-int packed_object_info(struct packed_git *pack,
+int packed_object_info(struct odb_source_packed *source,
+		       struct packed_git *pack,
 		       off_t offset, struct object_info *);
-int packed_object_info_with_index_pos(struct packed_git *p, off_t obj_offset,
+int packed_object_info_with_index_pos(struct odb_source_packed *source,
+				      struct packed_git *p, off_t obj_offset,
 				      uint32_t *maybe_index_pos, struct object_info *oi);
 
 void mark_bad_packed_object(struct packed_git *, const struct object_id *);

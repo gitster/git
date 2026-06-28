@@ -59,7 +59,7 @@ static int odb_source_packed_read_object_info(struct odb_source *source,
 	if (!oi)
 		return 0;
 
-	ret = packed_object_info(e.p, e.offset, oi);
+	ret = packed_object_info(packed, e.p, e.offset, oi);
 	if (ret < 0) {
 		mark_bad_packed_object(e.p, oid);
 		return -1;
@@ -99,7 +99,7 @@ static int odb_source_packed_for_each_object_wrapper(const struct object_id *oid
 		off_t offset = nth_packed_object_offset(pack, index_pos);
 		struct object_info oi = *data->request;
 
-		if (packed_object_info_with_index_pos(pack, offset,
+		if (packed_object_info_with_index_pos(data->store, pack, offset,
 						      &index_pos, &oi) < 0) {
 			mark_bad_packed_object(pack, oid);
 			return -1;
