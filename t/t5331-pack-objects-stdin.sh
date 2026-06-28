@@ -676,7 +676,7 @@ test_expect_success '--stdin-packs=follow-reachable with --unpacked and loose ob
 		objects_in_packs $P >actual &&
 
 		# The unreachable blob should NOT be in the output.
-		! grep $unreachable actual &&
+		test_grep ! $unreachable actual &&
 
 		test_cmp expect actual
 	)
