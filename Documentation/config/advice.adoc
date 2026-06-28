@@ -98,6 +98,11 @@ all advice messages.
 		Shown when linkgit:git-push[1] rejects a forced update of
 		a branch when its remote-tracking ref has updates that we
 		do not have locally.
+	pushRepoLooksLikeRef::
+		Shown when the repository given to linkgit:git-push[1] is not
+		a configured remote but looks like a `<remote>/<branch>` ref,
+		suggesting that the remote and branch be given as separate
+		arguments.
 	pushUnqualifiedRefname::
 		Shown when linkgit:git-push[1] gives up trying to
 		guess based on the source and destination refs what
