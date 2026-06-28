@@ -59,11 +59,6 @@ static int fill_commit_message(struct repository *repo,
 		  " empty message aborts the commit.\n");
 	struct wt_status s;
 
-	strbuf_addstr(out, default_message);
-	strbuf_addch(out, '\n');
-	strbuf_commented_addf(out, comment_line_str, hint, action, comment_line_str);
-	write_file_buf(path, out->buf, out->len);
-
 	wt_status_prepare(repo, &s);
 	FREE_AND_NULL(s.branch);
 	s.ahead_behind_flags = AHEAD_BEHIND_QUICK;
@@ -75,14 +70,20 @@ static int fill_commit_message(struct repository *repo,
 	s.whence = FROM_COMMIT;
 	s.committable = 1;
 
-	s.fp = fopen(git_path_commit_editmsg(), "a");
+	s.fp = fopen(path, "w");
 	if (!s.fp)
-		return error_errno(_("could not open '%s'"), git_path_commit_editmsg());
+		return error_errno(_("could not open '%s'"), path);
+
+	strbuf_addstr(out, default_message);
+	strbuf_addch(out, '\n');
+	strbuf_commented_addf(out, comment_line_str, hint, action, comment_line_str);
+	fwrite(out->buf, 1, out->len, s.fp);
 
 	wt_status_collect_changes_trees(&s, old_tree, new_tree);
 	wt_status_print(&s);
 	wt_status_collect_free_buffers(&s);
 	string_list_clear_func(&s.change, change_data_free);
+	fclose(s.fp);
 
 	strbuf_reset(out);
 	if (launch_editor(path, out, NULL)) {
