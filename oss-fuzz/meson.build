@@ -6,6 +6,7 @@ fuzz_programs = [
   'fuzz-pack-headers.c',
   'fuzz-pack-idx.c',
   'fuzz-parse-attr-line.c',
+  'fuzz-reftable.c',
   'fuzz-url-decode-mem.c',
 ]
 
