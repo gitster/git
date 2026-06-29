@@ -351,6 +351,10 @@ int reftable_block_init(struct reftable_block *block,
 
 	restart_count = reftable_get_be16(block->block_data.data + block_size - 2);
 	restart_off = block_size - 2 - 3 * restart_count;
+	if (restart_off < header_size + 4 || restart_off > block_size - 2) {
+		err = REFTABLE_FORMAT_ERROR;
+		goto done;
+	}
 
 	block->block_type = block_type;
 	block->hash_size = hash_size;
