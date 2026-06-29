@@ -260,6 +260,15 @@ int reftable_block_init(struct reftable_block *block,
 			goto done;
 	}
 
+	/*
+	 * Verify that the block size covers at least the table header, block
+	 * header and the 2 byte restart counter.
+	 */
+	if (block_size < header_size + 4 + 2) {
+		err = REFTABLE_FORMAT_ERROR;
+		goto done;
+	}
+
 	if (block_type == REFTABLE_BLOCK_TYPE_LOG) {
 		uint32_t block_header_skip = 4 + header_size;
 		uLong dst_len = block_size - block_header_skip;
