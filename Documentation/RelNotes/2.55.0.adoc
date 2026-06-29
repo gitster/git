@@ -31,7 +31,9 @@ UI, Workflows & Features
    subcommand "git url-parse".
 
  * Misspelt proxy URL (e.g., httt://...) did not trigger any warning
-   or failure, which has been corrected.
+   or failure, which has been corrected.  We had a regression in this
+   update that broke https:// proxies, but that has been caught and
+   corrected.
 
  * Document the fact that .git/info/exclude is shared across worktrees
    linked to the same repository.
