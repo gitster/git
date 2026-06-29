@@ -562,6 +562,11 @@ int reftable_table_new(struct reftable_table **out,
 		goto done;
 	}
 
+	if (file_size < header_size(t->version) + footer_size(t->version)) {
+		err = REFTABLE_FORMAT_ERROR;
+		goto done;
+	}
+
 	t->size = file_size - footer_size(t->version);
 	t->source = *source;
 	t->name = reftable_strdup(name);

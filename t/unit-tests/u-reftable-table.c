@@ -262,3 +262,31 @@ void test_reftable_table__seek_invalid_log_offset(void)
 	reftable_table_decref(table);
 	reftable_buf_release(&buf);
 }
+
+void test_reftable_table__new_with_truncated_table(void)
+{
+	struct reftable_ref_record refs[] = {
+		{
+			.refname = (char *) "refs/heads/main",
+			.value_type = REFTABLE_REF_VAL1,
+			.value.val1 = { 42 },
+		},
+	};
+	struct reftable_block_source source = { 0 };
+	struct reftable_table *table;
+	struct reftable_buf buf = REFTABLE_BUF_INIT;
+
+	cl_reftable_write_to_buf(&buf, refs, ARRAY_SIZE(refs), NULL, 0, NULL);
+
+	/*
+	 * Truncate the table so that it is large enough to read the header, but
+	 * too small to also contain the footer.
+	 */
+	buf.len = footer_size(1) - 1;
+	block_source_from_buf(&source, &buf);
+
+	cl_assert_equal_i(reftable_table_new(&table, &source, "name"),
+			  REFTABLE_FORMAT_ERROR);
+
+	reftable_buf_release(&buf);
+}
