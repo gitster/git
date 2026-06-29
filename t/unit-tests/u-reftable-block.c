@@ -563,3 +563,42 @@ void test_reftable_block__corrupt_restart_count(void)
 	reftable_block_release(&block);
 	reftable_buf_release(&data);
 }
+
+void test_reftable_block__corrupt_restart_offset(void)
+{
+	struct reftable_block_source source = { 0 };
+	struct reftable_record rec = {
+		.type = REFTABLE_BLOCK_TYPE_REF,
+		.u.ref = {
+			.value_type = REFTABLE_REF_VAL1,
+			.refname = (char *) "refs/heads/main",
+		},
+	};
+	struct reftable_block block = { 0 };
+	struct block_iter it = BLOCK_ITER_INIT;
+	struct reftable_buf want = REFTABLE_BUF_INIT;
+	struct reftable_buf data = REFTABLE_BUF_INIT;
+
+	cl_reftable_write_block(&data, REFTABLE_BLOCK_TYPE_REF, &rec, 1);
+
+	block_source_from_buf(&source, &data);
+	cl_must_pass(reftable_block_init(&block, &source, 0, 0, data.len,
+					 REFTABLE_HASH_SIZE_SHA1, REFTABLE_BLOCK_TYPE_REF));
+
+	/*
+	 * Corrupt the first restart offset, stored as a big-endian 24-bit
+	 * integer at the start of the restart table, to point past the end of
+	 * the records section. Seeking such a block must fail gracefully.
+	 */
+	reftable_put_be24((uint8_t *) block.block_data.data + block.restart_off,
+			  0xffffff);
+
+	block_iter_init(&it, &block);
+	cl_must_pass(reftable_buf_addstr(&want, "refs/heads/main"));
+	cl_assert_equal_i(block_iter_seek_key(&it, &want), REFTABLE_FORMAT_ERROR);
+
+	reftable_buf_release(&want);
+	block_iter_close(&it);
+	reftable_block_release(&block);
+	reftable_buf_release(&data);
+}

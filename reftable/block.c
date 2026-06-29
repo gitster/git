@@ -441,6 +441,15 @@ static int restart_needle_less(size_t idx, void *_args)
 	int n;
 
 	/*
+	 * The restart offset must point to a record, which is stored before
+	 * the restart table. Verify that this is the case.
+	 */
+	if (off >= args->block->restart_off) {
+		args->error = 1;
+		return -1;
+	}
+
+	/*
 	 * Records at restart points are stored without prefix compression, so
 	 * there is no need to fully decode the record key here. This removes
 	 * the need for allocating memory.
