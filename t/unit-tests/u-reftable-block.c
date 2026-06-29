@@ -14,6 +14,31 @@ https://developers.google.com/open-source/licenses/bsd
 #include "reftable/reftable-error.h"
 #include "strbuf.h"
 
+static int cl_reftable_write_block(struct reftable_buf *buf,
+				   uint8_t block_type,
+				   struct reftable_record *recs,
+				   size_t nrecs)
+{
+	struct block_writer writer = {
+		.last_key = REFTABLE_BUF_INIT,
+	};
+	uint8_t block[1024];
+	int block_end;
+
+	cl_must_pass(block_writer_init(&writer, block_type, block, 1024,
+				       0, hash_size(REFTABLE_HASH_SHA1)));
+	for (size_t i = 0; i < nrecs; i++)
+		cl_must_pass(block_writer_add(&writer, &recs[i]));
+
+	block_end = block_writer_finish(&writer);
+	cl_assert(block_end > 0);
+
+	cl_must_pass(reftable_buf_add(buf, block, block_end));
+
+	block_writer_release(&writer);
+	return block_end;
+}
+
 void test_reftable_block__read_write(void)
 {
 	const int header_off = 21; /* random */
@@ -381,24 +406,12 @@ void test_reftable_block__ref_read_write(void)
 void test_reftable_block__iterator(void)
 {
 	struct reftable_block_source source = { 0 };
-	struct block_writer writer = {
-		.last_key = REFTABLE_BUF_INIT,
-	};
 	struct reftable_record expected_refs[20];
 	struct reftable_ref_record ref = { 0 };
 	struct reftable_iterator it = { 0 };
 	struct reftable_block block = { 0 };
-	struct reftable_buf data;
+	struct reftable_buf data = REFTABLE_BUF_INIT;
 	int err;
-
-	data.len = 1024;
-	REFTABLE_CALLOC_ARRAY(data.buf, data.len);
-	cl_assert(data.buf != NULL);
-
-	err = block_writer_init(&writer, REFTABLE_BLOCK_TYPE_REF,
-				(uint8_t *) data.buf, data.len,
-				0, hash_size(REFTABLE_HASH_SHA1));
-	cl_assert(!err);
 
 	for (size_t i = 0; i < ARRAY_SIZE(expected_refs); i++) {
 		expected_refs[i] = (struct reftable_record) {
@@ -409,13 +422,10 @@ void test_reftable_block__iterator(void)
 			},
 		};
 		memset(expected_refs[i].u.ref.value.val1, i, REFTABLE_HASH_SIZE_SHA1);
-
-		err = block_writer_add(&writer, &expected_refs[i]);
-		cl_assert_equal_i(err, 0);
 	}
 
-	err = block_writer_finish(&writer);
-	cl_assert(err > 0);
+	cl_reftable_write_block(&data, REFTABLE_BLOCK_TYPE_REF,
+				expected_refs, ARRAY_SIZE(expected_refs));
 
 	block_source_from_buf(&source, &data);
 	reftable_block_init(&block, &source, 0, 0, data.len,
@@ -453,6 +463,5 @@ void test_reftable_block__iterator(void)
 	reftable_ref_record_release(&ref);
 	reftable_iterator_destroy(&it);
 	reftable_block_release(&block);
-	block_writer_release(&writer);
 	reftable_buf_release(&data);
 }
