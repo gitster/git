@@ -2472,7 +2472,7 @@ static enum pick_result do_pick_commit(struct repository *r,
 					opts->xopts.nr, opts->xopts.v,
 					common, oid_to_hex(&head), remotes);
 		/*
-		 * If the there were conflicts, try_merge_command() returns 1,
+		 * If there were conflicts, try_merge_command() returns 1,
 		 * any other no-zero return code means that either the merge
 		 * command could not be run, or it failed to merge.
 		 */
