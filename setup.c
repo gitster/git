@@ -1094,6 +1094,7 @@ struct repo_discovery {
 	struct repository_format format;
 	char *gitdir;
 	char *worktree;
+	char *prefix;
 };
 
 #define REPO_DISCOVERY_INIT { \
@@ -1105,6 +1106,7 @@ static void repo_discovery_release(struct repo_discovery *r)
 	clear_repository_format(&r->format);
 	free(r->gitdir);
 	free(r->worktree);
+	free(r->prefix);
 }
 
 static void repo_discovery_set_gitdir(struct repo_discovery *r,
@@ -1128,10 +1130,10 @@ static void repo_discovery_set_worktree(struct repo_discovery *r,
 	r->worktree = real_pathdup(worktree, 1);
 }
 
-static const char *repo_discover_explicit_gitdir(struct repo_discovery *discovery,
-						 const char *gitdirenv,
-						 struct strbuf *cwd,
-						 int *nongit_ok)
+static void repo_discover_explicit_gitdir(struct repo_discovery *discovery,
+					  const char *gitdirenv,
+					  struct strbuf *cwd,
+					  int *nongit_ok)
 {
 	const char *work_tree_env = getenv(GIT_WORK_TREE_ENVIRONMENT);
 	char *gitfile;
@@ -1149,16 +1151,13 @@ static const char *repo_discover_explicit_gitdir(struct repo_discovery *discover
 	if (!is_git_directory(gitdirenv)) {
 		if (nongit_ok) {
 			*nongit_ok = 1;
-			free(gitfile);
-			return NULL;
+			goto out;
 		}
 		die(_("not a git repository: '%s'"), gitdirenv);
 	}
 
-	if (read_and_verify_repository_format(&discovery->format, gitdirenv, nongit_ok)) {
-		free(gitfile);
-		return NULL;
-	}
+	if (read_and_verify_repository_format(&discovery->format, gitdirenv, nongit_ok))
+		goto out;
 
 	/* #3, #7, #11, #15, #19, #23, #27, #31 (see t1510) */
 	if (work_tree_env) {
@@ -1173,8 +1172,7 @@ static const char *repo_discover_explicit_gitdir(struct repo_discovery *discover
 	} else if (discovery->format.is_bare > 0) {
 		/* #18, #26 */
 		repo_discovery_set_gitdir(discovery, gitdirenv, 0);
-		free(gitfile);
-		return NULL;
+		goto out;
 	} else if (discovery->format.work_tree) { /* #6, #14 */
 		if (is_absolute_path(discovery->format.work_tree)) {
 			repo_discovery_set_worktree(discovery, discovery->format.work_tree);
@@ -1193,8 +1191,7 @@ static const char *repo_discover_explicit_gitdir(struct repo_discovery *discover
 	} else if (!git_env_bool(GIT_IMPLICIT_WORK_TREE_ENVIRONMENT, 1)) {
 		/* #16d */
 		repo_discovery_set_gitdir(discovery, gitdirenv, 0);
-		free(gitfile);
-		return NULL;
+		goto out;
 	} else { /* #2, #10 */
 		repo_discovery_set_worktree(discovery, ".");
 	}
@@ -1202,8 +1199,7 @@ static const char *repo_discover_explicit_gitdir(struct repo_discovery *discover
 	/* both the worktree and cwd are already normalized */
 	if (!strcmp(cwd->buf, discovery->worktree)) { /* cwd == worktree */
 		repo_discovery_set_gitdir(discovery, gitdirenv, 0);
-		free(gitfile);
-		return NULL;
+		goto out;
 	}
 
 	offset = dir_inside_of(cwd->buf, discovery->worktree);
@@ -1211,38 +1207,37 @@ static const char *repo_discover_explicit_gitdir(struct repo_discovery *discover
 		repo_discovery_set_gitdir(discovery, gitdirenv, 1);
 		if (chdir(discovery->worktree))
 			die_errno(_("cannot chdir to '%s'"), discovery->worktree);
-		strbuf_addch(cwd, '/');
-		free(gitfile);
-		return cwd->buf + offset;
+		discovery->prefix = xstrfmt("%s/", cwd->buf + offset);
+		goto out;
 	}
 
 	/* cwd outside worktree */
 	repo_discovery_set_gitdir(discovery, gitdirenv, 0);
+
+out:
 	free(gitfile);
-	return NULL;
 }
 
-static const char *repo_discover_implicit_gitdir(struct repo_discovery *discovery,
-						 const char *gitdir,
-						 struct strbuf *cwd, int offset,
-						 int *nongit_ok)
+static void repo_discover_implicit_gitdir(struct repo_discovery *discovery,
+					  const char *gitdir,
+					  struct strbuf *cwd, int offset,
+					  int *nongit_ok)
 {
 	if (read_and_verify_repository_format(&discovery->format, gitdir, nongit_ok))
-		return NULL;
+		return;
 
 	/* --work-tree is set without --git-dir; use discovered one */
 	if (getenv(GIT_WORK_TREE_ENVIRONMENT) || discovery->format.work_tree) {
 		char *to_free = NULL;
-		const char *ret;
 
 		if (offset != cwd->len && !is_absolute_path(gitdir))
 			gitdir = to_free = real_pathdup(gitdir, 1);
 		if (chdir(cwd->buf))
 			die_errno(_("cannot come back to cwd"));
-		ret = repo_discover_explicit_gitdir(discovery, gitdir, cwd,
-						    nongit_ok);
+		repo_discover_explicit_gitdir(discovery, gitdir, cwd,
+					      nongit_ok);
 		free(to_free);
-		return ret;
+		return;
 	}
 
 	/* #16.2, #17.2, #20.2, #21.2, #24, #25, #28, #29 (see t1510) */
@@ -1250,7 +1245,7 @@ static const char *repo_discover_implicit_gitdir(struct repo_discovery *discover
 		repo_discovery_set_gitdir(discovery, gitdir, (offset != cwd->len));
 		if (chdir(cwd->buf))
 			die_errno(_("cannot come back to cwd"));
-		return NULL;
+		return;
 	}
 
 	/* #0, #1, #5, #8, #9, #12, #13 */
@@ -1258,37 +1253,34 @@ static const char *repo_discover_implicit_gitdir(struct repo_discovery *discover
 	if (strcmp(gitdir, DEFAULT_GIT_DIR_ENVIRONMENT))
 		repo_discovery_set_gitdir(discovery, gitdir, 0);
 	if (offset >= cwd->len)
-		return NULL;
+		return;
 
 	/* Make "offset" point past the '/' (already the case for root dirs) */
 	if (offset != offset_1st_component(cwd->buf))
 		offset++;
-	/* Add a '/' at the end */
-	strbuf_addch(cwd, '/');
-	return cwd->buf + offset;
+	discovery->prefix = xstrfmt("%s/", cwd->buf + offset);
 }
 
 /* #16.1, #17.1, #20.1, #21.1, #22.1 (see t1510) */
-static const char *repo_discover_bare_gitdir(struct repo_discovery *discovery,
-					     struct strbuf *cwd, int offset,
-					     int *nongit_ok)
+static void repo_discover_bare_gitdir(struct repo_discovery *discovery,
+				      struct strbuf *cwd, int offset,
+				      int *nongit_ok)
 {
 	int root_len;
 
 	if (read_and_verify_repository_format(&discovery->format, ".", nongit_ok))
-		return NULL;
+		return;
 
 	setenv(GIT_IMPLICIT_WORK_TREE_ENVIRONMENT, "0", 1);
 
 	/* --work-tree is set without --git-dir; use discovered one */
 	if (getenv(GIT_WORK_TREE_ENVIRONMENT) || discovery->format.work_tree) {
-		static const char *gitdir;
-
-		gitdir = offset == cwd->len ? "." : xmemdupz(cwd->buf, offset);
+		char *gitdir = offset == cwd->len ? xstrdup(".") : xmemdupz(cwd->buf, offset);
 		if (chdir(cwd->buf))
 			die_errno(_("cannot come back to cwd"));
-		return repo_discover_explicit_gitdir(discovery, gitdir, cwd,
-						     nongit_ok);
+		repo_discover_explicit_gitdir(discovery, gitdir, cwd, nongit_ok);
+		free(gitdir);
+		return;
 	}
 
 	if (offset != cwd->len) {
@@ -1297,10 +1289,9 @@ static const char *repo_discover_bare_gitdir(struct repo_discovery *discovery,
 		root_len = offset_1st_component(cwd->buf);
 		strbuf_setlen(cwd, offset > root_len ? offset : root_len);
 		repo_discovery_set_gitdir(discovery, cwd->buf, 0);
-	}
-	else
+	} else {
 		repo_discovery_set_gitdir(discovery, ".", 0);
-	return NULL;
+	}
 }
 
 static dev_t get_device_or_die(const char *path, const char *prefix, int prefix_len)
@@ -1936,7 +1927,6 @@ const char *setup_git_directory_gently(struct repository *repo, int *nongit_ok)
 	struct strbuf cwd = STRBUF_INIT;
 	struct strbuf dir = STRBUF_INIT, gitdir = STRBUF_INIT, report = STRBUF_INIT;
 	struct repo_discovery discovery = REPO_DISCOVERY_INIT;
-	const char *prefix = NULL;
 
 	/*
 	 * We may have read an incomplete configuration before
@@ -1961,20 +1951,19 @@ const char *setup_git_directory_gently(struct repository *repo, int *nongit_ok)
 
 	switch (repo_discovery_find_dir(&dir, &gitdir, &report, 1)) {
 	case GIT_DIR_EXPLICIT:
-		prefix = repo_discover_explicit_gitdir(&discovery, gitdir.buf, &cwd,
-						       nongit_ok);
+		repo_discover_explicit_gitdir(&discovery, gitdir.buf, &cwd,
+					      nongit_ok);
 		break;
 	case GIT_DIR_DISCOVERED:
 		if (dir.len < cwd.len && chdir(dir.buf))
 			die(_("cannot change to '%s'"), dir.buf);
-		prefix = repo_discover_implicit_gitdir(&discovery, gitdir.buf, &cwd, dir.len,
-						       nongit_ok);
+		repo_discover_implicit_gitdir(&discovery, gitdir.buf, &cwd, dir.len,
+					      nongit_ok);
 		break;
 	case GIT_DIR_BARE:
 		if (dir.len < cwd.len && chdir(dir.buf))
 			die(_("cannot change to '%s'"), dir.buf);
-		prefix = repo_discover_bare_gitdir(&discovery, &cwd, dir.len,
-						   nongit_ok);
+		repo_discover_bare_gitdir(&discovery, &cwd, dir.len, nongit_ok);
 		break;
 	case GIT_DIR_HIT_CEILING:
 		if (!nongit_ok)
@@ -2103,10 +2092,10 @@ const char *setup_git_directory_gently(struct repository *repo, int *nongit_ok)
 	 * out where the repository is, i.e. a preparation
 	 * for calling repo_config_get_bool().
 	 */
-	if (prefix) {
-		prefix = precompose_string_if_needed(prefix);
+	if (discovery.prefix) {
+		const char *prefix = precompose_string_if_needed(discovery.prefix);
 		repo->prefix = xstrdup(prefix);
-		setenv(GIT_PREFIX_ENVIRONMENT, prefix, 1);
+		setenv(GIT_PREFIX_ENVIRONMENT, repo->prefix, 1);
 	} else {
 		FREE_AND_NULL(repo->prefix);
 		setenv(GIT_PREFIX_ENVIRONMENT, "", 1);
