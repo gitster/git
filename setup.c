@@ -2847,12 +2847,10 @@ int init_db(struct repository *repo,
 		apply_and_export_relative_gitdir(repo, real_git_dir, 1);
 		git_dir = repo_get_git_dir(repo);
 		separate_git_dir(git_dir, original_git_dir);
-	}
-	else {
+	} else {
 		apply_and_export_relative_gitdir(repo, git_dir, 1);
 		git_dir = repo_get_git_dir(repo);
 	}
-	startup_info->have_repository = 1;
 
 	/*
 	 * Check to see if the repository version is right.
