@@ -96,8 +96,6 @@ static inline int discover_git_directory(struct strbuf *commondir,
 	return 0;
 }
 
-void set_git_work_tree(struct repository *repo, const char *tree);
-
 /* Flags that can be passed to `enter_repo()`. */
 enum {
 	/*

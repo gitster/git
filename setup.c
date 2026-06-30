@@ -1904,7 +1904,7 @@ const char *enter_repo(struct repository *repo, const char *path, unsigned flags
  * primarily to support git-clone to work in a new repository it just
  * created, and is not meant to flip between different work trees.
  */
-void set_git_work_tree(struct repository *repo, const char *new_work_tree)
+static void set_git_work_tree(struct repository *repo, const char *new_work_tree)
 {
 	if (repo->worktree_initialized) {
 		struct strbuf realpath = STRBUF_INIT;
