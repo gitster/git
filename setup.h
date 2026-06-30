@@ -263,7 +263,9 @@ const char *get_template_dir(const char *option_template);
 #define INIT_DB_SKIP_REFDB (1 << 2)
 
 int init_db(struct repository *repo,
-	    const char *git_dir, const char *real_git_dir,
+	    const char *git_dir,
+	    const char *real_git_dir,
+	    const char *worktree,
 	    const char *template_dir, int hash_algo,
 	    enum ref_storage_format ref_storage_format,
 	    const char *initial_branch, int init_shared_repository,

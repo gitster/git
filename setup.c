@@ -2823,7 +2823,9 @@ static void repository_format_configure(struct repository_format *repo_fmt,
 }
 
 int init_db(struct repository *repo,
-	    const char *git_dir, const char *real_git_dir,
+	    const char *git_dir,
+	    const char *real_git_dir,
+	    const char *worktree,
 	    const char *template_dir, int hash,
 	    enum ref_storage_format ref_storage_format,
 	    const char *initial_branch,
@@ -2851,6 +2853,9 @@ int init_db(struct repository *repo,
 		apply_and_export_relative_gitdir(repo, git_dir, 1);
 		git_dir = repo_get_git_dir(repo);
 	}
+
+	if (worktree)
+		set_git_work_tree(repo, worktree);
 
 	/*
 	 * Check to see if the repository version is right.
