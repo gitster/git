@@ -2549,7 +2549,7 @@ fast_forward_edit:
 			*check_todo = 1;
 		}
 		/*
-		 * If "git commit" failed to run than res == -1 but we dont
+		 * If "git commit" failed to run then res == -1, but we don't
 		 * want reschedule the last command because the picking the
 		 * commit was successful.
 		 */
