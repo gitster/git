@@ -4986,6 +4986,7 @@ static int pick_one_commit(struct repository *r,
 	} else if (!res) {
 		record_in_rewritten(&item->commit->object.oid,
 				    peek_command(todo_list, 1));
+		return 0;
 	} else if (res && is_fixup(item->command)) {
 		return error_failed_squash(r, item->commit, opts,
 					   item->arg_len, arg);
@@ -5009,7 +5010,8 @@ static int pick_one_commit(struct repository *r,
 		return error_with_patch(r, item->commit, arg, item->arg_len,
 					opts, res, to_amend);
 	}
-	return res;
+
+	BUG("Unhandled return value from do_pick_commit()");
 }
 
 static int pick_commits(struct repository *r,
