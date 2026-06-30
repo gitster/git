@@ -749,9 +749,9 @@ static int check_repo_format(const char *var, const char *value,
 	return read_worktree_config(var, value, ctx, vdata);
 }
 
-static int check_repository_format_gently(const char *gitdir,
-					  struct repository_format *candidate,
-					  int *nongit_ok)
+static int read_and_verify_repository_format(struct repository_format *format,
+					     const char *gitdir,
+					     int *nongit_ok)
 {
 	struct strbuf sb = STRBUF_INIT;
 	struct strbuf err = STRBUF_INIT;
@@ -759,7 +759,7 @@ static int check_repository_format_gently(const char *gitdir,
 
 	has_common = get_common_dir(&sb, gitdir);
 	strbuf_addstr(&sb, "/config");
-	read_repository_format(candidate, sb.buf);
+	read_repository_format(format, sb.buf);
 	strbuf_release(&sb);
 
 	/*
@@ -767,10 +767,10 @@ static int check_repository_format_gently(const char *gitdir,
 	 * we treat a missing config as a silent "ok", even when nongit_ok
 	 * is unset.
 	 */
-	if (candidate->version < 0)
+	if (format->version < 0)
 		return 0;
 
-	if (verify_repository_format(candidate, &err) < 0) {
+	if (verify_repository_format(format, &err) < 0) {
 		if (nongit_ok) {
 			warning("%s", err.buf);
 			strbuf_release(&err);
@@ -780,37 +780,37 @@ static int check_repository_format_gently(const char *gitdir,
 		die("%s", err.buf);
 	}
 
-	string_list_clear(&candidate->unknown_extensions, 0);
-	string_list_clear(&candidate->v1_only_extensions, 0);
+	string_list_clear(&format->unknown_extensions, 0);
+	string_list_clear(&format->v1_only_extensions, 0);
 
-	if (candidate->worktree_config) {
+	if (format->worktree_config) {
 		/*
 		 * pick up core.bare and core.worktree from per-worktree
 		 * config if present
 		 */
 		strbuf_addf(&sb, "%s/config.worktree", gitdir);
-		git_config_from_file(read_worktree_config, sb.buf, candidate);
+		git_config_from_file(read_worktree_config, sb.buf, format);
 		strbuf_release(&sb);
 		has_common = 0;
 	}
 
 	if (startup_info->force_bare_repository) {
-		candidate->is_bare = 1;
-		FREE_AND_NULL(candidate->work_tree);
+		format->is_bare = 1;
+		FREE_AND_NULL(format->work_tree);
 	} else if (has_common) {
 		/*
 		 * When sharing a common dir with another repository (e.g. a
 		 * linked worktree), do not let this repository's config
 		 * dictate bareness; it is inherited from the main worktree.
 		 */
-		candidate->is_bare = -1;
+		format->is_bare = -1;
 
 		/*
 		 * Furthermore, "core.worktree" is supposed to be ignored when
 		 * we have a commondir configured, unless it comes from the
 		 * per-worktree configuration.
 		 */
-		FREE_AND_NULL(candidate->work_tree);
+		FREE_AND_NULL(format->work_tree);
 	}
 
 	return 0;
@@ -1141,7 +1141,7 @@ static const char *setup_explicit_git_dir(struct repository *repo,
 		die(_("not a git repository: '%s'"), gitdirenv);
 	}
 
-	if (check_repository_format_gently(gitdirenv, repo_fmt, nongit_ok)) {
+	if (read_and_verify_repository_format(repo_fmt, gitdirenv, nongit_ok)) {
 		free(gitfile);
 		return NULL;
 	}
@@ -1218,7 +1218,7 @@ static const char *setup_discovered_git_dir(struct repository *repo,
 					    struct repository_format *repo_fmt,
 					    int *nongit_ok)
 {
-	if (check_repository_format_gently(gitdir, repo_fmt, nongit_ok))
+	if (read_and_verify_repository_format(repo_fmt, gitdir, nongit_ok))
 		return NULL;
 
 	/* --work-tree is set without --git-dir; use discovered one */
@@ -1266,7 +1266,7 @@ static const char *setup_bare_git_dir(struct repository *repo,
 {
 	int root_len;
 
-	if (check_repository_format_gently(".", repo_fmt, nongit_ok))
+	if (read_and_verify_repository_format(repo_fmt, ".", nongit_ok))
 		return NULL;
 
 	setenv(GIT_IMPLICIT_WORK_TREE_ENVIRONMENT, "0", 1);
@@ -1874,7 +1874,7 @@ const char *enter_repo(struct repository *repo, const char *path, unsigned flags
 		struct strbuf err = STRBUF_INIT;
 
 		set_git_dir(repo, ".", 0);
-		check_repository_format_gently(".", &fmt, NULL);
+		read_and_verify_repository_format(&fmt, ".", NULL);
 		if (apply_repository_format(repo, &fmt, APPLY_REPOSITORY_FORMAT_HONOR_ENV, &err) < 0)
 			die("%s", err.buf);
 		startup_info->have_repository = 1;
@@ -2836,7 +2836,7 @@ int init_db(struct repository *repo,
 	 * config file, so this will not fail.  What we are catching
 	 * is an attempt to reinitialize new repository with an old tool.
 	 */
-	check_repository_format_gently(repo_get_git_dir(repo), &repo_fmt, NULL);
+	read_and_verify_repository_format(&repo_fmt, repo_get_git_dir(repo), NULL);
 	repository_format_configure(&repo_fmt, hash, ref_storage_format);
 	if (apply_repository_format(repo, &repo_fmt, APPLY_REPOSITORY_FORMAT_HONOR_ENV, &err) < 0)
 		die("%s", err.buf);
