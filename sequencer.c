@@ -4966,12 +4966,14 @@ static int pick_one_commit(struct repository *r,
 
 	res = do_pick_commit(r, item, opts, is_final_fixup(todo_list),
 			     check_todo);
-	if (is_rebase_i(opts) && res < 0) {
+	if (!is_rebase_i(opts))
+		return res;
+
+	if (res < 0) {
 		/* Reschedule */
 		*reschedule = 1;
 		return -1;
-	}
-	if (item->command == TODO_EDIT) {
+	} else if (item->command == TODO_EDIT) {
 		struct commit *commit = item->commit;
 		if (!res) {
 			if (!opts->verbose)
@@ -4981,14 +4983,13 @@ static int pick_one_commit(struct repository *r,
 		}
 		return error_with_patch(r, commit,
 					arg, item->arg_len, opts, res, !res);
-	}
-	if (is_rebase_i(opts) && !res)
+	} else if (!res) {
 		record_in_rewritten(&item->commit->object.oid,
 				    peek_command(todo_list, 1));
-	if (res && is_fixup(item->command)) {
+	} else if (res && is_fixup(item->command)) {
 		return error_failed_squash(r, item->commit, opts,
 					   item->arg_len, arg);
-	} else if (res && is_rebase_i(opts)) {
+	} else if (res) {
 		int to_amend = 0;
 		struct object_id oid;
 
