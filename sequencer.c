@@ -4629,21 +4629,6 @@ static int do_update_refs(struct repository *r, int quiet)
 	return res;
 }
 
-static int is_final_fixup(struct todo_list *todo_list)
-{
-	int i = todo_list->current;
-
-	if (!is_fixup(todo_list->items[i].command))
-		return 0;
-
-	while (++i < todo_list->nr)
-		if (is_fixup(todo_list->items[i].command))
-			return 0;
-		else if (!is_noop(todo_list->items[i].command))
-			break;
-	return 1;
-}
-
 static enum todo_command peek_command(struct todo_list *todo_list, int offset)
 {
 	int i;
@@ -4925,6 +4910,21 @@ static int reread_todo_if_changed(struct repository *r,
 	strbuf_release(&buf);
 
 	return 0;
+}
+
+static int is_final_fixup(struct todo_list *todo_list)
+{
+	int i = todo_list->current;
+
+	if (!is_fixup(todo_list->items[i].command))
+		return 0;
+
+	while (++i < todo_list->nr)
+		if (is_fixup(todo_list->items[i].command))
+			return 0;
+		else if (!is_noop(todo_list->items[i].command))
+			break;
+	return 1;
 }
 
 static const char rescheduled_advice[] =
