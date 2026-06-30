@@ -30,6 +30,9 @@
 #define REFS_UPDATE_USAGE \
 	N_("git refs update [--message=<reason>] [--no-deref] [--create-reflog] <ref> <new-value> [<old-value>]")
 
+#define REFS_RENAME_USAGE \
+	N_("git refs rename [--message=<reason>] <old-ref> <new-ref>")
+
 static int cmd_refs_migrate(int argc, const char **argv, const char *prefix,
 			    struct repository *repo)
 {
@@ -327,6 +330,50 @@ static int cmd_refs_update(int argc, const char **argv, const char *prefix,
 	return ret;
 }
 
+static int cmd_refs_rename(int argc, const char **argv, const char *prefix,
+			   struct repository *repo)
+{
+	static char const * const refs_rename_usage[] = {
+		REFS_RENAME_USAGE,
+		NULL
+	};
+	const char *message = NULL;
+	struct option opts[] = {
+		OPT_STRING(0, "message", &message, N_("reason"),
+			   N_("reason of the update")),
+		OPT_END(),
+	};
+	const char *oldref, *newref;
+	int ret;
+
+	argc = parse_options(argc, argv, prefix, opts, refs_rename_usage, 0);
+	if (argc != 2)
+		usage(_("rename requires old and new reference name"));
+	if (message && !*message)
+		die(_("refusing to perform update with empty message"));
+
+	repo_config(repo, git_default_config, NULL);
+
+	oldref = argv[0];
+	newref = argv[1];
+
+	if (check_refname_format(oldref, 0))
+		die(_("invalid ref format: '%s'"), oldref);
+	if (check_refname_format(newref, 0))
+		die(_("invalid ref format: '%s'"), newref);
+
+	if (!refs_ref_exists(get_main_ref_store(repo), oldref))
+		die(_("reference does not exist: '%s'"), oldref);
+	if (refs_ref_exists(get_main_ref_store(repo), newref))
+		die(_("reference already exists: '%s'"), newref);
+
+	ret = refs_rename_ref(get_main_ref_store(repo), oldref, newref, message);
+
+	if (ret < 0)
+		ret = 1;
+	return ret;
+}
+
 int cmd_refs(int argc,
 	     const char **argv,
 	     const char *prefix,
@@ -341,6 +388,7 @@ int cmd_refs(int argc,
 		REFS_CREATE_USAGE,
 		REFS_DELETE_USAGE,
 		REFS_UPDATE_USAGE,
+		REFS_RENAME_USAGE,
 		NULL,
 	};
 	parse_opt_subcommand_fn *fn = NULL;
@@ -353,6 +401,7 @@ int cmd_refs(int argc,
 		OPT_SUBCOMMAND("create", &fn, cmd_refs_create),
 		OPT_SUBCOMMAND("delete", &fn, cmd_refs_delete),
 		OPT_SUBCOMMAND("update", &fn, cmd_refs_update),
+		OPT_SUBCOMMAND("rename", &fn, cmd_refs_rename),
 		OPT_END(),
 	};
 
