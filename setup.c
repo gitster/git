@@ -2030,7 +2030,7 @@ const char *setup_git_directory_gently(struct repository *repo, int *nongit_ok)
 	 * repository and that the caller expects startup_info to reflect
 	 * this.
 	 *
-	 * Regardless of the state of nongit_ok, startup_info->prefix and
+	 * Regardless of the state of nongit_ok, the_repository->prefix and
 	 * the GIT_PREFIX environment variable must always match. For details
 	 * see Documentation/config/alias.adoc.
 	 */
@@ -2105,10 +2105,10 @@ const char *setup_git_directory_gently(struct repository *repo, int *nongit_ok)
 	 */
 	if (prefix) {
 		prefix = precompose_string_if_needed(prefix);
-		startup_info->prefix = prefix;
+		repo->prefix = xstrdup(prefix);
 		setenv(GIT_PREFIX_ENVIRONMENT, prefix, 1);
 	} else {
-		startup_info->prefix = NULL;
+		FREE_AND_NULL(repo->prefix);
 		setenv(GIT_PREFIX_ENVIRONMENT, "", 1);
 	}
 

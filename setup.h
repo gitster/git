@@ -299,7 +299,6 @@ struct startup_info {
 	bool force_bare_repository;
 
 	int have_repository;
-	const char *prefix;
 	const char *original_cwd;
 };
 extern struct startup_info *startup_info;
