@@ -225,6 +225,7 @@ integration_tests = [
   't1463-refs-optimize.sh',
   't1464-refs-delete.sh',
   't1465-refs-update.sh',
+  't1466-refs-create.sh',
   't1500-rev-parse.sh',
   't1501-work-tree.sh',
   't1502-rev-parse-parseopt.sh',

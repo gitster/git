@@ -20,6 +20,7 @@ git refs list [--count=<count>] [--shell|--perl|--python|--tcl]
 		   [ --stdin | (<pattern>...)]
 git refs exists <ref>
 git refs optimize [--all] [--no-prune] [--auto] [--include <pattern>] [--exclude <pattern>]
+git refs create [--message=<reason>] [--no-deref] [--create-reflog] <ref> <new-value>
 git refs delete [--message=<reason>] [--no-deref] <ref> [<old-value>]
 git refs update [--message=<reason>] [--no-deref] [--create-reflog] <ref> <new-value> [<old-value>]
 
@@ -52,6 +53,10 @@ optimize::
 	Optimizes references to improve repository performance and reduce disk
 	usage. This subcommand is an alias for linkgit:git-pack-refs[1] and
 	offers identical functionality.
+
+create::
+	Create the given reference, which must not already exist, pointing at
+	`<new-value>`.
 
 delete::
 	Delete the given reference. This subcommand mirrors `git update-ref -d`
