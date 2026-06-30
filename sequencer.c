@@ -4988,7 +4988,7 @@ static int pick_one_commit(struct repository *r,
 	if (res && is_fixup(item->command)) {
 		return error_failed_squash(r, item->commit, opts,
 					   item->arg_len, arg);
-	} else if (res && is_rebase_i(opts) && item->commit) {
+	} else if (res && is_rebase_i(opts)) {
 		int to_amend = 0;
 		struct object_id oid;
 
