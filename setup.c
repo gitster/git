@@ -1147,24 +1147,24 @@ static const char *setup_explicit_git_dir(struct repository *repo,
 	}
 
 	/* #3, #7, #11, #15, #19, #23, #27, #31 (see t1510) */
-	if (work_tree_env)
+	if (work_tree_env) {
+		/*
+		 * The environment variable overrides "core.worktree". This
+		 * also has the consequence that we don't want to flag cases as
+		 * bogus where we have both "core.worktree" and "core.bare", so
+		 * we have to explicitly unset the configuration.
+		 */
+		FREE_AND_NULL(repo_fmt->work_tree);
 		set_git_work_tree(repo, work_tree_env);
-	else if (repo_fmt->is_bare > 0) {
-		if (repo_fmt->work_tree) {
-			/* #22.2, #30 */
-			warning("core.bare and core.worktree do not make sense");
-			repo->worktree_config_is_bogus = true;
-		}
-
+	} else if (repo_fmt->is_bare > 0) {
 		/* #18, #26 */
 		set_git_dir(repo, gitdirenv, 0);
 		free(gitfile);
 		return NULL;
-	}
-	else if (repo_fmt->work_tree) { /* #6, #14 */
-		if (is_absolute_path(repo_fmt->work_tree))
+	} else if (repo_fmt->work_tree) { /* #6, #14 */
+		if (is_absolute_path(repo_fmt->work_tree)) {
 			set_git_work_tree(repo, repo_fmt->work_tree);
-		else {
+		} else {
 			char *core_worktree;
 			if (chdir(gitdirenv))
 				die_errno(_("cannot chdir to '%s'"), gitdirenv);
@@ -1176,15 +1176,14 @@ static const char *setup_explicit_git_dir(struct repository *repo,
 			set_git_work_tree(repo, core_worktree);
 			free(core_worktree);
 		}
-	}
-	else if (!git_env_bool(GIT_IMPLICIT_WORK_TREE_ENVIRONMENT, 1)) {
+	} else if (!git_env_bool(GIT_IMPLICIT_WORK_TREE_ENVIRONMENT, 1)) {
 		/* #16d */
 		set_git_dir(repo, gitdirenv, 0);
 		free(gitfile);
 		return NULL;
-	}
-	else /* #2, #10 */
+	} else { /* #2, #10 */
 		set_git_work_tree(repo, ".");
+	}
 
 	/* set_git_work_tree() must have been called by now */
 	worktree = repo_get_work_tree(repo);
@@ -1767,6 +1766,12 @@ int apply_repository_format(struct repository *repo,
 
 	if (verify_repository_format(format, err) < 0)
 		return -1;
+
+	if (format->is_bare > 0 && format->work_tree) {
+		/* #22.2, #30 */
+		warning("core.bare and core.worktree do not make sense");
+		repo->worktree_config_is_bogus = true;
+	}
 
 	if (flags & APPLY_REPOSITORY_FORMAT_HONOR_ENV) {
 		object_directory = xstrdup_or_null(getenv(DB_ENVIRONMENT));
