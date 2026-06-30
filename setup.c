@@ -1046,7 +1046,6 @@ static void setup_git_env_internal(struct repository *repo,
 				   const char *git_dir)
 {
 	char *git_replace_ref_base;
-	const char *shallow_file;
 	const char *replace_ref_base;
 	struct set_gitdir_args args = { NULL };
 	struct strvec to_free = STRVEC_INIT;
@@ -1066,10 +1065,6 @@ static void setup_git_env_internal(struct repository *repo,
 	git_replace_ref_base = xstrdup(replace_ref_base ? replace_ref_base
 							  : "refs/replace/");
 	update_ref_namespace(NAMESPACE_REPLACE, git_replace_ref_base);
-
-	shallow_file = getenv(GIT_SHALLOW_FILE_ENVIRONMENT);
-	if (shallow_file)
-		set_alternate_shallow_file(repo, shallow_file, 0);
 
 	if (git_env_bool(NO_LAZY_FETCH_ENVIRONMENT, 0))
 		fetch_if_missing = 0;
@@ -1774,8 +1769,13 @@ int apply_repository_format(struct repository *repo,
 	}
 
 	if (flags & APPLY_REPOSITORY_FORMAT_HONOR_ENV) {
+		const char *shallow_file;
+
 		object_directory = xstrdup_or_null(getenv(DB_ENVIRONMENT));
 		alternate_object_directories = xstrdup_or_null(getenv(ALTERNATE_DB_ENVIRONMENT));
+		shallow_file = getenv(GIT_SHALLOW_FILE_ENVIRONMENT);
+		if (shallow_file)
+			set_alternate_shallow_file(repo, shallow_file, 0);
 	}
 
 	repo->bare_cfg = format->is_bare;
