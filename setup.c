@@ -1933,7 +1933,7 @@ void set_git_work_tree(struct repository *repo, const char *new_work_tree)
 
 const char *setup_git_directory_gently(struct repository *repo, int *nongit_ok)
 {
-	static struct strbuf cwd = STRBUF_INIT;
+	struct strbuf cwd = STRBUF_INIT;
 	struct strbuf dir = STRBUF_INIT, gitdir = STRBUF_INIT, report = STRBUF_INIT;
 	struct repo_discovery discovery = REPO_DISCOVERY_INIT;
 	const char *prefix = NULL;
@@ -2116,9 +2116,10 @@ const char *setup_git_directory_gently(struct repository *repo, int *nongit_ok)
 
 	repo_discovery_release(&discovery);
 	strbuf_release(&dir);
+	strbuf_release(&cwd);
 	strbuf_release(&gitdir);
 	strbuf_release(&report);
-	return prefix;
+	return repo->prefix;
 }
 
 int git_config_perm(const char *var, const char *value)
