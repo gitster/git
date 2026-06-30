@@ -1922,20 +1922,10 @@ void set_git_work_tree(struct repository *repo, const char *new_work_tree)
 	repo_set_worktree(repo, new_work_tree);
 }
 
-const char *setup_git_directory_gently(struct repository *repo, int *nongit_ok)
+static void repo_discover(struct repo_discovery *discovery, int *nongit_ok)
 {
 	struct strbuf cwd = STRBUF_INIT;
 	struct strbuf dir = STRBUF_INIT, gitdir = STRBUF_INIT, report = STRBUF_INIT;
-	struct repo_discovery discovery = REPO_DISCOVERY_INIT;
-
-	/*
-	 * We may have read an incomplete configuration before
-	 * setting-up the git directory. If so, clear the cache so
-	 * that the next queries to the configuration reload complete
-	 * configuration (including the per-repo config file that we
-	 * ignored previously).
-	 */
-	repo_config_clear(repo);
 
 	/*
 	 * Let's assume that we are in a git repository.
@@ -1951,19 +1941,19 @@ const char *setup_git_directory_gently(struct repository *repo, int *nongit_ok)
 
 	switch (repo_discovery_find_dir(&dir, &gitdir, &report, 1)) {
 	case GIT_DIR_EXPLICIT:
-		repo_discover_explicit_gitdir(&discovery, gitdir.buf, &cwd,
+		repo_discover_explicit_gitdir(discovery, gitdir.buf, &cwd,
 					      nongit_ok);
 		break;
 	case GIT_DIR_DISCOVERED:
 		if (dir.len < cwd.len && chdir(dir.buf))
 			die(_("cannot change to '%s'"), dir.buf);
-		repo_discover_implicit_gitdir(&discovery, gitdir.buf, &cwd, dir.len,
+		repo_discover_implicit_gitdir(discovery, gitdir.buf, &cwd, dir.len,
 					      nongit_ok);
 		break;
 	case GIT_DIR_BARE:
 		if (dir.len < cwd.len && chdir(dir.buf))
 			die(_("cannot change to '%s'"), dir.buf);
-		repo_discover_bare_gitdir(&discovery, &cwd, dir.len, nongit_ok);
+		repo_discover_bare_gitdir(discovery, &cwd, dir.len, nongit_ok);
 		break;
 	case GIT_DIR_HIT_CEILING:
 		if (!nongit_ok)
@@ -2012,6 +2002,27 @@ const char *setup_git_directory_gently(struct repository *repo, int *nongit_ok)
 	default:
 		BUG("unhandled repo_discovery_find_dir() result");
 	}
+
+	strbuf_release(&dir);
+	strbuf_release(&cwd);
+	strbuf_release(&gitdir);
+	strbuf_release(&report);
+}
+
+const char *setup_git_directory_gently(struct repository *repo, int *nongit_ok)
+{
+	struct repo_discovery discovery = REPO_DISCOVERY_INIT;
+
+	/*
+	 * We may have read an incomplete configuration before
+	 * setting-up the git directory. If so, clear the cache so
+	 * that the next queries to the configuration reload complete
+	 * configuration (including the per-repo config file that we
+	 * ignored previously).
+	 */
+	repo_config_clear(repo);
+
+	repo_discover(&discovery, nongit_ok);
 
 	/*
 	 * At this point, nongit_ok is stable. If it is non-NULL and points
@@ -2104,10 +2115,6 @@ const char *setup_git_directory_gently(struct repository *repo, int *nongit_ok)
 	setup_original_cwd(repo);
 
 	repo_discovery_release(&discovery);
-	strbuf_release(&dir);
-	strbuf_release(&cwd);
-	strbuf_release(&gitdir);
-	strbuf_release(&report);
 	return repo->prefix;
 }
 
