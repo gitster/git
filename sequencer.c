@@ -2260,10 +2260,16 @@ static const char *reflog_message(struct replay_opts *opts,
 	return buf.buf;
 }
 
-static int do_pick_commit(struct repository *r,
-			  struct todo_item *item,
-			  struct replay_opts *opts,
-			  int final_fixup, int *check_todo)
+enum pick_result {
+	PICK_RESULT_ERROR = -1,
+	PICK_RESULT_OK,
+	PICK_RESULT_CONFLICTS,
+};
+
+static enum pick_result do_pick_commit(struct repository *r,
+				       struct todo_item *item,
+				       struct replay_opts *opts,
+				       int final_fixup, int *check_todo)
 {
 	struct replay_ctx *ctx = opts->ctx;
 	unsigned int flags = should_edit(opts) ? EDIT_MSG : 0;
@@ -2564,7 +2570,12 @@ leave:
 	free(author);
 	update_abort_safety_file();
 
-	return res;
+	if (res < 0)
+		return PICK_RESULT_ERROR;
+	else if (res > 0)
+		return PICK_RESULT_CONFLICTS;
+	else
+		return PICK_RESULT_OK;
 }
 
 static int prepare_revs(struct replay_opts *opts)
@@ -4960,22 +4971,31 @@ static int pick_one_commit(struct repository *r,
 			   struct replay_opts *opts,
 			   int *check_todo, int* reschedule)
 {
-	int res;
+	enum pick_result pick_res;
 	struct todo_item *item = todo_list->items + todo_list->current;
 	const char *arg = todo_item_get_arg(todo_list, item);
 
-	res = do_pick_commit(r, item, opts, is_final_fixup(todo_list),
-			     check_todo);
+	pick_res = do_pick_commit(r, item, opts, is_final_fixup(todo_list),
+				  check_todo);
 	if (!is_rebase_i(opts))
-		return res;
+		switch (pick_res) {
+		case PICK_RESULT_ERROR:
+			return -1;
+		case PICK_RESULT_CONFLICTS:
+			return 1;
+		default:
+			return 0;
+		}
 
-	if (res < 0) {
+	if (pick_res == PICK_RESULT_ERROR) {
 		/* Reschedule */
 		*reschedule = 1;
 		return -1;
 	} else if (item->command == TODO_EDIT) {
 		struct commit *commit = item->commit;
-		if (!res) {
+		int res = pick_res == PICK_RESULT_CONFLICTS;
+
+		if (pick_res == PICK_RESULT_OK) {
 			if (!opts->verbose)
 				term_clear_line();
 			fprintf(stderr, _("Stopped at %s...  %.*s\n"),
@@ -4983,14 +5003,15 @@ static int pick_one_commit(struct repository *r,
 		}
 		return error_with_patch(r, commit,
 					arg, item->arg_len, opts, res, !res);
-	} else if (!res) {
+	} else if (pick_res == PICK_RESULT_OK) {
 		record_in_rewritten(&item->commit->object.oid,
 				    peek_command(todo_list, 1));
 		return 0;
-	} else if (res && is_fixup(item->command)) {
+	} else if (pick_res == PICK_RESULT_CONFLICTS &&
+		   is_fixup(item->command)) {
 		return error_failed_squash(r, item->commit, opts,
 					   item->arg_len, arg);
-	} else if (res) {
+	} else if (pick_res == PICK_RESULT_CONFLICTS) {
 		int to_amend = 0;
 		struct object_id oid;
 
@@ -5008,7 +5029,7 @@ static int pick_one_commit(struct repository *r,
 			to_amend = 1;
 
 		return error_with_patch(r, item->commit, arg, item->arg_len,
-					opts, res, to_amend);
+					opts, 1, to_amend);
 	}
 
 	BUG("Unhandled return value from do_pick_commit()");
@@ -5547,7 +5568,15 @@ static int single_pick(struct repository *r,
 			TODO_PICK : TODO_REVERT;
 	item.commit = cmit;
 
-	return do_pick_commit(r, &item, opts, 0, &check_todo);
+	switch (do_pick_commit(r, &item, opts, 0, &check_todo)) {
+	case PICK_RESULT_ERROR:
+		return -1;
+	case PICK_RESULT_CONFLICTS:
+		return 1;
+	default:
+		return 0;
+	}
+
 }
 
 int sequencer_pick_revisions(struct repository *r,
