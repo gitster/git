@@ -3874,7 +3874,7 @@ static int error_failed_squash(struct repository *r,
 		return error(_("could not copy '%s' to '%s'"),
 			     rebase_path_message(),
 			     git_path_merge_msg(r));
-	return error_with_patch(r, commit, subject, subject_len, opts, 1, 0);
+	return error_with_patch(r, commit, subject, subject_len, opts, 1, 1);
 }
 
 static int do_exec(struct repository *r, const char *command_line, int quiet)
@@ -4986,8 +4986,6 @@ static int pick_one_commit(struct repository *r,
 		record_in_rewritten(&item->commit->object.oid,
 				    peek_command(todo_list, 1));
 	if (res && is_fixup(item->command)) {
-		if (res == 1)
-			intend_to_amend();
 		return error_failed_squash(r, item->commit, opts,
 					   item->arg_len, arg);
 	} else if (res && is_rebase_i(opts) && item->commit) {
