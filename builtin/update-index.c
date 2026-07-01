@@ -875,7 +875,7 @@ static enum parse_opt_result unresolve_callback(
 	const char *arg, int unset)
 {
 	int *has_errors = opt->value;
-	const char *prefix = startup_info->prefix;
+	const char *prefix = the_repository->prefix;
 
 	BUG_ON_OPT_NEG(unset);
 	BUG_ON_OPT_ARG(arg);
@@ -896,7 +896,7 @@ static enum parse_opt_result reupdate_callback(
 	const char *arg, int unset)
 {
 	int *has_errors = opt->value;
-	const char *prefix = startup_info->prefix;
+	const char *prefix = the_repository->prefix;
 
 	BUG_ON_OPT_NEG(unset);
 	BUG_ON_OPT_ARG(arg);
