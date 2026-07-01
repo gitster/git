@@ -451,7 +451,7 @@ CAVEATS
 
 Note that since only `%(objectname)` and `%(objectsize)` are currently
 supported by the `remote-object-info` command. Using any other placeholder in
-the format string will raise an error.
+the format string will return an empty string in its position.
 
 Note that the sizes of objects on disk are reported accurately, but care
 should be taken in drawing conclusions about which refs or objects are
