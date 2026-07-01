@@ -840,6 +840,10 @@ if help_format_opt != 'man'
     libgit_c_args += '-DDEFAULT_HELP_FORMAT="' + help_format_opt + '"'
 endif
 
+if get_option('nanosec')
+  libgit_c_args += '-DUSE_NSEC'
+endif
+
 libgit_include_directories = [ '.' ]
 libgit_dependencies = [ ]
 
