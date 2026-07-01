@@ -104,6 +104,85 @@ test_expect_success 'setup' '
 	pi_x="$(cat pi-X-oid)" &&
 	git branch -f pi-X-br "$pi_x" &&
 	git tag pi-X "$pi_x" &&
+
+	# Build a topology with clock skew to test the !FIND_ALL early
+	# exit in paint_down_to_common().  M2 is the correct merge base
+	# of P1 and P2, but its ancestor M1 has a higher committer date
+	# due to clock skew.  With date-only ordering (v1 commit graph
+	# without corrected commit dates), M1 pops from the queue first,
+	# gets both paint sides, and the early exit fires before M2 is
+	# ever visited.
+	#
+	#        P1     P2          @7000
+	#        |     /  \
+	#        A    B    D        @6000
+	#       / \   |    |
+	#      |  M2--+    |        @2000 (correct merge base)
+	#       \ |        |
+	#        M1--------+        @5000 (clock skew: date > M2)
+	#        |
+	#       root                @1000
+	#
+	git checkout --orphan skew-orphan &&
+	skew_tree=$(git mktree </dev/null) &&
+	skew_commit () {
+		GIT_COMMITTER_DATE="@$1 +0000" GIT_AUTHOR_DATE="@$1 +0000" \
+			git commit-tree -m "$2" "$skew_tree" $3 $4 $5 $6
+	} &&
+	skew_root=$(skew_commit 1000 root) &&
+	skew_M1=$(skew_commit 5000 M1 -p "$skew_root") &&
+	skew_M2=$(skew_commit 2000 M2 -p "$skew_M1") &&
+	skew_A=$(skew_commit 6000 A -p "$skew_M1" -p "$skew_M2") &&
+	skew_B=$(skew_commit 6000 B -p "$skew_M2") &&
+	skew_D=$(skew_commit 6000 D -p "$skew_M1") &&
+	skew_P1=$(skew_commit 7000 P1 -p "$skew_A") &&
+	skew_P2=$(skew_commit 7000 P2 -p "$skew_B" -p "$skew_D") &&
+	git branch -f skew-P1 "$skew_P1" &&
+	git branch -f skew-P2 "$skew_P2" &&
+	git tag skew-M2 "$skew_M2" &&
+
+	# Build a topology where clock skew causes the side-exhaustion
+	# optimization to fire too early with date ordering (v1 graph).
+	# D is the correct merge base but has a higher committer date
+	# than C (its child), so D is dequeued before C.  The P2 side
+	# (B -> D -> root) fully drains while C (P1-only) is still
+	# queued.  Side-exhaustion fires, missing D as a merge base.
+	#
+	#   se-A (date 7000) --> se-C (date 3000) --> se-D (date 5000) --> se-root (date 4000)
+	#   se-B (date 6000) --> se-D
+	#
+	se_root=$(skew_commit 4000 se-root) &&
+	se_D=$(skew_commit 5000 se-D -p "$se_root") &&
+	se_C=$(skew_commit 3000 se-C -p "$se_D") &&
+	se_A=$(skew_commit 7000 se-A -p "$se_C") &&
+	se_B=$(skew_commit 6000 se-B -p "$se_D") &&
+	git branch -f se-A "$se_A" &&
+	git branch -f se-B "$se_B" &&
+	git tag se-D "$se_D" &&
+
+	# Build a topology where side-exhaustion with date ordering
+	# returns a wrong (too-deep) merge base.  MB1 is the correct
+	# merge base; MB2 is its parent and should be filtered as
+	# redundant.  A reaches MB2 via E (high date) and MB1 via C
+	# (low date).  B reaches MB1 via D.  With date ordering, the
+	# P2 side drains after MB2 is found but before C is dequeued,
+	# so MB1 never receives P1 paint.  Result: MB2 (wrong).
+	#
+	#   se2-A (date 8000) --> se2-C (date 2000) --> se2-MB1 (date 5000) --> se2-MB2 (date 4000) --> se2-root (date 1000)
+	#   se2-A              --> se2-E (date 6500) --> se2-MB2
+	#   se2-B (date 7000) --> se2-D (date 6000) --> se2-MB1
+	#
+	se2_root=$(skew_commit 1000 se2-root) &&
+	se2_MB2=$(skew_commit 4000 se2-MB2 -p "$se2_root") &&
+	se2_MB1=$(skew_commit 5000 se2-MB1 -p "$se2_MB2") &&
+	se2_C=$(skew_commit 2000 se2-C -p "$se2_MB1") &&
+	se2_D=$(skew_commit 6000 se2-D -p "$se2_MB1") &&
+	se2_E=$(skew_commit 6500 se2-E -p "$se2_MB2") &&
+	se2_A=$(skew_commit 8000 se2-A -p "$se2_C" -p "$se2_E") &&
+	se2_B=$(skew_commit 7000 se2-B -p "$se2_D") &&
+	git branch -f se2-A "$se2_A" &&
+	git branch -f se2-B "$se2_B" &&
+	git tag se2-MB1 "$se2_MB1" &&
 	git commit-graph write --reachable &&
 	mv .git/objects/info/commit-graph commit-graph-full &&
 	chmod u+w commit-graph-full &&
@@ -287,7 +366,8 @@ test_expect_success 'get_merge_bases_many:pending-stale' '
 		echo "get_merge_bases_many(A,X):" &&
 		git rev-parse ps-B
 	} >expect &&
-	test_all_modes get_merge_bases_many
+	test_all_modes get_merge_bases_many &&
+	test_paint_down_steps 6 6 6 6
 '
 
 test_expect_success 'get_merge_bases_many:infinity-both-sides' '
@@ -301,7 +381,34 @@ test_expect_success 'get_merge_bases_many:infinity-both-sides' '
 		echo "get_merge_bases_many(A,X):" &&
 		git rev-parse pi-B
 	} >expect &&
-	test_all_modes get_merge_bases_many
+	test_all_modes get_merge_bases_many &&
+	test_paint_down_steps 5 5 5 5
+'
+
+test_expect_success 'setup mixed finite/INFINITY topology' '
+	# Create a commit outside all saved commit-graph files so it always
+	# has INFINITY generation, while its parent (ps-X) is in the graph
+	# with a finite generation. Use the ps-* orphan topology so we do
+	# not pollute the grid-based rev-list tests.
+	git checkout ps-X &&
+	test_env GIT_TEST_COMMIT_GRAPH= test_commit pm-INF
+'
+
+test_expect_success 'get_merge_bases_many:mixed-finite-infinity' '
+	# One tip (pm-INF) is outside the commit-graph with INFINITY
+	# generation; the other (ps-B) is in the graph with finite
+	# generation. The walk starts in the INFINITY region and crosses
+	# into the finite region where side-exhaustion can fire.
+	cat >input <<-\EOF &&
+	A:pm-INF
+	X:ps-B
+	EOF
+	{
+		echo "get_merge_bases_many(A,X):" &&
+		git rev-parse ps-X
+	} >expect &&
+	test_all_modes get_merge_bases_many &&
+	test_paint_down_steps 3 3 3 3
 '
 
 test_expect_success 'merge-base --all commit-walk steps' '
@@ -309,6 +416,36 @@ test_expect_success 'merge-base --all commit-walk steps' '
 	git rev-parse commit-9-1 >expect &&
 	run_all_modes git merge-base --all commit-9-9 commit-9-1 &&
 	test_paint_down_steps 81 80 81 81
+'
+
+test_expect_success 'merge-base --all with clock skew and v1 commit-graph (side-exhaustion)' '
+	# With date ordering (v1 graph), the side-exhaustion
+	# optimization can fire too early.  In this topology, the P2
+	# side (se-B -> se-D -> se-root) fully drains from the queue
+	# while se-C (P1-only, low date) is still queued.  With
+	# generation ordering, se-C would be dequeued before se-D
+	# (child before parent), propagating P1 to se-D and
+	# discovering the merge base.  Date ordering violates this.
+	>input &&
+	git rev-parse se-D >expect &&
+	run_all_modes git merge-base --all se-A se-B &&
+	test_paint_down_steps 6 4 6 6
+'
+
+test_expect_success 'merge-base --all with clock skew returns wrong merge base (side-exhaustion)' '
+	# With date ordering (v1 graph), side-exhaustion causes
+	# merge-base --all to return MB2 (too deep) instead of MB1
+	# (the correct closest merge base).  P1 paint reaches MB2
+	# via E (high date) before it reaches MB1 via C (low date).
+	# After MB2 is found as P1|P2, the P2 side drains and
+	# side-exhaustion fires while C is still in the queue.
+	# MB1 never receives P1 paint, so it is never identified
+	# as a merge base.  remove_redundant cannot discard MB2
+	# because MB1 was never found.
+	>input &&
+	git rev-parse se2-MB1 >expect &&
+	run_all_modes git merge-base --all se2-A se2-B &&
+	test_paint_down_steps 8 7 8 8
 '
 
 test_expect_success 'reduce_heads' '
