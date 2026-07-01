@@ -1479,7 +1479,7 @@ static enum parse_opt_result usage_with_options_internal(struct parse_opt_ctx_t 
 	fputc('\n', outfile);
 
 	if (!err && ctx && ctx->flags & PARSE_OPT_SHELL_EVAL)
-		fputs("EOF\n", outfile);
+		fputs("EOF\nexit 0\n", outfile);
 
 	return PARSE_OPT_HELP;
 }

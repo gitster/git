@@ -133,10 +133,10 @@ do
 	difftool--helper | filter-branch | format-rev | fsck-objects | \
 	get-tar-commit-id | \
 	gui | gui--askpass | \
-	http-backend | http-fetch | http-push | init-db | \
+	http-backend | http-fetch | http-push | init-db | instaweb | \
 	merge-octopus | merge-one-file | merge-resolve | mergetool | \
-	mktag | p4 | p4.py | pickaxe | remote-ftp | remote-ftps | \
-	remote-http | remote-https | replay | send-email | \
+	mktag | p4 | p4.py | pickaxe | quiltimport | remote-ftp | remote-ftps | \
+	remote-http | remote-https | replay | request-pull | send-email | \
 	sh-i18n--envsubst | shell | show | stage | submodule | svn | \
 	upload-archive--writer | upload-pack | web--browse | whatchanged)
 		expect_outcome=expect_failure ;;
