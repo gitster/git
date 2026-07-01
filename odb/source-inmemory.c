@@ -52,7 +52,8 @@ static void populate_object_info(struct odb_source_inmemory *source,
 		*oi->contentp = xmemdupz(object->buf, object->size);
 	if (oi->mtimep)
 		*oi->mtimep = 0;
-	oi->whence = OI_CACHED;
+	if (oi->sourcep)
+		oi->sourcep->source = &source->base;
 }
 
 static int odb_source_inmemory_read_object_info(struct odb_source *source,
