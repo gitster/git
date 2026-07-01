@@ -9,7 +9,6 @@ static void combine_small_cruft_packs(FILE *in, off_t combine_cruft_below_size,
 {
 	struct packed_git *p;
 	struct strbuf buf = STRBUF_INIT;
-	size_t i;
 
 	repo_for_each_pack(existing->repo, p) {
 		if (!(p->is_cruft && p->pack_local))
@@ -30,10 +29,6 @@ static void combine_small_cruft_packs(FILE *in, off_t combine_cruft_below_size,
 		}
 	}
 
-	for (i = 0; i < existing->non_kept_packs.nr; i++)
-		fprintf(in, "-%s.pack\n",
-			existing->non_kept_packs.items[i].string);
-
 	strbuf_release(&buf);
 }
 
@@ -41,7 +36,8 @@ int write_cruft_pack(const struct write_pack_opts *opts,
 		     const char *cruft_expiration,
 		     unsigned long combine_cruft_below_size,
 		     struct string_list *names,
-		     struct existing_packs *existing)
+		     struct existing_packs *existing,
+		     struct pack_geometry *geometry)
 {
 	struct child_process cmd = CHILD_PROCESS_INIT;
 	struct string_list_item *item;
@@ -80,13 +76,28 @@ int write_cruft_pack(const struct write_pack_opts *opts,
 	in = xfdopen(cmd.in, "w");
 	for_each_string_list_item(item, names)
 		fprintf(in, "%s-%s.pack\n", pack_prefix, item->string);
-	if (combine_cruft_below_size && !cruft_expiration) {
+	if (combine_cruft_below_size && !cruft_expiration)
 		combine_small_cruft_packs(in, combine_cruft_below_size,
 					  existing);
+	else
+		for_each_string_list_item(item, &existing->cruft_packs)
+			fprintf(in, "-%s.pack\n", item->string);
+	if (geometry) {
+		uint32_t j;
+		for (j = 0; j < geometry->split; j++)
+			fprintf(in, "-%s\n",
+				pack_basename(geometry->pack[j]));
+		for (; j < geometry->pack_nr; j++)
+			fprintf(in, "%s\n",
+				pack_basename(geometry->pack[j]));
+		for (j = 0; j < geometry->promisor_split; j++)
+			fprintf(in, "-%s\n",
+				pack_basename(geometry->promisor_pack[j]));
+		for (; j < geometry->promisor_pack_nr; j++)
+			fprintf(in, "%s\n",
+				pack_basename(geometry->promisor_pack[j]));
 	} else {
 		for_each_string_list_item(item, &existing->non_kept_packs)
-			fprintf(in, "-%s.pack\n", item->string);
-		for_each_string_list_item(item, &existing->cruft_packs)
 			fprintf(in, "-%s.pack\n", item->string);
 	}
 	for_each_string_list_item(item, &existing->kept_packs)

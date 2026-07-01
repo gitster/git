@@ -259,7 +259,7 @@ int cmd_repack(int argc,
 				  keep_unreachable, "-k/--keep-unreachable",
 				  pack_everything & PACK_CRUFT, "--cruft");
 
-	if (pack_everything & PACK_CRUFT)
+	if (pack_everything & PACK_CRUFT && !geometry.split_factor)
 		pack_everything |= ALL_INTO_ONE;
 
 	if (write_bitmaps < 0) {
@@ -295,7 +295,8 @@ int cmd_repack(int argc,
 		die(_("invalid value for %s: %d"), "--midx-new-layer-threshold",
 		    config_ctx.midx_new_layer_threshold);
 
-	if (write_midx != REPACK_WRITE_MIDX_NONE && write_bitmaps) {
+	if ((write_midx != REPACK_WRITE_MIDX_NONE && write_bitmaps) ||
+	    (geometry.split_factor && (pack_everything & PACK_CRUFT))) {
 		struct strbuf path = STRBUF_INIT;
 
 		strbuf_addf(&path, "%s/%s_XXXXXX",
@@ -316,7 +317,7 @@ int cmd_repack(int argc,
 	existing_packs_collect(&existing, &keep_pack_list);
 
 	if (geometry.split_factor) {
-		if (pack_everything)
+		if (pack_everything & ~PACK_CRUFT)
 			die(_("options '%s' and '%s' cannot be used together"), "--geometric", "-A/-a");
 		if (write_midx == REPACK_WRITE_MIDX_INCREMENTAL) {
 			geometry.midx_layer_threshold = config_ctx.midx_new_layer_threshold;
@@ -324,6 +325,8 @@ int cmd_repack(int argc,
 		}
 		pack_geometry_init(&geometry, &existing, &po_args);
 		pack_geometry_split(&geometry);
+
+		existing_packs_retain_from_geometry(&existing, &geometry);
 	}
 
 	prepare_pack_objects(&cmd, &po_args, packtmp);
@@ -390,10 +393,16 @@ int cmd_repack(int argc,
 		pack_geometry_repack_promisors(repo, &po_args, &geometry,
 					       &names, packtmp);
 
-		if (midx_must_contain_cruft)
+		if (pack_everything & PACK_CRUFT) {
+			strvec_push(&cmd.args, "--stdin-packs=follow-reachable");
+			if (refs_snapshot)
+				strvec_pushf(&cmd.args, "--refs-snapshot=%s",
+					     get_tempfile_path(refs_snapshot));
+		} else if (midx_must_contain_cruft)
 			strvec_push(&cmd.args, "--stdin-packs");
 		else
 			strvec_push(&cmd.args, "--stdin-packs=follow");
+
 		strvec_push(&cmd.args, "--unpacked");
 	} else {
 		strvec_push(&cmd.args, "--unpacked");
@@ -428,7 +437,8 @@ int cmd_repack(int argc,
 			const char *basename = pack_basename(geometry.pack[i]);
 			char marker = '^';
 
-			if (!midx_must_contain_cruft &&
+			if ((pack_everything & PACK_CRUFT ||
+			     !midx_must_contain_cruft) &&
 			    !string_list_has_string(&existing.midx_packs,
 						    basename)) {
 				/*
@@ -504,7 +514,8 @@ int cmd_repack(int argc,
 
 		ret = write_cruft_pack(&opts, cruft_expiration,
 				       combine_cruft_below_size, &names,
-				       &existing);
+				       &existing,
+				       geometry.split_factor ? &geometry : NULL);
 		if (ret)
 			goto cleanup;
 
@@ -539,7 +550,7 @@ int cmd_repack(int argc,
 			 */
 			opts.destination = expire_to;
 			ret = write_cruft_pack(&opts, NULL, 0ul, &names,
-					       &existing);
+					       &existing, NULL);
 			if (ret)
 				goto cleanup;
 		}
@@ -573,10 +584,13 @@ int cmd_repack(int argc,
 				       packtmp);
 	/* End of pack replacement. */
 
-	if (delete_redundant && pack_everything & ALL_INTO_ONE) {
+	if (delete_redundant) {
 		if (write_midx == REPACK_WRITE_MIDX_INCREMENTAL)
-			existing_packs_retain_midx_packs(&existing);
-		existing_packs_mark_for_deletion(&existing, &names);
+			existing_packs_retain_midx_packs(&existing, &geometry);
+		if (geometry.split_factor && !combine_cruft_below_size)
+			existing_packs_retain_all_cruft(&existing);
+		if (pack_everything & ALL_INTO_ONE || geometry.split_factor)
+			existing_packs_mark_for_deletion(&existing, &names);
 	}
 
 	if (write_midx != REPACK_WRITE_MIDX_NONE) {
@@ -608,10 +622,6 @@ int cmd_repack(int argc,
 		existing_packs_remove_redundant(&existing, packdir,
 						wrote_incremental_midx);
 
-		if (geometry.split_factor)
-			pack_geometry_remove_redundant(&geometry, &names,
-						       &existing, packdir,
-						       wrote_incremental_midx);
 		if (show_progress)
 			opts |= PRUNE_PACKED_VERBOSE;
 		prune_packed_objects(opts);
