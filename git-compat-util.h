@@ -975,6 +975,26 @@ static inline int strtoul_ui(char const *s, int base, unsigned int *result)
 	return 0;
 }
 
+/*
+ * Convert a string to a size_t using the standard library's strtoumax, with
+ * additional error handling to ensure robustness.
+ */
+static inline int strtoumax_szt(char const *s, int base, size_t *result)
+{
+	uintmax_t uim;
+	char *p;
+
+	errno = 0;
+	/* negative values would be accepted by strtoul */
+	if (strchr(s, '-'))
+		return -1;
+	uim = strtoumax(s, &p, base);
+	if ((errno || *p || p == s) || uim > SIZE_MAX)
+		return -1;
+	*result = uim;
+	return 0;
+}
+
 static inline int strtol_i(char const *s, int base, int *result)
 {
 	long ul;
