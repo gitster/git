@@ -54,7 +54,6 @@ enum fsync_method fsync_method = FSYNC_METHOD_DEFAULT;
 enum fsync_component fsync_components = FSYNC_COMPONENTS_DEFAULT;
 char *editor_program;
 char *askpass_program;
-char *excludes_file;
 enum auto_crlf auto_crlf = AUTO_CRLF_FALSE;
 enum eol core_eol = EOL_UNSET;
 int global_conv_flags_eol = CONV_EOL_RNDTRP_WARN;
@@ -152,6 +151,24 @@ int repo_trust_executable_bit(struct repository *repo)
 	return (repo && repo->initialized) ?
 		repo_config_values(repo)->trust_executable_bit :
 		1;
+}
+
+const char *repo_excludes_file(struct repository *repo)
+{
+	/*
+	 * NEEDSWORK: This is a temporary shield to maintain bug-to-bug
+	 * compatibility during the libification transition.
+	 *
+	 * Once offending callers are properly fixed, this check should
+	 * be upgraded to a BUG() assertion and eventually removed entirely.
+	 */
+	if (!repo || !repo->initialized)
+		return NULL;
+
+	if (!repo_config_values(repo)->excludes_file)
+		repo_config_values(repo)->excludes_file = xdg_config_home("ignore");
+
+	return repo_config_values(repo)->excludes_file;
 }
 
 int have_git_dir(void)
@@ -481,8 +498,8 @@ int git_default_core_config(const char *var, const char *value,
 	}
 
 	if (!strcmp(var, "core.excludesfile")) {
-		FREE_AND_NULL(excludes_file);
-		return git_config_pathname(&excludes_file, var, value);
+		FREE_AND_NULL(cfg->excludes_file);
+		return git_config_pathname(&cfg->excludes_file, var, value);
 	}
 
 	if (!strcmp(var, "core.whitespace")) {
@@ -735,6 +752,7 @@ int git_default_config(const char *var, const char *value,
 void repo_config_values_init(struct repo_config_values *cfg)
 {
 	cfg->attributes_file = NULL;
+	cfg->excludes_file = NULL;
 	cfg->apply_sparse_checkout = 0;
 	cfg->protect_hfs = PROTECT_HFS_DEFAULT;
 	cfg->protect_ntfs = PROTECT_NTFS_DEFAULT;
@@ -749,4 +767,23 @@ void repo_config_values_init(struct repo_config_values *cfg)
 	cfg->core_sparse_checkout_cone = 0;
 	cfg->sparse_expect_files_outside_of_patterns = 0;
 	cfg->warn_on_object_refname_ambiguity = 1;
+}
+
+void repo_config_values_clear(struct repository *repo)
+{
+	struct repo_config_values *cfg;
+
+	/*
+	 * NEEDSWORK: Temporary shield to prevent temporary/uninitialized
+	 * submodules from triggering the BUG() at repository.c:59
+	 * during repo_clear(). This should be removed once submodule
+	 * lifecycle and per-repo config support are fully resolved.
+	 */
+	if (repo != the_repository)
+		return;
+
+	cfg = repo_config_values(repo);
+
+	FREE_AND_NULL(cfg->attributes_file);
+	FREE_AND_NULL(cfg->excludes_file);
 }
