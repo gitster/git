@@ -2627,10 +2627,10 @@ int get_superproject_working_tree(struct strbuf *buf)
 		 * We might have a superproject, but it is harder
 		 * to determine.
 		 */
-		return 0;
+		goto out;
 
 	if (!strbuf_realpath(&one_up, "../", 0))
-		return 0;
+		goto out;
 
 	subpath = relative_path(cwd, one_up.buf, &sb);
 	strbuf_release(&one_up);
@@ -2693,6 +2693,10 @@ int get_superproject_working_tree(struct strbuf *buf)
 		die(_("ls-tree returned unexpected return code %d"), code);
 
 	return ret;
+
+out:
+	free(cwd);
+	return 0;
 }
 
 /*
