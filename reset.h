@@ -38,6 +38,11 @@ struct reset_working_tree_options {
 	 */
 	const struct object_id *oid;
 	/*
+	 * The commit to checkout/reset from when doing a two-way merge. This
+	 * is used as one of the sides to merge.
+	 */
+	const struct object_id *oid_from;
+	/*
 	 * Optional value to set ORIG_HEAD. Defaults to HEAD.
 	 */
 	const struct object_id *orig_head;
