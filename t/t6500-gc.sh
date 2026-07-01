@@ -35,7 +35,7 @@ test_expect_success 'gc -h with invalid configuration' '
 		cd broken &&
 		git init &&
 		echo "[gc] pruneexpire = CORRUPT" >>.git/config &&
-		test_expect_code 129 git gc -h >usage 2>&1
+		git gc -h >usage 2>&1
 	) &&
 	test_grep "[Uu]sage" broken/usage
 '

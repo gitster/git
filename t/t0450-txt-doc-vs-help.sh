@@ -29,7 +29,7 @@ help_to_synopsis () {
 		return 0
 	fi &&
 	mkdir -p "$out_dir" &&
-	test_expect_code 129 git $builtin -h >"$out.raw" 2>&1 &&
+	test_might_fail git $builtin -h >"$out.raw" 2>&1 &&
 	sed -n \
 		-e '1,/^$/ {
 			/^$/d;

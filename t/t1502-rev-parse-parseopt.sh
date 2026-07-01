@@ -75,7 +75,7 @@ EOF
 '
 
 test_expect_success 'test --parseopt help output' '
-	test_expect_code 129 git rev-parse --parseopt -- -h > output < optionspec &&
+	git rev-parse --parseopt -- -h > output < optionspec &&
 	test_cmp "$TEST_DIRECTORY/t1502/optionspec.help" output
 '
 
@@ -89,7 +89,7 @@ test_expect_success 'test --parseopt help output no switches' '
 |EOF
 |exit 0
 END_EXPECT
-	test_expect_code 129 git rev-parse --parseopt -- -h > output < optionspec_no_switches &&
+	git rev-parse --parseopt -- -h > output < optionspec_no_switches &&
 	test_cmp expect output
 '
 
@@ -103,7 +103,7 @@ test_expect_success 'test --parseopt help output hidden switches' '
 |EOF
 |exit 0
 END_EXPECT
-	test_expect_code 129 git rev-parse --parseopt -- -h > output < optionspec_only_hidden_switches &&
+	git rev-parse --parseopt -- -h > output < optionspec_only_hidden_switches &&
 	test_cmp expect output
 '
 
@@ -119,7 +119,7 @@ test_expect_success 'test --parseopt help-all output hidden switches' '
 |EOF
 |exit 0
 END_EXPECT
-	test_expect_code 129 git rev-parse --parseopt -- --help-all > output < optionspec_only_hidden_switches &&
+	git rev-parse --parseopt -- --help-all > output < optionspec_only_hidden_switches &&
 	test_cmp expect output
 '
 
@@ -258,7 +258,7 @@ test_expect_success 'test --parseopt help output: "wrapped" options normal "or:"
 	|exit 0
 	END_EXPECT
 
-	test_must_fail git rev-parse --parseopt -- -h <spec >actual &&
+	git rev-parse --parseopt -- -h <spec >actual &&
 	test_cmp expect actual
 '
 
@@ -296,12 +296,12 @@ test_expect_success 'test --parseopt help output: multi-line blurb after empty l
 	|exit 0
 	END_EXPECT
 
-	test_must_fail git rev-parse --parseopt -- -h <spec >actual &&
+	git rev-parse --parseopt -- -h <spec >actual &&
 	test_cmp expect actual
 '
 
 test_expect_success 'test --parseopt help output for optionspec-neg' '
-	test_expect_code 129 git rev-parse --parseopt -- \
+	git rev-parse --parseopt -- \
 		-h >output <"$TEST_DIRECTORY/t1502/optionspec-neg" &&
 	test_cmp "$TEST_DIRECTORY/t1502/optionspec-neg.help" output
 '

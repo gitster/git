@@ -1135,8 +1135,9 @@ enum parse_opt_result parse_options_step(struct parse_opt_ctx_t *ctx,
 		case PARSE_OPT_UNKNOWN:
 			goto unknown;
 		case PARSE_OPT_HELP:
-		case PARSE_OPT_HELP_ERROR:
 			goto show_usage;
+		case PARSE_OPT_HELP_ERROR:
+			goto show_usage_stderr;
 		case PARSE_OPT_NON_OPTION:
 		case PARSE_OPT_SUBCOMMAND:
 		case PARSE_OPT_COMPLETE:
@@ -1170,6 +1171,9 @@ unknown:
  show_usage:
 	return usage_with_options_internal(ctx, usagestr, options,
 					   USAGE_NORMAL, USAGE_TO_STDOUT);
+ show_usage_stderr:
+	return usage_with_options_internal(ctx, usagestr, options,
+					   USAGE_NORMAL, USAGE_TO_STDERR);
 }
 
 int parse_options_end(struct parse_opt_ctx_t *ctx)
@@ -1201,6 +1205,7 @@ int parse_options(int argc, const char **argv,
 	parse_options_start_1(&ctx, argc, argv, prefix, options, flags);
 	switch (parse_options_step(&ctx, options, usagestr)) {
 	case PARSE_OPT_HELP:
+		exit(0);
 	case PARSE_OPT_HELP_ERROR:
 	case PARSE_OPT_ERROR:
 		exit(129);
@@ -1481,7 +1486,7 @@ static enum parse_opt_result usage_with_options_internal(struct parse_opt_ctx_t 
 	if (!err && ctx && ctx->flags & PARSE_OPT_SHELL_EVAL)
 		fputs("EOF\nexit 0\n", outfile);
 
-	return PARSE_OPT_HELP;
+	return err ? PARSE_OPT_HELP_ERROR : PARSE_OPT_HELP;
 }
 
 void NORETURN usage_with_options(const char * const *usagestr,
@@ -1500,11 +1505,11 @@ void show_usage_with_options_if_asked(int ac, const char **av,
 		if (!strcmp(av[1], "-h")) {
 			usage_with_options_internal(NULL, usagestr, opts,
 						    USAGE_NORMAL, USAGE_TO_STDOUT);
-			exit(129);
+			exit(0);
 		} else if (!strcmp(av[1], "--help-all")) {
 			usage_with_options_internal(NULL, usagestr, opts,
 						    USAGE_FULL, USAGE_TO_STDOUT);
-			exit(129);
+			exit(0);
 		}
 	}
 }

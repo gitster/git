@@ -130,18 +130,25 @@ do
 	archimport | citool | credential-netrc | credential-libsecret | \
 	credential-osxkeychain | cvsexportcommit | cvsimport | cvsserver | \
 	daemon | \
-	difftool--helper | filter-branch | format-rev | fsck-objects | \
-	get-tar-commit-id | \
+	difftool--helper | format-rev | fsck-objects |  get-tar-commit-id | \
 	gui | gui--askpass | \
-	http-backend | http-fetch | http-push | init-db | instaweb | \
-	merge-octopus | merge-one-file | merge-resolve | mergetool | \
-	mktag | p4 | p4.py | pickaxe | quiltimport | remote-ftp | remote-ftps | \
-	remote-http | remote-https | replay | request-pull | send-email | \
-	sh-i18n--envsubst | shell | show | stage | submodule | svn | \
-	upload-archive--writer | upload-pack | web--browse | whatchanged)
-		expect_outcome=expect_failure ;;
+	http-backend | http-fetch | http-push | init-db | \
+	mktag | p4 | p4.py | pickaxe | remote-ftp | remote-ftps | \
+	remote-http | remote-https | replay | send-email | \
+	sh-i18n--envsubst | shell | show | stage | \
+	upload-archive--writer | upload-pack | whatchanged)
+		h_expect_outcome=expect_failure
+		all_expect_outcome=expect_failure
+		;;
+	filter-branch | merge-octopus | merge-one-file | merge-resolve | \
+	mergetool | submodule | svn | web--browse)
+		h_expect_outcome=expect_success
+		all_expect_outcome=expect_failure
+		;;
 	*)
-		expect_outcome=expect_success ;;
+		h_expect_outcome=expect_success
+		all_expect_outcome=expect_success
+		;;
 	esac
 	case "$cmd" in
 	instaweb)
@@ -151,20 +158,20 @@ do
 	*)
 		prereq= ;;
 	esac
-	test_$expect_outcome $prereq "'git $cmd -h' outside a repository" '
-		test_expect_code 129 nongit git $cmd -h >usage &&
+	test_$h_expect_outcome $prereq "'git $cmd -h' outside a repository" '
+		nongit git $cmd -h >usage &&
 		test_grep "[Uu]sage: git $cmd " usage
 	'
-	test_$expect_outcome $prereq "'git $cmd --help-all' outside a repository" '
-		test_expect_code 129 nongit git $cmd --help-all >usage &&
+	test_$all_expect_outcome $prereq "'git $cmd --help-all' outside a repository" '
+		nongit git $cmd --help-all >usage &&
 		test_grep "[Uu]sage: git $cmd " usage
 	'
 done
 
 test_expect_success 'fmt-merge-msg does not crash with -h' '
-	test_expect_code 129 git fmt-merge-msg -h >usage &&
+	git fmt-merge-msg -h >usage &&
 	test_grep "[Uu]sage: git fmt-merge-msg " usage &&
-	test_expect_code 129 nongit git fmt-merge-msg -h >usage &&
+	nongit git fmt-merge-msg -h >usage &&
 	test_grep "[Uu]sage: git fmt-merge-msg " usage
 '
 
