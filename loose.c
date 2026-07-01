@@ -65,6 +65,7 @@ static int load_one_loose_object_map(struct repository *repo, struct odb_source_
 {
 	struct strbuf buf = STRBUF_INIT, path = STRBUF_INIT;
 	FILE *fp;
+	int ret = -1;
 
 	if (!loose->map)
 		loose_object_map_init(&loose->map);
@@ -98,13 +99,12 @@ static int load_one_loose_object_map(struct repository *repo, struct odb_source_
 		insert_loose_map(loose, &oid, &compat_oid);
 	}
 
-	strbuf_release(&buf);
-	strbuf_release(&path);
-	return errno ? -1 : 0;
+	ret = 0;
 err:
+	fclose(fp);
 	strbuf_release(&buf);
 	strbuf_release(&path);
-	return -1;
+	return ret;
 }
 
 int repo_read_loose_object_map(struct repository *repo)
@@ -202,7 +202,8 @@ static int write_one_object(struct odb_source_loose *loose,
 	return 0;
 errout:
 	error_errno(_("failed to write loose object index %s"), path.buf);
-	close(fd);
+	if (fd >= 0)
+		close(fd);
 	rollback_lock_file(&lock);
 	strbuf_release(&buf);
 	strbuf_release(&path);
