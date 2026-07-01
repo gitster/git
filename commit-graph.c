@@ -793,17 +793,6 @@ int generation_numbers_enabled(struct repository *r)
 	return !!first_generation;
 }
 
-int corrected_commit_dates_enabled(struct repository *r)
-{
-	struct commit_graph *g;
-
-	g = prepare_commit_graph(r);
-	if (!g || !g->num_commits)
-		return 0;
-
-	return g->read_generation_data;
-}
-
 struct bloom_filter_settings *get_bloom_filter_settings(struct repository *r)
 {
 	struct commit_graph *g;

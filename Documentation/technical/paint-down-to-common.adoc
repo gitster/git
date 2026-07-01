@@ -40,19 +40,9 @@ and PARENT2, it is a merge-base candidate. A candidate gains the
 STALE flag so its ancestors propagate staleness -- any deeper common
 ancestor is necessarily redundant.
 
-NOTE: When the commit-graph uses only topological levels (generation
-number v1) and the caller passes `min_generation = 0`, a legacy
-fallback replaces the generation-ordered comparator with a pure
-commit-date comparator. This breaks the ordering invariants
-described below -- see <<date-ordering-fallback>>.
-
 [[generation-regions]]
 INFINITY and finite generation regions
 --------------------------------------
-
-The properties in this section assume generation-number ordering (the
-default comparator). They do NOT hold when the date-ordering fallback
-is active -- see <<date-ordering-fallback>>.
 
 The commit-graph stores a generation number for each commit. Commits
 not in the commit-graph have generation `GENERATION_NUMBER_INFINITY`. The
@@ -153,36 +143,6 @@ common ancestor. No remaining commit in the queue can be a
 descendant of this candidate (generation ordering guarantees
 children are visited first), so it cannot be redundant and the walk
 can stop immediately.
-
-This optimization is NOT safe when the date-ordering fallback is
-active, because commit-date order can visit a deeper ancestor
-before a shallower one -- see <<date-ordering-fallback>>.
-
-[[date-ordering-fallback]]
-Date-ordering fallback
-----------------------
-
-When `min_generation` is zero and the commit-graph does not contain
-corrected commit dates (generation number v1, which stores only
-topological levels), `paint_down_to_common()` replaces the default
-generation-ordered comparator with `compare_commits_by_commit_date`.
-
-This was introduced as a performance heuristic: topological levels
-are coarser than commit dates, so date ordering can reach merge
-bases in fewer steps when timestamps are well-behaved. However,
-commit dates are not required to be monotonic -- a parent can have
-a later date than its child (clock skew, rebases, etc.) -- so the
-queue may visit commits out of topological order.
-
-This disables optimizations that depend on generation ordering:
-
-  1. *Single result*: the first merge-base candidate found may not
-     be the shallowest, because a deeper ancestor with a higher
-     commit date can be dequeued first.
-
-  2. *Side-exhaustion* (see subsequent commits): one paint side can
-     appear to drain from the queue while commits from that side are
-     still waiting with lower dates, causing premature termination.
 
 Related documentation
 ---------------------
