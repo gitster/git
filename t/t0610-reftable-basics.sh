@@ -15,9 +15,9 @@ export GIT_TEST_DEFAULT_REF_FORMAT
 INVALID_OID=$(test_oid 001)
 
 test_expect_success 'pack-refs does not crash with -h' '
-	test_expect_code 129 git pack-refs -h >usage &&
+	git pack-refs -h >usage &&
 	test_grep "[Uu]sage: git pack-refs " usage &&
-	test_expect_code 129 nongit git pack-refs -h >usage &&
+	nongit git pack-refs -h >usage &&
 	test_grep "[Uu]sage: git pack-refs " usage
 '
 

@@ -16,7 +16,7 @@ test_expect_success 'status -h in broken repository' '
 		cd broken &&
 		git init &&
 		echo "[status] showuntrackedfiles = CORRUPT" >>.git/config &&
-		test_expect_code 129 git status -h >usage 2>&1
+		git status -h >usage 2>&1
 	) &&
 	test_grep "[Uu]sage" broken/usage
 '
@@ -28,7 +28,7 @@ test_expect_success 'commit -h in broken repository' '
 		cd broken &&
 		git init &&
 		echo "[status] showuntrackedfiles = CORRUPT" >>.git/config &&
-		test_expect_code 129 git commit -h >usage 2>&1
+		git commit -h >usage 2>&1
 	) &&
 	test_grep "[Uu]sage" broken/usage
 '

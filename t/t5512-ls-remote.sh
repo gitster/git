@@ -86,7 +86,7 @@ test_expect_success 'ls-remote -h is deprecated w/o warning' '
 '
 
 test_expect_success 'ls-remote --heads is deprecated and hidden w/o warning' '
-	test_expect_code 129 git ls-remote -h >short-help &&
+	git ls-remote -h >short-help &&
 	test_grep ! -e --head short-help &&
 	git ls-remote --heads self >actual 2>warning &&
 	test_cmp expected.branches actual &&

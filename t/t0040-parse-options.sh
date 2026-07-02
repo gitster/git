@@ -68,7 +68,7 @@ Alias
 EOF
 
 test_expect_success 'test help' '
-	test_must_fail test-tool parse-options -h >output 2>output.err &&
+	test-tool parse-options -h >output 2>output.err &&
 	test_must_be_empty output.err &&
 	test_cmp expect output
 '

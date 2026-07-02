@@ -8,9 +8,9 @@ export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
 . "$TEST_DIRECTORY/lib-gpg.sh"
 
 test_expect_success GPG 'verify-tag does not crash with -h' '
-	test_expect_code 129 git verify-tag -h >usage &&
+	git verify-tag -h >usage &&
 	test_grep "[Uu]sage: git verify-tag " usage &&
-	test_expect_code 129 nongit git verify-tag -h >usage &&
+	nongit git verify-tag -h >usage &&
 	test_grep "[Uu]sage: git verify-tag " usage
 '
 

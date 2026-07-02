@@ -9,9 +9,9 @@ GNUPGHOME_NOT_USED=$GNUPGHOME
 . "$TEST_DIRECTORY/lib-gpg.sh"
 
 test_expect_success GPG 'verify-commit does not crash with -h' '
-	test_expect_code 129 git verify-commit -h >usage &&
+	git verify-commit -h >usage &&
 	test_grep "[Uu]sage: git verify-commit " usage &&
-	test_expect_code 129 nongit git verify-commit -h >usage &&
+	nongit git verify-commit -h >usage &&
 	test_grep "[Uu]sage: git verify-commit " usage
 '
 

@@ -27,13 +27,13 @@ test_expect_success 'usage on cmd and subcommand invalid option' '
 '
 
 test_expect_success 'usage on main command -h emits a summary of subcommands' '
-	test_expect_code 129 git stash -h >usage &&
+	git stash -h >usage &&
 	test_grep -F "usage: git stash list" usage &&
 	test_grep -F "or: git stash show" usage
 '
 
 test_expect_success 'usage for subcommands should emit subcommand usage' '
-	test_expect_code 129 git stash push -h >usage &&
+	git stash push -h >usage &&
 	test_grep -F "usage: git stash [push" usage
 '
 

@@ -33,7 +33,7 @@ test_expect_success REFFILES 'branch -h in broken repository' '
 		cd broken &&
 		git init -b main &&
 		>.git/refs/heads/main &&
-		test_expect_code 129 git branch -h >usage 2>&1
+		git branch -h >usage 2>&1
 	) &&
 	test_grep "[Uu]sage" broken/usage
 '

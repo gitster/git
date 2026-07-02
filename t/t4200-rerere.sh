@@ -438,7 +438,7 @@ test_expect_success 'rerere --no-no-rerere-autoupdate' '
 '
 
 test_expect_success 'rerere -h' '
-	test_must_fail git rerere -h >help &&
+	git rerere -h >help &&
 	test_grep [Uu]sage help
 '
 

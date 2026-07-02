@@ -165,7 +165,7 @@ test_expect_success 'show-ref --branches, --tags, --head, pattern' '
 '
 
 test_expect_success 'show-ref --heads is deprecated and hidden' '
-	test_expect_code 129 git show-ref -h >short-help &&
+	git show-ref -h >short-help &&
 	test_grep ! -e --heads short-help &&
 	git show-ref --heads >actual 2>warning &&
 	test_grep ! deprecated warning &&

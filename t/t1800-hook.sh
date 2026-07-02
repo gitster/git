@@ -75,10 +75,10 @@ sentinel_detector () {
 test_expect_success 'git hook usage' '
 	test_expect_code 129 git hook &&
 	test_expect_code 129 git hook run &&
-	test_expect_code 129 git hook run -h &&
+	git hook run -h &&
 	test_expect_code 129 git hook run --unknown 2>err &&
 	test_expect_code 129 git hook list &&
-	test_expect_code 129 git hook list -h &&
+	git hook list -h &&
 	test_grep "unknown option" err
 '
 
