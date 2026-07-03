@@ -144,7 +144,7 @@ test_expect_success '"list" all worktrees with prunable annotation' '
 	rm -rf prunable &&
 	git worktree list >out &&
 	grep "/prunable  *[0-9a-f].* prunable$" out &&
-	! grep "/unprunable  *[0-9a-f].* prunable$"
+	! grep "/unprunable  *[0-9a-f].* prunable$" out
 '
 
 test_expect_success '"list" all worktrees --porcelain with prunable' '
