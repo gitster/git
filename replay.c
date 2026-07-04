@@ -351,10 +351,10 @@ void replay_result_release(struct replay_result *result)
 	free(result->updates);
 }
 
-static void replay_result_queue_update(struct replay_result *result,
-				       const char *refname,
-				       const struct object_id *old_oid,
-				       const struct object_id *new_oid)
+void replay_result_queue_update(struct replay_result *result,
+				const char *refname,
+				const struct object_id *old_oid,
+				const struct object_id *new_oid)
 {
 	ALLOC_GROW(result->updates, result->updates_nr + 1, result->updates_alloc);
 	result->updates[result->updates_nr].refname = xstrdup(refname);
