@@ -244,7 +244,7 @@ testrebase () {
 		git rebase --quit &&
 		test_when_finished git stash drop &&
 		test_path_is_missing $dotest/autostash &&
-		! grep dirty file3 &&
+		test_path_is_missing file3 &&
 		git stash show -p >actual &&
 		test_cmp expect actual &&
 		git reset --hard &&
