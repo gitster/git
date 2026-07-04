@@ -664,10 +664,12 @@ static void odb_source_loose_clear_cache(struct odb_source_loose *loose)
 	       sizeof(loose->subdir_seen));
 }
 
-static void odb_source_loose_reprepare(struct odb_source *source)
+static void odb_source_loose_prepare(struct odb_source *source,
+				     enum odb_prepare_flags flags)
 {
 	struct odb_source_loose *loose = odb_source_loose_downcast(source);
-	odb_source_loose_clear_cache(loose);
+	if (flags & ODB_PREPARE_FLUSH_CACHES)
+		odb_source_loose_clear_cache(loose);
 }
 
 static void odb_source_loose_close(struct odb_source *source UNUSED)
@@ -708,7 +710,7 @@ struct odb_source_loose *odb_source_loose_new(struct object_database *odb,
 
 	loose->base.free = odb_source_loose_free;
 	loose->base.close = odb_source_loose_close;
-	loose->base.reprepare = odb_source_loose_reprepare;
+	loose->base.prepare = odb_source_loose_prepare;
 	loose->base.read_object_info = odb_source_loose_read_object_info;
 	loose->base.read_object_stream = odb_source_loose_read_object_stream;
 	loose->base.for_each_object = odb_source_loose_for_each_object;
