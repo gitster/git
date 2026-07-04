@@ -73,12 +73,10 @@ unsigned long pack_size_limit_cfg;
 #ifndef PROTECT_HFS_DEFAULT
 #define PROTECT_HFS_DEFAULT 0
 #endif
-int protect_hfs = PROTECT_HFS_DEFAULT;
 
 #ifndef PROTECT_NTFS_DEFAULT
 #define PROTECT_NTFS_DEFAULT 1
 #endif
-int protect_ntfs = PROTECT_NTFS_DEFAULT;
 
 /*
  * The character that begins a commented line in user-editable file
@@ -128,6 +126,20 @@ int is_bare_repository(struct repository *repo)
 {
 	/* if core.bare is not 'false', let's see if there is a work tree */
 	return repo->bare_cfg && !repo_get_work_tree(repo);
+}
+
+int repo_protect_ntfs(struct repository *repo)
+{
+	return (repo && repo->initialized) ?
+		repo_config_values(repo)->protect_ntfs :
+		PROTECT_NTFS_DEFAULT;
+}
+
+int repo_protect_hfs(struct repository *repo)
+{
+	return (repo && repo->initialized) ?
+		repo_config_values(repo)->protect_hfs :
+		PROTECT_HFS_DEFAULT;
 }
 
 int have_git_dir(void)
@@ -529,12 +541,12 @@ int git_default_core_config(const char *var, const char *value,
 	}
 
 	if (!strcmp(var, "core.protecthfs")) {
-		protect_hfs = git_config_bool(var, value);
+		cfg->protect_hfs = git_config_bool(var, value);
 		return 0;
 	}
 
 	if (!strcmp(var, "core.protectntfs")) {
-		protect_ntfs = git_config_bool(var, value);
+		cfg->protect_ntfs = git_config_bool(var, value);
 		return 0;
 	}
 
@@ -712,6 +724,8 @@ void repo_config_values_init(struct repo_config_values *cfg)
 {
 	cfg->attributes_file = NULL;
 	cfg->apply_sparse_checkout = 0;
+	cfg->protect_hfs = PROTECT_HFS_DEFAULT;
+	cfg->protect_ntfs = PROTECT_NTFS_DEFAULT;
 	cfg->branch_track = BRANCH_TRACK_REMOTE;
 	cfg->trust_ctime = 1;
 	cfg->check_stat = 1;
