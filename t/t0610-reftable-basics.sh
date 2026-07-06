@@ -1163,4 +1163,26 @@ test_expect_success 'writes do not persist peeled value for invalid tags' '
 	)
 '
 
+test_expect_success 'delete and re-create refs with tombstones' '
+	test_when_finished "rm -rf repo" &&
+	git init repo &&
+	test_commit -C repo A &&
+	A=$(git -C repo rev-parse HEAD) &&
+	cat >input <<-EOF &&
+	create refs/tags/a $A
+	create refs/tags/b $A
+	create refs/tags/c $A
+	EOF
+	git -C repo update-ref --stdin <input &&
+
+	# delete all tags, leaving tombstones
+	git -C repo for-each-ref --format="delete %(refname)" refs/tags/ |
+	git -C repo update-ref --stdin &&
+
+	# re-create the same refs and verify they are visible
+	git -C repo update-ref --stdin <input &&
+	git -C repo tag -l >actual &&
+	test_line_count = 3 actual
+'
+
 test_done
