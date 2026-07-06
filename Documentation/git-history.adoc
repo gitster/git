@@ -117,15 +117,21 @@ like the arguments to linkgit:git-rev-list[1], so several arguments may be
 given, for example `HEAD~3..HEAD ^topic` to additionally exclude what is
 already on `topic`.
 +
-The oldest commit's message and authorship are preserved by default,
-unless you specify `--reedit-message`. A merge commit inside the range is
+The oldest commit's message and authorship are preserved by default. With
+`--reedit-message`, an editor opens pre-filled with the messages of all the
+folded commits so you can combine them. A merge commit inside the range is
 folded like any other, but the range must have a single base, so a range
 that reaches more than one entry point (for example a side branch that
 forked before the range and was later merged into it) is rejected.
 +
 Because the oldest commit's message is reused, the range may not begin
 with a `fixup!`, `squash!`, or `amend!` commit, whose target is
-necessarily outside the range.
+necessarily outside the range. The changes from every commit in the range
+are always folded in. Only the message text differs. With
+`--reedit-message` the template mirrors `git rebase -i`: the message of a
+`fixup!` elsewhere in the range is commented out in full, while a
+`squash!` or `amend!` keeps its message body with only the marker subject
+commented, so you can fold the remark into the result.
 +
 A branch or tag that points at a commit inside the range would be left
 dangling once those commits are folded away, so with the default
