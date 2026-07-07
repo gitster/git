@@ -661,7 +661,7 @@ static void add_repack_incremental_option(struct strvec *args)
 	strvec_push(args, "--no-write-bitmap-index");
 }
 
-static int need_to_gc(struct gc_config *cfg, struct strvec *repack_args)
+static int need_to_gc(struct gc_config *cfg)
 {
 	/*
 	 * Setting gc.auto to 0 or negative can disable the
@@ -669,46 +669,8 @@ static int need_to_gc(struct gc_config *cfg, struct strvec *repack_args)
 	 */
 	if (cfg->gc_auto_threshold <= 0)
 		return 0;
-
-	/*
-	 * If there are too many loose objects, but not too many
-	 * packs, we run "repack -d -l".  If there are too many packs,
-	 * we run "repack -A -d -l".  Otherwise we tell the caller
-	 * there is no need.
-	 */
-	if (too_many_packs(cfg)) {
-		struct string_list keep_pack = STRING_LIST_INIT_NODUP;
-
-		if (cfg->big_pack_threshold) {
-			find_base_packs(&keep_pack, cfg->big_pack_threshold);
-			if (keep_pack.nr >= cfg->gc_auto_pack_limit) {
-				cfg->big_pack_threshold = 0;
-				string_list_clear(&keep_pack, 0);
-				find_base_packs(&keep_pack, 0);
-			}
-		} else {
-			struct packed_git *p = find_base_packs(&keep_pack, 0);
-			uint64_t mem_have, mem_want;
-
-			mem_have = total_ram();
-			mem_want = estimate_repack_memory(cfg, p);
-
-			/*
-			 * Only allow 1/2 of memory for pack-objects, leave
-			 * the rest for the OS and other processes in the
-			 * system.
-			 */
-			if (!mem_have || mem_want < mem_have / 2)
-				string_list_clear(&keep_pack, 0);
-		}
-
-		add_repack_all_option(cfg, &keep_pack, repack_args);
-		string_list_clear(&keep_pack, 0);
-	} else if (too_many_loose_objects(cfg->gc_auto_threshold))
-		add_repack_incremental_option(repack_args);
-	else
+	if (!too_many_packs(cfg) && !too_many_loose_objects(cfg->gc_auto_threshold))
 		return 0;
-
 	return 1;
 }
 
@@ -841,7 +803,8 @@ static int gc_foreground_tasks(struct maintenance_run_opts *opts,
 
 static int maintenance_task_odb(struct maintenance_run_opts *opts,
 				struct gc_config *cfg,
-				struct strvec *repack_args)
+				int keep_largest_pack,
+				int aggressive)
 {
 	struct child_process repack_cmd = CHILD_PROCESS_INIT;
 	int ret;
@@ -851,9 +814,75 @@ static int maintenance_task_odb(struct maintenance_run_opts *opts,
 
 	repack_cmd.git_cmd = 1;
 	repack_cmd.odb_to_close = the_repository->objects;
-	strvec_pushv(&repack_cmd.args, repack_args->v);
+
+	strvec_pushl(&repack_cmd.args, "repack", "-d", "-l", NULL);
+	if (aggressive) {
+		strvec_push(&repack_cmd.args, "-f");
+		if (cfg->aggressive_depth > 0)
+			strvec_pushf(&repack_cmd.args, "--depth=%d", cfg->aggressive_depth);
+		if (cfg->aggressive_window > 0)
+			strvec_pushf(&repack_cmd.args, "--window=%d", cfg->aggressive_window);
+	}
+	if (opts->quiet)
+		strvec_push(&repack_cmd.args, "-q");
+
+	/*
+	 * There's three cases we need to consider:
+	 *
+	 *   - If we're invoked without `--auto` we'll need to perform a full
+	 *     repack.
+	 *
+	 *   - If we're invoked with `--auto` and there's too many packs, then
+	 *     we perform a full repack, as well.
+	 *
+	 *   - Otherwise we perform an incremental repack.
+	 */
+	if (!opts->auto_flag) {
+		struct string_list keep_pack = STRING_LIST_INIT_NODUP;
+
+		if (keep_largest_pack != -1) {
+			if (keep_largest_pack)
+				find_base_packs(&keep_pack, 0);
+		} else if (cfg->big_pack_threshold) {
+			find_base_packs(&keep_pack, cfg->big_pack_threshold);
+		}
+
+		add_repack_all_option(cfg, &keep_pack, &repack_cmd.args);
+		string_list_clear(&keep_pack, 0);
+	} else if (too_many_packs(cfg)) {
+		struct string_list keep_pack = STRING_LIST_INIT_NODUP;
+
+		if (cfg->big_pack_threshold) {
+			find_base_packs(&keep_pack, cfg->big_pack_threshold);
+			if (keep_pack.nr >= cfg->gc_auto_pack_limit) {
+				cfg->big_pack_threshold = 0;
+				string_list_clear(&keep_pack, 0);
+				find_base_packs(&keep_pack, 0);
+			}
+		} else {
+			struct packed_git *p = find_base_packs(&keep_pack, 0);
+			uint64_t mem_have, mem_want;
+
+			mem_have = total_ram();
+			mem_want = estimate_repack_memory(cfg, p);
+
+			/*
+			 * Only allow 1/2 of memory for pack-objects, leave
+			 * the rest for the OS and other processes in the
+			 * system.
+			 */
+			if (!mem_have || mem_want < mem_have / 2)
+				string_list_clear(&keep_pack, 0);
+		}
+
+		add_repack_all_option(cfg, &keep_pack, &repack_cmd.args);
+		string_list_clear(&keep_pack, 0);
+	} else {
+		add_repack_incremental_option(&repack_cmd.args);
+	}
+
 	if (run_command(&repack_cmd)) {
-		ret = error(FAILED_RUN, repack_args->v[0]);
+		ret = error(FAILED_RUN, repack_cmd.args.v[0]);
 		goto out;
 	}
 
@@ -899,7 +928,6 @@ int cmd_gc(int argc,
 	int keep_largest_pack = -1;
 	int skip_foreground_tasks = 0;
 	timestamp_t dummy;
-	struct strvec repack_args = STRVEC_INIT;
 	struct maintenance_run_opts opts = MAINTENANCE_RUN_OPTS_INIT;
 	struct gc_config cfg = GC_CONFIG_INIT;
 	const char *prune_expire_sentinel = "sentinel";
@@ -939,8 +967,6 @@ int cmd_gc(int argc,
 	show_usage_with_options_if_asked(argc, argv,
 					 builtin_gc_usage, builtin_gc_options);
 
-	strvec_pushl(&repack_args, "repack", "-d", "-l", NULL);
-
 	gc_config(&cfg);
 
 	if (parse_expiry_date(cfg.gc_log_expire, &gc_log_expire_time))
@@ -961,16 +987,6 @@ int cmd_gc(int argc,
 	if (cfg.prune_expire && parse_expiry_date(cfg.prune_expire, &dummy))
 		die(_("failed to parse prune expiry value %s"), cfg.prune_expire);
 
-	if (aggressive) {
-		strvec_push(&repack_args, "-f");
-		if (cfg.aggressive_depth > 0)
-			strvec_pushf(&repack_args, "--depth=%d", cfg.aggressive_depth);
-		if (cfg.aggressive_window > 0)
-			strvec_pushf(&repack_args, "--window=%d", cfg.aggressive_window);
-	}
-	if (opts.quiet)
-		strvec_push(&repack_args, "-q");
-
 	if (opts.auto_flag) {
 		if (cfg.detach_auto && opts.detach < 0)
 			opts.detach = 1;
@@ -978,8 +994,7 @@ int cmd_gc(int argc,
 		/*
 		 * Auto-gc should be least intrusive as possible.
 		 */
-		if (!need_to_gc(&cfg, &repack_args) ||
-		    run_hooks(the_repository, "pre-auto-gc")) {
+		if (!need_to_gc(&cfg) || run_hooks(the_repository, "pre-auto-gc")) {
 			ret = 0;
 			goto out;
 		}
@@ -991,18 +1006,6 @@ int cmd_gc(int argc,
 				fprintf(stderr, _("Auto packing the repository for optimum performance.\n"));
 			fprintf(stderr, _("See \"git help gc\" for manual housekeeping.\n"));
 		}
-	} else {
-		struct string_list keep_pack = STRING_LIST_INIT_NODUP;
-
-		if (keep_largest_pack != -1) {
-			if (keep_largest_pack)
-				find_base_packs(&keep_pack, 0);
-		} else if (cfg.big_pack_threshold) {
-			find_base_packs(&keep_pack, cfg.big_pack_threshold);
-		}
-
-		add_repack_all_option(&cfg, &keep_pack, &repack_args);
-		string_list_clear(&keep_pack, 0);
 	}
 
 	if (opts.detach > 0) {
@@ -1065,7 +1068,7 @@ int cmd_gc(int argc,
 	if (maintenance_task_rerere_gc(&opts, &cfg))
 		die(FAILED_RUN, "rerere");
 
-	if (maintenance_task_odb(&opts, &cfg, &repack_args))
+	if (maintenance_task_odb(&opts, &cfg, keep_largest_pack, aggressive))
 		die(NULL);
 
 	report_garbage = report_pack_garbage;
@@ -1088,7 +1091,6 @@ int cmd_gc(int argc,
 
 out:
 	maintenance_run_opts_release(&opts);
-	strvec_clear(&repack_args);
 	gc_config_release(&cfg);
 	return 0;
 }
@@ -1291,15 +1293,7 @@ static int maintenance_task_gc_background(struct maintenance_run_opts *opts,
 
 static int gc_condition(struct gc_config *cfg)
 {
-	/*
-	 * Note that it's fine to drop the repack arguments here, as we execute
-	 * git-gc(1) as a separate child process anyway. So it knows to compute
-	 * these arguments again.
-	 */
-	struct strvec repack_args = STRVEC_INIT;
-	int ret = need_to_gc(cfg, &repack_args);
-	strvec_clear(&repack_args);
-	return ret;
+	return need_to_gc(cfg);
 }
 
 static int prune_packed(struct maintenance_run_opts *opts)
