@@ -428,9 +428,8 @@ out:
 	return should_gc;
 }
 
-static int too_many_loose_objects(int limit)
+static int too_many_loose_objects(struct odb_source_files *files, int limit)
 {
-	struct odb_source_files *files = odb_source_files_downcast(the_repository->objects->sources);
 	/*
 	 * This is weird, but stems from legacy behaviour: the GC auto
 	 * threshold was always essentially interpreted as if it was rounded up
@@ -446,19 +445,21 @@ static int too_many_loose_objects(int limit)
 	return loose_count > auto_threshold;
 }
 
-static struct packed_git *find_base_packs(struct string_list *packs,
+static struct packed_git *find_base_packs(struct odb_source_files *files,
+					  struct string_list *packs,
 					  unsigned long limit)
 {
-	struct packed_git *p, *base = NULL;
+	struct packfile_list_entry *e;
+	struct packed_git *base = NULL;
 
-	repo_for_each_pack(the_repository, p) {
-		if (!p->pack_local || p->is_cruft)
+	for (e = packfile_store_get_packs(files->packed); e; e = e->next) {
+		if (e->pack->is_cruft)
 			continue;
 		if (limit) {
-			if (p->pack_size >= limit)
-				string_list_append(packs, p->pack_name);
-		} else if (!base || base->pack_size < p->pack_size) {
-			base = p;
+			if (e->pack->pack_size >= limit)
+				string_list_append(packs, e->pack->pack_name);
+		} else if (!base || base->pack_size < e->pack->pack_size) {
+			base = e->pack;
 		}
 	}
 
@@ -468,18 +469,16 @@ static struct packed_git *find_base_packs(struct string_list *packs,
 	return base;
 }
 
-static int too_many_packs(int gc_auto_pack_limit)
+static int too_many_packs(struct odb_source_files *files, int gc_auto_pack_limit)
 {
-	struct packed_git *p;
+	struct packfile_list_entry *e;
 	int cnt = 0;
 
 	if (gc_auto_pack_limit <= 0)
 		return 0;
 
-	repo_for_each_pack(the_repository, p) {
-		if (!p->pack_local)
-			continue;
-		if (p->pack_keep)
+	for (e = packfile_store_get_packs(files->packed); e; e = e->next) {
+		if (e->pack->pack_keep)
 			continue;
 		/*
 		 * Perhaps check the size of the pack and count only
@@ -535,15 +534,16 @@ static uint64_t total_ram(void)
 	return 0;
 }
 
-static uint64_t estimate_repack_memory(struct packed_git *pack)
+static uint64_t estimate_repack_memory(struct odb_source_files *files,
+				       struct packed_git *pack)
 {
 	unsigned long max_delta_cache_size = DEFAULT_DELTA_CACHE_SIZE;
 	unsigned long delta_base_cache_limit = DEFAULT_DELTA_BASE_CACHE_LIMIT;
 	unsigned long nr_objects;
 	size_t os_cache, heap;
 
-	if (odb_count_objects(the_repository->objects,
-			      ODB_COUNT_OBJECTS_APPROXIMATE, &nr_objects) < 0)
+	if (odb_source_count_objects(&files->base, ODB_COUNT_OBJECTS_APPROXIMATE,
+				     &nr_objects) < 0)
 		return 0;
 
 	if (!pack || !nr_objects)
@@ -679,6 +679,8 @@ static void add_repack_incremental_option(struct strvec *args)
 static bool odb_optimize_required(struct object_database *odb,
 				  const struct odb_optimize_options *opts)
 {
+	struct odb_source_files *files = odb_source_files_downcast(odb->sources);
+
 	switch (opts->strategy) {
 	case ODB_OPTIMIZE_INCREMENTAL: {
 		int gc_auto_threshold = 6700;
@@ -693,8 +695,8 @@ static bool odb_optimize_required(struct object_database *odb,
 		 */
 		if (gc_auto_threshold <= 0)
 			return false;
-		if (!too_many_packs(gc_auto_pack_limit) &&
-		    !too_many_loose_objects(gc_auto_threshold))
+		if (!too_many_packs(files, gc_auto_pack_limit) &&
+		    !too_many_loose_objects(files, gc_auto_threshold))
 			return false;
 
 		return true;
@@ -739,7 +741,7 @@ static bool odb_optimize_required(struct object_database *odb,
 		 * Otherwise, we estimate the number of loose objects to determine
 		 * whether we want to create a new packfile or not.
 		 */
-		if (too_many_loose_objects(auto_value)) {
+		if (too_many_loose_objects(files, auto_value)) {
 			ret = true;
 			goto out;
 		}
@@ -886,21 +888,22 @@ static int gc_foreground_tasks(struct maintenance_run_opts *opts,
 static int odb_optimize(struct object_database *odb,
 			const struct odb_optimize_options *opts)
 {
+	struct odb_source_files *files = odb_source_files_downcast(odb->sources);
 	struct child_process repack_cmd = CHILD_PROCESS_INIT;
 	unsigned long big_pack_threshold = 0;
 	int gc_auto_threshold = 6700;
 	int gc_auto_pack_limit = 50;
 	int ret;
 
-	repo_config_get_int(the_repository, "gc.auto", &gc_auto_threshold);
-	repo_config_get_int(the_repository, "gc.autopacklimit", &gc_auto_pack_limit);
-	repo_config_get_ulong(the_repository, "gc.bigpackthreshold", &big_pack_threshold);
+	repo_config_get_int(odb->repo, "gc.auto", &gc_auto_threshold);
+	repo_config_get_int(odb->repo, "gc.autopacklimit", &gc_auto_pack_limit);
+	repo_config_get_ulong(odb->repo, "gc.bigpackthreshold", &big_pack_threshold);
 
 	if (odb->repo->repository_format_precious_objects)
 		return 0;
 
 	repack_cmd.git_cmd = 1;
-	repack_cmd.odb_to_close = the_repository->objects;
+	repack_cmd.odb_to_close = odb->repo->objects;
 
 	strvec_pushl(&repack_cmd.args, "repack", "-d", "-l", NULL);
 	if (opts->flags & ODB_OPTIMIZE_NO_REUSE_DELTAS)
@@ -930,29 +933,29 @@ static int odb_optimize(struct object_database *odb,
 
 			if (opts->keep_largest_pack != -1) {
 				if (opts->keep_largest_pack)
-					find_base_packs(&keep_pack, 0);
+					find_base_packs(files, &keep_pack, 0);
 			} else if (big_pack_threshold) {
-				find_base_packs(&keep_pack, big_pack_threshold);
+				find_base_packs(files, &keep_pack, big_pack_threshold);
 			}
 
 			add_repack_all_option(opts, &keep_pack, &repack_cmd.args);
 			string_list_clear(&keep_pack, 0);
 		} else {
-			if (too_many_packs(gc_auto_pack_limit)) {
+			if (too_many_packs(files, gc_auto_pack_limit)) {
 				struct string_list keep_pack = STRING_LIST_INIT_NODUP;
 
 				if (big_pack_threshold) {
-					find_base_packs(&keep_pack, big_pack_threshold);
+					find_base_packs(files, &keep_pack, big_pack_threshold);
 					if (keep_pack.nr >= gc_auto_pack_limit) {
 						string_list_clear(&keep_pack, 0);
-						find_base_packs(&keep_pack, 0);
+						find_base_packs(files, &keep_pack, 0);
 					}
 				} else {
-					struct packed_git *p = find_base_packs(&keep_pack, 0);
+					struct packed_git *p = find_base_packs(files, &keep_pack, 0);
 					uint64_t mem_have, mem_want;
 
 					mem_have = total_ram();
-					mem_want = estimate_repack_memory(p);
+					mem_want = estimate_repack_memory(files, p);
 
 					/*
 					 * Only allow 1/2 of memory for pack-objects, leave
@@ -981,10 +984,10 @@ static int odb_optimize(struct object_database *odb,
 		struct existing_packs existing_packs = EXISTING_PACKS_INIT;
 		struct string_list kept_packs = STRING_LIST_INIT_DUP;
 
-		repo_config_get_int(the_repository, "maintenance.geometric-repack.splitFactor",
+		repo_config_get_int(odb->repo, "maintenance.geometric-repack.splitFactor",
 				    &geometry.split_factor);
 
-		existing_packs.repo = the_repository;
+		existing_packs.repo = odb->repo;
 		existing_packs_collect(&existing_packs, &kept_packs);
 		pack_geometry_init(&geometry, &existing_packs, &po_args);
 		pack_geometry_split(&geometry);
@@ -995,7 +998,7 @@ static int odb_optimize(struct object_database *odb,
 		} else {
 			add_repack_all_option(opts, NULL, &repack_cmd.args);
 		}
-		if (the_repository->settings.core_multi_pack_index)
+		if (odb->repo->settings.core_multi_pack_index)
 			strvec_push(&repack_cmd.args, "--write-midx");
 
 		existing_packs_release(&existing_packs);
@@ -1020,7 +1023,7 @@ static int odb_optimize(struct object_database *odb,
 		strvec_push(&prune_cmd.args, opts->prune_expire);
 		if (!(opts->flags & ODB_OPTIMIZE_VERBOSE))
 			strvec_push(&prune_cmd.args, "--no-progress");
-		if (repo_has_promisor_remote(the_repository))
+		if (repo_has_promisor_remote(odb->repo))
 			strvec_push(&prune_cmd.args,
 				    "--exclude-promisor-objects");
 		prune_cmd.git_cmd = 1;
@@ -1031,7 +1034,7 @@ static int odb_optimize(struct object_database *odb,
 		}
 	}
 
-	if (opts->flags & ODB_OPTIMIZE_AUTO && too_many_loose_objects(gc_auto_threshold))
+	if (opts->flags & ODB_OPTIMIZE_AUTO && too_many_loose_objects(files, gc_auto_threshold))
 		warning(_("There are too many unreachable loose objects; "
 			"run 'git prune' to remove them."));
 
