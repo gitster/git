@@ -740,6 +740,127 @@ test_expect_success 'geometric repacking honors configured split factor' '
 	)
 '
 
+test_expect_success 'pre-auto-gc hook runs exactly once' '
+	test_when_finished "rm -rf repo" &&
+	git init repo &&
+	(
+		cd repo &&
+		write_script .git/hooks/pre-auto-gc <<-\EOF &&
+		echo hook >>hook.log
+		EOF
+
+		# Satisfy the auto condition for multiple tasks, both in the
+		# foreground and in the background phase.
+		git config set maintenance.reflog-expire.auto -1 &&
+		git config set maintenance.geometric-repack.auto -1 &&
+		git config set maintenance.rerere-gc.auto -1 &&
+
+		GIT_TRACE2_EVENT="$(pwd)/trace2.txt" \
+			git maintenance run --auto 2>/dev/null &&
+
+		# The successful hook does not inhibit any of the tasks...
+		test_subcommand git reflog expire --all <trace2.txt &&
+		test_subcommand_flex git repack <trace2.txt &&
+		test_subcommand git rerere gc <trace2.txt &&
+		# ... but it must only have been executed a single time.
+		test_line_count = 1 hook.log
+	)
+'
+
+test_expect_success 'pre-auto-gc hook can inhibit geometric strategy' '
+	test_when_finished "rm -rf repo" &&
+	git init repo &&
+	(
+		cd repo &&
+		write_script .git/hooks/pre-auto-gc <<-\EOF &&
+		echo hook >>hook.log
+		exit 1
+		EOF
+
+		git config set maintenance.reflog-expire.auto -1 &&
+		git config set maintenance.geometric-repack.auto -1 &&
+		git config set maintenance.rerere-gc.auto -1 &&
+
+		# Maintenance would be required...
+		git maintenance is-needed --auto &&
+
+		GIT_TRACE2_EVENT="$(pwd)/trace2.txt" \
+			git maintenance run --auto 2>/dev/null &&
+
+		# ... but the failing hook inhibits all tasks. The hook itself
+		# is expected to be the only child process being spawned, and
+		# it must only run a single time.
+		test_grep "child_start.*pre-auto-gc" trace2.txt &&
+		test_subcommand_flex ! git trace2 &&
+		test_line_count = 1 hook.log
+	)
+'
+
+test_expect_success 'pre-auto-gc hook can inhibit gc strategy' '
+	test_when_finished "rm -rf repo" &&
+	git init repo &&
+	(
+		cd repo &&
+		write_script .git/hooks/pre-auto-gc <<-\EOF &&
+		echo hook >>hook.log
+		exit 1
+		EOF
+
+		git config set maintenance.strategy gc &&
+		git config set maintenance.auto false &&
+		git config set gc.auto 3 &&
+
+		test_oid_init &&
+
+		# We need to create two objects whose hashes start with 17
+		# since this is what the gc task counts.
+		test_commit "$(test_oid blob17_1)" &&
+		test_commit "$(test_oid blob17_2)" &&
+
+		# Maintenance would be required...
+		git maintenance is-needed --auto &&
+
+		GIT_TRACE2_EVENT="$(pwd)/trace2.txt" \
+			git maintenance run --auto 2>/dev/null &&
+
+		# ... but the failing hook inhibits all tasks. The hook itself
+		# is expected to be the only child process being spawned, and
+		# it must only run a single time.
+		test_grep "child_start.*pre-auto-gc" trace2.txt &&
+		test_subcommand_flex ! git trace2 &&
+		test_line_count = 1 hook.log
+	)
+'
+
+test_expect_success 'pre-auto-gc hook does not run when no maintenance is needed' '
+	test_when_finished "rm -rf repo" &&
+	git init repo &&
+	(
+		cd repo &&
+		write_script .git/hooks/pre-auto-gc <<-\EOF &&
+		echo hook >>hook.log
+		EOF
+		test_must_fail git maintenance is-needed --auto &&
+		git maintenance run --auto 2>/dev/null &&
+		test_path_is_missing hook.log
+	)
+'
+
+test_expect_success 'pre-auto-gc hook does not run without --auto' '
+	test_when_finished "rm -rf repo" &&
+	git init repo &&
+	test_hook -C repo pre-auto-gc <<-\EOF &&
+	echo hook >>hook.log
+	EOF
+	(
+		cd repo &&
+		GIT_TRACE2_EVENT="$(pwd)/trace2.txt" \
+			git maintenance run 2>/dev/null &&
+		test_grep "\[\"git\",\"repack\"," trace2.txt &&
+		test_path_is_missing hook.log
+	)
+'
+
 test_expect_success 'pack-refs task' '
 	for n in $(test_seq 1 5)
 	do

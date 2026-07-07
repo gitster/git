@@ -709,8 +709,6 @@ static int need_to_gc(struct gc_config *cfg, struct strvec *repack_args)
 	else
 		return 0;
 
-	if (run_hooks(the_repository, "pre-auto-gc"))
-		return 0;
 	return 1;
 }
 
@@ -933,7 +931,8 @@ int cmd_gc(int argc,
 		/*
 		 * Auto-gc should be least intrusive as possible.
 		 */
-		if (!need_to_gc(&cfg, &repack_args)) {
+		if (!need_to_gc(&cfg, &repack_args) ||
+		    run_hooks(the_repository, "pre-auto-gc")) {
 			ret = 0;
 			goto out;
 		}
@@ -1755,11 +1754,18 @@ enum task_phase {
 	TASK_PHASE_BACKGROUND,
 };
 
+enum auto_gc_hook_result {
+	AUTO_GC_HOOK_UNDECIDED = 0,
+	AUTO_GC_HOOK_RUN = 1,
+	AUTO_GC_HOOK_SKIP = 2,
+};
+
 static int maybe_run_task(const struct maintenance_task *task,
 			  struct repository *repo,
 			  struct maintenance_run_opts *opts,
 			  struct gc_config *cfg,
-			  enum task_phase phase)
+			  enum task_phase phase,
+			  enum auto_gc_hook_result *auto_gc_hook_result)
 {
 	int foreground = (phase == TASK_PHASE_FOREGROUND);
 	maintenance_task_fn fn = foreground ? task->foreground : task->background;
@@ -1768,9 +1774,19 @@ static int maybe_run_task(const struct maintenance_task *task,
 
 	if (!fn)
 		return 0;
-	if (opts->auto_flag &&
-	    (!task->auto_condition || !task->auto_condition(cfg)))
-		return 0;
+	if (opts->auto_flag) {
+		if (*auto_gc_hook_result == AUTO_GC_HOOK_SKIP)
+			return 0;
+
+		if (!task->auto_condition || !task->auto_condition(cfg))
+			return 0;
+
+		if (*auto_gc_hook_result == AUTO_GC_HOOK_UNDECIDED)
+			*auto_gc_hook_result = run_hooks(repo, "pre-auto-gc") ?
+				AUTO_GC_HOOK_SKIP : AUTO_GC_HOOK_RUN;
+		if (*auto_gc_hook_result == AUTO_GC_HOOK_SKIP)
+			return 0;
+	}
 
 	trace2_region_enter(region, task->name, repo);
 	if (fn(opts, cfg)) {
@@ -1789,6 +1805,7 @@ static int maintenance_run_tasks(struct maintenance_run_opts *opts,
 	struct lock_file lk;
 	struct repository *r = the_repository;
 	char *lock_path = xstrfmt("%s/maintenance", r->objects->sources->path);
+	enum auto_gc_hook_result auto_gc_hook_result = AUTO_GC_HOOK_UNDECIDED;
 
 	if (hold_lock_file_for_update(&lk, lock_path, LOCK_NO_DEREF) < 0) {
 		/*
@@ -1808,7 +1825,7 @@ static int maintenance_run_tasks(struct maintenance_run_opts *opts,
 
 	for (size_t i = 0; i < opts->tasks_nr; i++)
 		if (maybe_run_task(&tasks[opts->tasks[i]], r, opts, cfg,
-				   TASK_PHASE_FOREGROUND))
+				   TASK_PHASE_FOREGROUND, &auto_gc_hook_result))
 			result = 1;
 
 	/* Failure to daemonize is ok, we'll continue in foreground. */
@@ -1820,7 +1837,7 @@ static int maintenance_run_tasks(struct maintenance_run_opts *opts,
 
 	for (size_t i = 0; i < opts->tasks_nr; i++)
 		if (maybe_run_task(&tasks[opts->tasks[i]], r, opts, cfg,
-				   TASK_PHASE_BACKGROUND))
+				   TASK_PHASE_BACKGROUND, &auto_gc_hook_result))
 			result = 1;
 
 	rollback_lock_file(&lk);
