@@ -839,6 +839,53 @@ static int gc_foreground_tasks(struct maintenance_run_opts *opts,
 	return 0;
 }
 
+static int maintenance_task_odb(struct maintenance_run_opts *opts,
+				struct gc_config *cfg,
+				struct strvec *repack_args)
+{
+	struct child_process repack_cmd = CHILD_PROCESS_INIT;
+	int ret;
+
+	if (the_repository->repository_format_precious_objects)
+		return 0;
+
+	repack_cmd.git_cmd = 1;
+	repack_cmd.odb_to_close = the_repository->objects;
+	strvec_pushv(&repack_cmd.args, repack_args->v);
+	if (run_command(&repack_cmd)) {
+		ret = error(FAILED_RUN, repack_args->v[0]);
+		goto out;
+	}
+
+	if (cfg->prune_expire) {
+		struct child_process prune_cmd = CHILD_PROCESS_INIT;
+
+		strvec_pushl(&prune_cmd.args, "prune", "--expire", NULL);
+		/* run `git prune` even if using cruft packs */
+		strvec_push(&prune_cmd.args, cfg->prune_expire);
+		if (opts->quiet)
+			strvec_push(&prune_cmd.args, "--no-progress");
+		if (repo_has_promisor_remote(the_repository))
+			strvec_push(&prune_cmd.args,
+				    "--exclude-promisor-objects");
+		prune_cmd.git_cmd = 1;
+
+		if (run_command(&prune_cmd)) {
+			ret = error(FAILED_RUN, prune_cmd.args.v[0]);
+			goto out;
+		}
+	}
+
+	if (opts->auto_flag && too_many_loose_objects(cfg->gc_auto_threshold))
+		warning(_("There are too many unreachable loose objects; "
+			"run 'git prune' to remove them."));
+
+	ret = 0;
+
+out:
+	return ret;
+}
+
 int cmd_gc(int argc,
 	   const char **argv,
 	   const char *prefix,
@@ -1018,32 +1065,8 @@ int cmd_gc(int argc,
 	if (maintenance_task_rerere_gc(&opts, &cfg))
 		die(FAILED_RUN, "rerere");
 
-	if (!the_repository->repository_format_precious_objects) {
-		struct child_process repack_cmd = CHILD_PROCESS_INIT;
-
-		repack_cmd.git_cmd = 1;
-		repack_cmd.odb_to_close = the_repository->objects;
-		strvec_pushv(&repack_cmd.args, repack_args.v);
-		if (run_command(&repack_cmd))
-			die(FAILED_RUN, repack_args.v[0]);
-
-		if (cfg.prune_expire) {
-			struct child_process prune_cmd = CHILD_PROCESS_INIT;
-
-			strvec_pushl(&prune_cmd.args, "prune", "--expire", NULL);
-			/* run `git prune` even if using cruft packs */
-			strvec_push(&prune_cmd.args, cfg.prune_expire);
-			if (opts.quiet)
-				strvec_push(&prune_cmd.args, "--no-progress");
-			if (repo_has_promisor_remote(the_repository))
-				strvec_push(&prune_cmd.args,
-					    "--exclude-promisor-objects");
-			prune_cmd.git_cmd = 1;
-
-			if (run_command(&prune_cmd))
-				die(FAILED_RUN, prune_cmd.args.v[0]);
-		}
-	}
+	if (maintenance_task_odb(&opts, &cfg, &repack_args))
+		die(NULL);
 
 	report_garbage = report_pack_garbage;
 	odb_reprepare(the_repository->objects);
@@ -1056,10 +1079,6 @@ int cmd_gc(int argc,
 		write_commit_graph_reachable(the_repository->objects->sources,
 					     !opts.quiet && !daemonized ? COMMIT_GRAPH_WRITE_PROGRESS : 0,
 					     NULL);
-
-	if (opts.auto_flag && too_many_loose_objects(cfg.gc_auto_threshold))
-		warning(_("There are too many unreachable loose objects; "
-			"run 'git prune' to remove them."));
 
 	if (!daemonized) {
 		char *path = repo_git_path(the_repository, "gc.log");
