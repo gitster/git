@@ -676,25 +676,84 @@ static void add_repack_incremental_option(struct strvec *args)
 	strvec_push(args, "--no-write-bitmap-index");
 }
 
-static int need_to_gc(struct repository *repo)
+static bool odb_optimize_required(struct object_database *odb,
+				  const struct odb_optimize_options *opts)
 {
-	int gc_auto_threshold = 6700;
-	int gc_auto_pack_limit = 50;
+	switch (opts->strategy) {
+	case ODB_OPTIMIZE_INCREMENTAL: {
+		int gc_auto_threshold = 6700;
+		int gc_auto_pack_limit = 50;
 
-	repo_config_get_int(repo, "gc.auto", &gc_auto_threshold);
-	repo_config_get_int(repo, "gc.autopacklimit", &gc_auto_pack_limit);
+		repo_config_get_int(odb->repo, "gc.auto", &gc_auto_threshold);
+		repo_config_get_int(odb->repo, "gc.autopacklimit", &gc_auto_pack_limit);
 
-	/*
-	 * Setting gc.auto to 0 or negative can disable the
-	 * automatic gc.
-	 */
-	if (gc_auto_threshold <= 0)
-		return 0;
-	if (!too_many_packs(gc_auto_pack_limit) &&
-	    !too_many_loose_objects(gc_auto_threshold))
-		return 0;
+		/*
+		 * Setting gc.auto to 0 or negative can disable the
+		 * automatic gc.
+		 */
+		if (gc_auto_threshold <= 0)
+			return false;
+		if (!too_many_packs(gc_auto_pack_limit) &&
+		    !too_many_loose_objects(gc_auto_threshold))
+			return false;
 
-	return 1;
+		return true;
+	}
+	case ODB_OPTIMIZE_GEOMETRIC: {
+		struct pack_geometry geometry = {
+			.split_factor = 2,
+		};
+		struct pack_objects_args po_args = {
+			.local = 1,
+		};
+		struct existing_packs existing_packs = EXISTING_PACKS_INIT;
+		struct string_list kept_packs = STRING_LIST_INIT_DUP;
+		int auto_value = 100;
+		bool ret;
+
+		repo_config_get_int(odb->repo, "maintenance.geometric-repack.auto",
+				    &auto_value);
+		if (!auto_value)
+			return false;
+		if (auto_value < 0)
+			return true;
+
+		repo_config_get_int(odb->repo, "maintenance.geometric-repack.splitFactor",
+				    &geometry.split_factor);
+
+		existing_packs.repo = odb->repo;
+		existing_packs_collect(&existing_packs, &kept_packs);
+		pack_geometry_init(&geometry, &existing_packs, &po_args);
+		pack_geometry_split(&geometry);
+
+		/*
+		 * When we'd merge at least two packs with one another we always
+		 * perform the repack.
+		 */
+		if (geometry.split) {
+			ret = true;
+			goto out;
+		}
+
+		/*
+		 * Otherwise, we estimate the number of loose objects to determine
+		 * whether we want to create a new packfile or not.
+		 */
+		if (too_many_loose_objects(auto_value)) {
+			ret = true;
+			goto out;
+		}
+
+		ret = false;
+
+	out:
+		existing_packs_release(&existing_packs);
+		pack_geometry_release(&geometry);
+		return ret;
+	}
+	default:
+		BUG("unknown maintenance strategy '%d'", opts->strategy);
+	}
 }
 
 /* return NULL on success, else hostname running the gc */
@@ -1076,13 +1135,19 @@ int cmd_gc(int argc,
 		die(_("failed to parse prune expiry value %s"), cfg.prune_expire);
 
 	if (opts.auto_flag) {
+		struct odb_optimize_options optimize_opts = {
+			.strategy = ODB_OPTIMIZE_INCREMENTAL,
+			OPTIMIZE_FIELDS_FROM_GC_CONFIG(&cfg, 0),
+		};
+
 		if (cfg.detach_auto && opts.detach < 0)
 			opts.detach = 1;
 
 		/*
 		 * Auto-gc should be least intrusive as possible.
 		 */
-		if (!need_to_gc(the_repository) || run_hooks(the_repository, "pre-auto-gc")) {
+		if (!odb_optimize_required(the_repository->objects, &optimize_opts) ||
+		    run_hooks(the_repository, "pre-auto-gc")) {
 			ret = 0;
 			goto out;
 		}
@@ -1379,9 +1444,13 @@ static int maintenance_task_gc_background(struct maintenance_run_opts *opts,
 	return run_command(&child);
 }
 
-static int gc_condition(struct gc_config *cfg UNUSED)
+static int gc_condition(struct gc_config *cfg)
 {
-	return need_to_gc(the_repository);
+	struct odb_optimize_options opts = {
+		.strategy = ODB_OPTIMIZE_INCREMENTAL,
+		OPTIMIZE_FIELDS_FROM_GC_CONFIG(cfg, 0),
+	};
+	return odb_optimize_required(the_repository->objects, &opts);
 }
 
 static int prune_packed(struct maintenance_run_opts *opts)
@@ -1681,58 +1750,13 @@ static int maintenance_task_geometric_repack(struct maintenance_run_opts *opts,
 	return odb_optimize(the_repository->objects, &odb_opts);
 }
 
-static int geometric_repack_auto_condition(struct gc_config *cfg UNUSED)
+static int geometric_repack_auto_condition(struct gc_config *cfg)
 {
-	struct pack_geometry geometry = {
-		.split_factor = 2,
+	struct odb_optimize_options opts = {
+		.strategy = ODB_OPTIMIZE_GEOMETRIC,
+		OPTIMIZE_FIELDS_FROM_GC_CONFIG(cfg, 0),
 	};
-	struct pack_objects_args po_args = {
-		.local = 1,
-	};
-	struct existing_packs existing_packs = EXISTING_PACKS_INIT;
-	struct string_list kept_packs = STRING_LIST_INIT_DUP;
-	int auto_value = 100;
-	int ret;
-
-	repo_config_get_int(the_repository, "maintenance.geometric-repack.auto",
-			    &auto_value);
-	if (!auto_value)
-		return 0;
-	if (auto_value < 0)
-		return 1;
-
-	repo_config_get_int(the_repository, "maintenance.geometric-repack.splitFactor",
-			    &geometry.split_factor);
-
-	existing_packs.repo = the_repository;
-	existing_packs_collect(&existing_packs, &kept_packs);
-	pack_geometry_init(&geometry, &existing_packs, &po_args);
-	pack_geometry_split(&geometry);
-
-	/*
-	 * When we'd merge at least two packs with one another we always
-	 * perform the repack.
-	 */
-	if (geometry.split) {
-		ret = 1;
-		goto out;
-	}
-
-	/*
-	 * Otherwise, we estimate the number of loose objects to determine
-	 * whether we want to create a new packfile or not.
-	 */
-	if (too_many_loose_objects(auto_value)) {
-		ret = 1;
-		goto out;
-	}
-
-	ret = 0;
-
-out:
-	existing_packs_release(&existing_packs);
-	pack_geometry_release(&geometry);
-	return ret;
+	return odb_optimize_required(the_repository->objects, &opts);
 }
 
 typedef int (*maintenance_task_fn)(struct maintenance_run_opts *opts,
