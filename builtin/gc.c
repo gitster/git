@@ -593,6 +593,11 @@ static int keep_one_pack(struct string_list_item *item, void *data)
 	return 0;
 }
 
+enum odb_optimize_strategy {
+	ODB_OPTIMIZE_INCREMENTAL,
+	ODB_OPTIMIZE_GEOMETRIC,
+};
+
 enum odb_optimize_flags {
 	/* Enable verbose logging and progress reporting. */
 	ODB_OPTIMIZE_VERBOSE = (1 << 0),
@@ -605,6 +610,7 @@ enum odb_optimize_flags {
 };
 
 struct odb_optimize_options {
+	enum odb_optimize_strategy strategy;
 	enum odb_optimize_flags flags;
 	const char *prune_expire;
 	const char *expire_to;
@@ -858,49 +864,87 @@ static int odb_optimize(struct object_database *odb,
 	 *
 	 *   - Otherwise we perform an incremental repack.
 	 */
-	if (!(opts->flags & ODB_OPTIMIZE_AUTO)) {
-		struct string_list keep_pack = STRING_LIST_INIT_NODUP;
-
-		if (opts->keep_largest_pack != -1) {
-			if (opts->keep_largest_pack)
-				find_base_packs(&keep_pack, 0);
-		} else if (big_pack_threshold) {
-			find_base_packs(&keep_pack, big_pack_threshold);
-		}
-
-		add_repack_all_option(opts, &keep_pack, &repack_cmd.args);
-		string_list_clear(&keep_pack, 0);
-	} else {
-		if (too_many_packs(gc_auto_pack_limit)) {
+	switch (opts->strategy) {
+	case ODB_OPTIMIZE_INCREMENTAL:
+		if (!(opts->flags & ODB_OPTIMIZE_AUTO)) {
 			struct string_list keep_pack = STRING_LIST_INIT_NODUP;
 
-			if (big_pack_threshold) {
-				find_base_packs(&keep_pack, big_pack_threshold);
-				if (keep_pack.nr >= gc_auto_pack_limit) {
-					string_list_clear(&keep_pack, 0);
+			if (opts->keep_largest_pack != -1) {
+				if (opts->keep_largest_pack)
 					find_base_packs(&keep_pack, 0);
-				}
-			} else {
-				struct packed_git *p = find_base_packs(&keep_pack, 0);
-				uint64_t mem_have, mem_want;
-
-				mem_have = total_ram();
-				mem_want = estimate_repack_memory(p);
-
-				/*
-				 * Only allow 1/2 of memory for pack-objects, leave
-				 * the rest for the OS and other processes in the
-				 * system.
-				 */
-				if (!mem_have || mem_want < mem_have / 2)
-					string_list_clear(&keep_pack, 0);
+			} else if (big_pack_threshold) {
+				find_base_packs(&keep_pack, big_pack_threshold);
 			}
 
 			add_repack_all_option(opts, &keep_pack, &repack_cmd.args);
 			string_list_clear(&keep_pack, 0);
 		} else {
-			add_repack_incremental_option(&repack_cmd.args);
+			if (too_many_packs(gc_auto_pack_limit)) {
+				struct string_list keep_pack = STRING_LIST_INIT_NODUP;
+
+				if (big_pack_threshold) {
+					find_base_packs(&keep_pack, big_pack_threshold);
+					if (keep_pack.nr >= gc_auto_pack_limit) {
+						string_list_clear(&keep_pack, 0);
+						find_base_packs(&keep_pack, 0);
+					}
+				} else {
+					struct packed_git *p = find_base_packs(&keep_pack, 0);
+					uint64_t mem_have, mem_want;
+
+					mem_have = total_ram();
+					mem_want = estimate_repack_memory(p);
+
+					/*
+					 * Only allow 1/2 of memory for pack-objects, leave
+					 * the rest for the OS and other processes in the
+					 * system.
+					 */
+					if (!mem_have || mem_want < mem_have / 2)
+						string_list_clear(&keep_pack, 0);
+				}
+
+				add_repack_all_option(opts, &keep_pack, &repack_cmd.args);
+				string_list_clear(&keep_pack, 0);
+			} else {
+				add_repack_incremental_option(&repack_cmd.args);
+			}
 		}
+
+		break;
+	case ODB_OPTIMIZE_GEOMETRIC: {
+		struct pack_geometry geometry = {
+			.split_factor = 2,
+		};
+		struct pack_objects_args po_args = {
+			.local = 1,
+		};
+		struct existing_packs existing_packs = EXISTING_PACKS_INIT;
+		struct string_list kept_packs = STRING_LIST_INIT_DUP;
+
+		repo_config_get_int(the_repository, "maintenance.geometric-repack.splitFactor",
+				    &geometry.split_factor);
+
+		existing_packs.repo = the_repository;
+		existing_packs_collect(&existing_packs, &kept_packs);
+		pack_geometry_init(&geometry, &existing_packs, &po_args);
+		pack_geometry_split(&geometry);
+
+		if (geometry.split < geometry.pack_nr) {
+			strvec_pushf(&repack_cmd.args, "--geometric=%d",
+				     geometry.split_factor);
+		} else {
+			add_repack_all_option(opts, NULL, &repack_cmd.args);
+		}
+		if (the_repository->settings.core_multi_pack_index)
+			strvec_push(&repack_cmd.args, "--write-midx");
+
+		existing_packs_release(&existing_packs);
+		pack_geometry_release(&geometry);
+		break;
+	}
+	default:
+		die("unknown maintenance strategy '%d'", opts->strategy);
 	}
 
 	if (run_command(&repack_cmd)) {
@@ -908,7 +952,8 @@ static int odb_optimize(struct object_database *odb,
 		goto out;
 	}
 
-	if (opts->prune_expire) {
+	/* Geometric repacking uses cruft packs, so we don't have to prune separately. */
+	if (opts->strategy != ODB_OPTIMIZE_GEOMETRIC && opts->prune_expire) {
 		struct child_process prune_cmd = CHILD_PROCESS_INIT;
 
 		strvec_pushl(&prune_cmd.args, "prune", "--expire", NULL);
@@ -943,6 +988,7 @@ static int maintenance_task_odb(struct maintenance_run_opts *opts,
 				int aggressive)
 {
 	struct odb_optimize_options odb_opts = {
+		.strategy = ODB_OPTIMIZE_INCREMENTAL,
 		.keep_largest_pack = keep_largest_pack,
 		OPTIMIZE_FIELDS_FROM_GC_CONFIG(cfg, aggressive),
 	};
@@ -1624,58 +1670,15 @@ static int maintenance_task_incremental_repack(struct maintenance_run_opts *opts
 static int maintenance_task_geometric_repack(struct maintenance_run_opts *opts,
 					     struct gc_config *cfg)
 {
-	struct pack_geometry geometry = {
-		.split_factor = 2,
+	struct odb_optimize_options odb_opts = {
+		.strategy = ODB_OPTIMIZE_GEOMETRIC,
+		OPTIMIZE_FIELDS_FROM_GC_CONFIG(cfg, 0),
 	};
-	struct pack_objects_args po_args = {
-		.local = 1,
-	};
-	struct existing_packs existing_packs = EXISTING_PACKS_INIT;
-	struct string_list kept_packs = STRING_LIST_INIT_DUP;
-	struct child_process child = CHILD_PROCESS_INIT;
-	int ret;
 
-	repo_config_get_int(the_repository, "maintenance.geometric-repack.splitFactor",
-			    &geometry.split_factor);
+	if (!opts->quiet)
+		odb_opts.flags |= ODB_OPTIMIZE_VERBOSE;
 
-	existing_packs.repo = the_repository;
-	existing_packs_collect(&existing_packs, &kept_packs);
-	pack_geometry_init(&geometry, &existing_packs, &po_args);
-	pack_geometry_split(&geometry);
-
-	child.git_cmd = 1;
-	child.odb_to_close = the_repository->objects;
-
-	strvec_pushl(&child.args, "repack", "-d", "-l", NULL);
-	if (geometry.split < geometry.pack_nr) {
-		strvec_pushf(&child.args, "--geometric=%d",
-			     geometry.split_factor);
-	} else {
-		struct odb_optimize_options odb_opts = {
-			OPTIMIZE_FIELDS_FROM_GC_CONFIG(cfg, 0),
-		};
-
-		if (!opts->quiet)
-			odb_opts.flags |= ODB_OPTIMIZE_VERBOSE;
-
-		add_repack_all_option(&odb_opts, NULL, &child.args);
-	}
-	if (opts->quiet)
-		strvec_push(&child.args, "--quiet");
-	if (the_repository->settings.core_multi_pack_index)
-		strvec_push(&child.args, "--write-midx");
-
-	if (run_command(&child)) {
-		ret = error(_("failed to perform geometric repack"));
-		goto out;
-	}
-
-	ret = 0;
-
-out:
-	existing_packs_release(&existing_packs);
-	pack_geometry_release(&geometry);
-	return ret;
+	return odb_optimize(the_repository->objects, &odb_opts);
 }
 
 static int geometric_repack_auto_condition(struct gc_config *cfg UNUSED)

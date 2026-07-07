@@ -556,8 +556,8 @@ run_and_verify_geometric_pack () {
 	rm -f "trace2.txt" &&
 	GIT_TRACE2_EVENT="$(pwd)/trace2.txt" \
 		git maintenance run --task=geometric-repack 2>/dev/null &&
-	test_subcommand git repack -d -l --geometric=2 \
-		--quiet --write-midx <trace2.txt &&
+	test_subcommand git repack -d -l -q --geometric=2 \
+		--write-midx <trace2.txt &&
 
 	# Verify that the number of packfiles matches our expectation.
 	ls -l .git/objects/pack/*.pack >packfiles &&
@@ -588,8 +588,8 @@ test_expect_success 'geometric repacking task' '
 		# The initial repack causes an all-into-one repack.
 		GIT_TRACE2_EVENT="$(pwd)/initial-repack.txt" \
 			git maintenance run --task=geometric-repack 2>/dev/null &&
-		test_subcommand git repack -d -l --cruft --cruft-expiration=2.weeks.ago \
-			--quiet --write-midx <initial-repack.txt &&
+		test_subcommand git repack -d -l -q --cruft --cruft-expiration=2.weeks.ago \
+			--write-midx <initial-repack.txt &&
 
 		# Repacking should now cause a no-op geometric repack because
 		# no packfiles need to be combined.
@@ -609,8 +609,8 @@ test_expect_success 'geometric repacking task' '
 		# an all-into-one-repack.
 		GIT_TRACE2_EVENT="$(pwd)/all-into-one-repack.txt" \
 			git maintenance run --task=geometric-repack 2>/dev/null &&
-		test_subcommand git repack -d -l --cruft --cruft-expiration=2.weeks.ago \
-			--quiet --write-midx <all-into-one-repack.txt &&
+		test_subcommand git repack -d -l -q --cruft --cruft-expiration=2.weeks.ago \
+			--write-midx <all-into-one-repack.txt &&
 
 		# The geometric repack soaks up unreachable objects.
 		echo blob-1 | git hash-object -w --stdin -t blob &&
@@ -644,8 +644,8 @@ test_expect_success 'geometric repacking task' '
 		run_and_verify_geometric_pack 3 &&
 		GIT_TRACE2_EVENT="$(pwd)/cruft-repack.txt" \
 			git maintenance run --task=geometric-repack 2>/dev/null &&
-		test_subcommand git repack -d -l --cruft --cruft-expiration=2.weeks.ago \
-			--quiet --write-midx <cruft-repack.txt &&
+		test_subcommand git repack -d -l -q --cruft --cruft-expiration=2.weeks.ago \
+			--write-midx <cruft-repack.txt &&
 		ls .git/objects/pack/*.pack >packs &&
 		test_line_count = 2 packs &&
 		ls .git/objects/pack/*.mtimes >cruft &&
@@ -736,7 +736,7 @@ test_expect_success 'geometric repacking honors configured split factor' '
 
 		test_geometric_repack_needed false splitFactor=2 &&
 		test_geometric_repack_needed true splitFactor=3 &&
-		test_subcommand git repack -d -l --geometric=3 --quiet --write-midx <trace2.txt
+		test_subcommand git repack -d -l -q --geometric=3 --write-midx <trace2.txt
 	)
 '
 
@@ -1167,7 +1167,7 @@ test_expect_success 'maintenance.strategy is respected' '
 		test_strategy geometric <<-\EOF &&
 		git pack-refs --all --prune
 		git reflog expire --all
-		git repack -d -l --geometric=2 --quiet --write-midx
+		git repack -d -l -q --geometric=2 --write-midx
 		git commit-graph write --split --reachable --no-progress
 		git worktree prune --expire 3.months.ago
 		git rerere gc
@@ -1176,7 +1176,7 @@ test_expect_success 'maintenance.strategy is respected' '
 		test_strategy geometric --schedule=weekly <<-\EOF
 		git pack-refs --all --prune
 		git reflog expire --all
-		git repack -d -l --geometric=2 --quiet --write-midx
+		git repack -d -l -q --geometric=2 --write-midx
 		git commit-graph write --split --reachable --no-progress
 		git worktree prune --expire 3.months.ago
 		git rerere gc
