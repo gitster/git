@@ -130,22 +130,11 @@ struct gc_config {
 	unsigned long max_cruft_size;
 	int aggressive_depth;
 	int aggressive_window;
-	int gc_auto_threshold;
-	int gc_auto_pack_limit;
 	int detach_auto;
 	char *gc_log_expire;
 	char *prune_expire;
 	char *prune_worktrees_expire;
-	char *repack_filter;
-	char *repack_filter_to;
 	char *repack_expire_to;
-	unsigned long big_pack_threshold;
-	unsigned long max_delta_cache_size;
-	/*
-	 * Remove this member from gc_config once repo_settings is passed
-	 * through the callchain.
-	 */
-	size_t delta_base_cache_limit;
 };
 
 #define GC_CONFIG_INIT { \
@@ -154,14 +143,10 @@ struct gc_config {
 	.cruft_packs = 1, \
 	.aggressive_depth = 50, \
 	.aggressive_window = 250, \
-	.gc_auto_threshold = 6700, \
-	.gc_auto_pack_limit = 50, \
 	.detach_auto = 1, \
 	.gc_log_expire = xstrdup("1.day.ago"), \
 	.prune_expire = xstrdup("2.weeks.ago"), \
 	.prune_worktrees_expire = xstrdup("3.months.ago"), \
-	.max_delta_cache_size = DEFAULT_DELTA_CACHE_SIZE, \
-	.delta_base_cache_limit = DEFAULT_DELTA_BASE_CACHE_LIMIT, \
 }
 
 static void gc_config_release(struct gc_config *cfg)
@@ -169,15 +154,12 @@ static void gc_config_release(struct gc_config *cfg)
 	free(cfg->gc_log_expire);
 	free(cfg->prune_expire);
 	free(cfg->prune_worktrees_expire);
-	free(cfg->repack_filter);
-	free(cfg->repack_filter_to);
 }
 
 static void gc_config(struct gc_config *cfg)
 {
 	const char *value;
 	char *owned = NULL;
-	unsigned long ulongval;
 
 	if (!repo_config_get_value(the_repository, "gc.packrefs", &value)) {
 		if (value && !strcmp(value, "notbare"))
@@ -192,8 +174,6 @@ static void gc_config(struct gc_config *cfg)
 
 	repo_config_get_int(the_repository, "gc.aggressivewindow", &cfg->aggressive_window);
 	repo_config_get_int(the_repository, "gc.aggressivedepth", &cfg->aggressive_depth);
-	repo_config_get_int(the_repository, "gc.auto", &cfg->gc_auto_threshold);
-	repo_config_get_int(the_repository, "gc.autopacklimit", &cfg->gc_auto_pack_limit);
 	repo_config_get_bool(the_repository, "gc.autodetach", &cfg->detach_auto);
 	repo_config_get_bool(the_repository, "gc.cruftpacks", &cfg->cruft_packs);
 	repo_config_get_ulong(the_repository, "gc.maxcruftsize", &cfg->max_cruft_size);
@@ -211,22 +191,6 @@ static void gc_config(struct gc_config *cfg)
 	if (!repo_config_get_expiry(the_repository, "gc.logexpiry", &owned)) {
 		free(cfg->gc_log_expire);
 		cfg->gc_log_expire = owned;
-	}
-
-	repo_config_get_ulong(the_repository, "gc.bigpackthreshold", &cfg->big_pack_threshold);
-	repo_config_get_ulong(the_repository, "pack.deltacachesize", &cfg->max_delta_cache_size);
-
-	if (!repo_config_get_ulong(the_repository, "core.deltabasecachelimit", &ulongval))
-		cfg->delta_base_cache_limit = ulongval;
-
-	if (!repo_config_get_string(the_repository, "gc.repackfilter", &owned)) {
-		free(cfg->repack_filter);
-		cfg->repack_filter = owned;
-	}
-
-	if (!repo_config_get_string(the_repository, "gc.repackfilterto", &owned)) {
-		free(cfg->repack_filter_to);
-		cfg->repack_filter_to = owned;
 	}
 
 	repo_config(the_repository, git_default_config, NULL);
@@ -504,12 +468,12 @@ static struct packed_git *find_base_packs(struct string_list *packs,
 	return base;
 }
 
-static int too_many_packs(struct gc_config *cfg)
+static int too_many_packs(int gc_auto_pack_limit)
 {
 	struct packed_git *p;
 	int cnt = 0;
 
-	if (cfg->gc_auto_pack_limit <= 0)
+	if (gc_auto_pack_limit <= 0)
 		return 0;
 
 	repo_for_each_pack(the_repository, p) {
@@ -523,7 +487,7 @@ static int too_many_packs(struct gc_config *cfg)
 		 */
 		cnt++;
 	}
-	return cfg->gc_auto_pack_limit < cnt;
+	return gc_auto_pack_limit < cnt;
 }
 
 static uint64_t total_ram(void)
@@ -571,9 +535,10 @@ static uint64_t total_ram(void)
 	return 0;
 }
 
-static uint64_t estimate_repack_memory(struct gc_config *cfg,
-				       struct packed_git *pack)
+static uint64_t estimate_repack_memory(struct packed_git *pack)
 {
+	unsigned long max_delta_cache_size = DEFAULT_DELTA_CACHE_SIZE;
+	unsigned long delta_base_cache_limit = DEFAULT_DELTA_BASE_CACHE_LIMIT;
 	unsigned long nr_objects;
 	size_t os_cache, heap;
 
@@ -583,6 +548,9 @@ static uint64_t estimate_repack_memory(struct gc_config *cfg,
 
 	if (!pack || !nr_objects)
 		return 0;
+
+	repo_config_get_ulong(the_repository, "pack.deltacachesize", &max_delta_cache_size);
+	repo_config_get_ulong(the_repository, "core.deltabasecachelimit", &delta_base_cache_limit);
 
 	/*
 	 * First we have to scan through at least one pack.
@@ -611,9 +579,9 @@ static uint64_t estimate_repack_memory(struct gc_config *cfg,
 	 * read_sha1_file() (either at delta calculation phase, or
 	 * writing phase) also fills up the delta base cache
 	 */
-	heap += cfg->delta_base_cache_limit;
+	heap += delta_base_cache_limit;
 	/* and of course pack-objects has its own delta cache */
-	heap += cfg->max_delta_cache_size;
+	heap += max_delta_cache_size;
 
 	return os_cache + heap;
 }
@@ -629,6 +597,12 @@ static void add_repack_all_option(struct gc_config *cfg,
 				  struct string_list *keep_pack,
 				  struct strvec *args)
 {
+	char *repack_filter = NULL;
+	char *repack_filter_to = NULL;
+
+	repo_config_get_string(the_repository, "gc.repackfilter", &repack_filter);
+	repo_config_get_string(the_repository, "gc.repackfilterto", &repack_filter_to);
+
 	if (cfg->prune_expire && !strcmp(cfg->prune_expire, "now")
 		&& !(cfg->cruft_packs && cfg->repack_expire_to))
 		strvec_push(args, "-a");
@@ -650,10 +624,13 @@ static void add_repack_all_option(struct gc_config *cfg,
 	if (keep_pack)
 		for_each_string_list(keep_pack, keep_one_pack, args);
 
-	if (cfg->repack_filter && *cfg->repack_filter)
-		strvec_pushf(args, "--filter=%s", cfg->repack_filter);
-	if (cfg->repack_filter_to && *cfg->repack_filter_to)
-		strvec_pushf(args, "--filter-to=%s", cfg->repack_filter_to);
+	if (repack_filter && *repack_filter)
+		strvec_pushf(args, "--filter=%s", repack_filter);
+	if (repack_filter_to && *repack_filter_to)
+		strvec_pushf(args, "--filter-to=%s", repack_filter_to);
+
+	free(repack_filter);
+	free(repack_filter_to);
 }
 
 static void add_repack_incremental_option(struct strvec *args)
@@ -661,16 +638,24 @@ static void add_repack_incremental_option(struct strvec *args)
 	strvec_push(args, "--no-write-bitmap-index");
 }
 
-static int need_to_gc(struct gc_config *cfg)
+static int need_to_gc(struct repository *repo)
 {
+	int gc_auto_threshold = 6700;
+	int gc_auto_pack_limit = 50;
+
+	repo_config_get_int(repo, "gc.auto", &gc_auto_threshold);
+	repo_config_get_int(repo, "gc.autopacklimit", &gc_auto_pack_limit);
+
 	/*
 	 * Setting gc.auto to 0 or negative can disable the
 	 * automatic gc.
 	 */
-	if (cfg->gc_auto_threshold <= 0)
+	if (gc_auto_threshold <= 0)
 		return 0;
-	if (!too_many_packs(cfg) && !too_many_loose_objects(cfg->gc_auto_threshold))
+	if (!too_many_packs(gc_auto_pack_limit) &&
+	    !too_many_loose_objects(gc_auto_threshold))
 		return 0;
+
 	return 1;
 }
 
@@ -807,7 +792,14 @@ static int maintenance_task_odb(struct maintenance_run_opts *opts,
 				int aggressive)
 {
 	struct child_process repack_cmd = CHILD_PROCESS_INIT;
+	unsigned long big_pack_threshold = 0;
+	int gc_auto_threshold = 6700;
+	int gc_auto_pack_limit = 50;
 	int ret;
+
+	repo_config_get_int(the_repository, "gc.auto", &gc_auto_threshold);
+	repo_config_get_int(the_repository, "gc.autopacklimit", &gc_auto_pack_limit);
+	repo_config_get_ulong(the_repository, "gc.bigpackthreshold", &big_pack_threshold);
 
 	if (the_repository->repository_format_precious_objects)
 		return 0;
@@ -843,19 +835,18 @@ static int maintenance_task_odb(struct maintenance_run_opts *opts,
 		if (keep_largest_pack != -1) {
 			if (keep_largest_pack)
 				find_base_packs(&keep_pack, 0);
-		} else if (cfg->big_pack_threshold) {
-			find_base_packs(&keep_pack, cfg->big_pack_threshold);
+		} else if (big_pack_threshold) {
+			find_base_packs(&keep_pack, big_pack_threshold);
 		}
 
 		add_repack_all_option(cfg, &keep_pack, &repack_cmd.args);
 		string_list_clear(&keep_pack, 0);
-	} else if (too_many_packs(cfg)) {
+	} else if (too_many_packs(gc_auto_pack_limit)) {
 		struct string_list keep_pack = STRING_LIST_INIT_NODUP;
 
-		if (cfg->big_pack_threshold) {
-			find_base_packs(&keep_pack, cfg->big_pack_threshold);
-			if (keep_pack.nr >= cfg->gc_auto_pack_limit) {
-				cfg->big_pack_threshold = 0;
+		if (big_pack_threshold) {
+			find_base_packs(&keep_pack, big_pack_threshold);
+			if (keep_pack.nr >= gc_auto_pack_limit) {
 				string_list_clear(&keep_pack, 0);
 				find_base_packs(&keep_pack, 0);
 			}
@@ -864,7 +855,7 @@ static int maintenance_task_odb(struct maintenance_run_opts *opts,
 			uint64_t mem_have, mem_want;
 
 			mem_have = total_ram();
-			mem_want = estimate_repack_memory(cfg, p);
+			mem_want = estimate_repack_memory(p);
 
 			/*
 			 * Only allow 1/2 of memory for pack-objects, leave
@@ -905,7 +896,7 @@ static int maintenance_task_odb(struct maintenance_run_opts *opts,
 		}
 	}
 
-	if (opts->auto_flag && too_many_loose_objects(cfg->gc_auto_threshold))
+	if (opts->auto_flag && too_many_loose_objects(gc_auto_threshold))
 		warning(_("There are too many unreachable loose objects; "
 			"run 'git prune' to remove them."));
 
@@ -994,7 +985,7 @@ int cmd_gc(int argc,
 		/*
 		 * Auto-gc should be least intrusive as possible.
 		 */
-		if (!need_to_gc(&cfg) || run_hooks(the_repository, "pre-auto-gc")) {
+		if (!need_to_gc(the_repository) || run_hooks(the_repository, "pre-auto-gc")) {
 			ret = 0;
 			goto out;
 		}
@@ -1291,9 +1282,9 @@ static int maintenance_task_gc_background(struct maintenance_run_opts *opts,
 	return run_command(&child);
 }
 
-static int gc_condition(struct gc_config *cfg)
+static int gc_condition(struct gc_config *cfg UNUSED)
 {
-	return need_to_gc(cfg);
+	return need_to_gc(the_repository);
 }
 
 static int prune_packed(struct maintenance_run_opts *opts)
