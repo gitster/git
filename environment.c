@@ -726,3 +726,22 @@ void repo_config_values_init(struct repo_config_values *cfg)
 	cfg->sparse_expect_files_outside_of_patterns = 0;
 	cfg->warn_on_object_refname_ambiguity = 1;
 }
+
+void repo_config_values_clear(struct repository *repo)
+{
+	struct repo_config_values *cfg;
+
+	/*
+	 * NEEDSWORK: Submodules are currently not supported by
+	 * repo_config_values(), which explicitly BUG()s out if
+	 * repo != the_repository. Since repo_clear() cleans up all
+	 * repository instances, we must bypass them here to prevent
+	 * crashing.
+	 */
+	if (repo != the_repository)
+		return;
+
+	cfg = repo_config_values(repo);
+
+	FREE_AND_NULL(cfg->attributes_file);
+}
