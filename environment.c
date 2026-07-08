@@ -723,6 +723,7 @@ void repo_config_values_init(struct repo_config_values *cfg)
 	cfg->attributes_file = NULL;
 	cfg->excludes_file = NULL;
 	cfg->editor_program = NULL;
+	cfg->pager_program = NULL;
 	cfg->apply_sparse_checkout = 0;
 	cfg->branch_track = BRANCH_TRACK_REMOTE;
 	cfg->trust_ctime = 1;
@@ -754,4 +755,5 @@ void repo_config_values_clear(struct repository *repo)
 	FREE_AND_NULL(cfg->attributes_file);
 	FREE_AND_NULL(cfg->excludes_file);
 	FREE_AND_NULL(cfg->editor_program);
+	FREE_AND_NULL(cfg->pager_program);
 }
