@@ -87,6 +87,21 @@ extern const char * const local_repo_env[];
 struct strvec;
 
 struct repository;
+
+/*
+ * NEEDSWORK: It would be better if these definitions could be moved to
+ * other more specific files, but care is needed to avoid circular
+ * inclusion issues.
+ */
+enum push_default_type {
+	PUSH_DEFAULT_NOTHING = 0,
+	PUSH_DEFAULT_MATCHING,
+	PUSH_DEFAULT_SIMPLE,
+	PUSH_DEFAULT_UPSTREAM,
+	PUSH_DEFAULT_CURRENT,
+	PUSH_DEFAULT_UNSPECIFIED
+};
+
 struct repo_config_values {
 	/* section "core" config values */
 	char *attributes_file;
@@ -96,6 +111,7 @@ struct repo_config_values {
 	char *askpass_program;
 	char *apply_default_whitespace;
 	char *apply_default_ignorewhitespace;
+	enum push_default_type push_default;
 	int apply_sparse_checkout;
 	int trust_ctime;
 	int check_stat;
@@ -196,16 +212,6 @@ enum rebase_setup_type {
 	AUTOREBASE_ALWAYS
 };
 extern enum rebase_setup_type autorebase;
-
-enum push_default_type {
-	PUSH_DEFAULT_NOTHING = 0,
-	PUSH_DEFAULT_MATCHING,
-	PUSH_DEFAULT_SIMPLE,
-	PUSH_DEFAULT_UPSTREAM,
-	PUSH_DEFAULT_CURRENT,
-	PUSH_DEFAULT_UNSPECIFIED
-};
-extern enum push_default_type push_default;
 
 enum object_creation_mode {
 	OBJECT_CREATION_USES_HARDLINKS = 0,

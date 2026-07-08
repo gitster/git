@@ -88,7 +88,7 @@ static void refspec_append_mapped(struct refspec *refspec, const char *ref,
 		}
 	}
 
-	if (push_default == PUSH_DEFAULT_UPSTREAM &&
+	if (repo_config_values(the_repository)->push_default == PUSH_DEFAULT_UPSTREAM &&
 	    skip_prefix(matched->name, "refs/heads/", &branch_name)) {
 		struct branch *branch = branch_get(branch_name);
 		if (branch->merge_nr == 1 && branch->merge[0]->src) {
@@ -160,7 +160,7 @@ static NORETURN void die_push_simple(struct branch *branch,
 	 * Don't show advice for people who explicitly set
 	 * push.default.
 	 */
-	if (push_default == PUSH_DEFAULT_UNSPECIFIED)
+	if (cfg->push_default == PUSH_DEFAULT_UNSPECIFIED)
 		advice_pushdefault_maybe = _("\n"
 				 "To choose either option permanently, "
 				 "see push.default in 'git help config'.\n");
@@ -232,7 +232,7 @@ static void setup_default_push_refspecs(int *flags, struct remote *remote)
 	const char *dst;
 	int same_remote;
 
-	switch (push_default) {
+	switch (repo_config_values(the_repository)->push_default) {
 	case PUSH_DEFAULT_MATCHING:
 		refspec_append(&rs, ":");
 		return;
@@ -252,7 +252,7 @@ static void setup_default_push_refspecs(int *flags, struct remote *remote)
 	dst = branch->refname;
 	same_remote = !strcmp(remote->name, remote_for_branch(branch, NULL));
 
-	switch (push_default) {
+	switch (repo_config_values(the_repository)->push_default) {
 	default:
 	case PUSH_DEFAULT_UNSPECIFIED:
 	case PUSH_DEFAULT_SIMPLE:

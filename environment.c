@@ -59,7 +59,6 @@ enum eol core_eol = EOL_UNSET;
 int global_conv_flags_eol = CONV_EOL_RNDTRP_WARN;
 char *check_roundtrip_encoding;
 enum rebase_setup_type autorebase = AUTOREBASE_NEVER;
-enum push_default_type push_default = PUSH_DEFAULT_UNSPECIFIED;
 #ifndef OBJECT_CREATION_MODE
 #define OBJECT_CREATION_MODE OBJECT_CREATION_USES_HARDLINKS
 #endif
@@ -619,21 +618,23 @@ static int git_default_branch_config(const char *var, const char *value)
 
 static int git_default_push_config(const char *var, const char *value)
 {
+	struct repo_config_values *cfg = repo_config_values(the_repository);
+
 	if (!strcmp(var, "push.default")) {
 		if (!value)
 			return config_error_nonbool(var);
 		else if (!strcmp(value, "nothing"))
-			push_default = PUSH_DEFAULT_NOTHING;
+			cfg->push_default = PUSH_DEFAULT_NOTHING;
 		else if (!strcmp(value, "matching"))
-			push_default = PUSH_DEFAULT_MATCHING;
+			cfg->push_default = PUSH_DEFAULT_MATCHING;
 		else if (!strcmp(value, "simple"))
-			push_default = PUSH_DEFAULT_SIMPLE;
+			cfg->push_default = PUSH_DEFAULT_SIMPLE;
 		else if (!strcmp(value, "upstream"))
-			push_default = PUSH_DEFAULT_UPSTREAM;
+			cfg->push_default = PUSH_DEFAULT_UPSTREAM;
 		else if (!strcmp(value, "tracking")) /* deprecated */
-			push_default = PUSH_DEFAULT_UPSTREAM;
+			cfg->push_default = PUSH_DEFAULT_UPSTREAM;
 		else if (!strcmp(value, "current"))
-			push_default = PUSH_DEFAULT_CURRENT;
+			cfg->push_default = PUSH_DEFAULT_CURRENT;
 		else {
 			error(_("malformed value for %s: %s"), var, value);
 			return error(_("must be one of nothing, matching, simple, "
@@ -725,6 +726,7 @@ void repo_config_values_init(struct repo_config_values *cfg)
 	cfg->askpass_program = NULL;
 	cfg->apply_default_whitespace = NULL;
 	cfg->apply_default_ignorewhitespace = NULL;
+	cfg->push_default = PUSH_DEFAULT_UNSPECIFIED;
 	cfg->apply_sparse_checkout = 0;
 	cfg->branch_track = BRANCH_TRACK_REMOTE;
 	cfg->trust_ctime = 1;
