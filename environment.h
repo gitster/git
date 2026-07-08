@@ -109,6 +109,11 @@ enum rebase_setup_type {
 	AUTOREBASE_ALWAYS
 };
 
+enum object_creation_mode {
+	OBJECT_CREATION_USES_HARDLINKS = 0,
+	OBJECT_CREATION_USES_RENAMES = 1
+};
+
 struct repo_config_values {
 	/* section "core" config values */
 	char *attributes_file;
@@ -120,6 +125,7 @@ struct repo_config_values {
 	char *apply_default_ignorewhitespace;
 	enum push_default_type push_default;
 	enum rebase_setup_type autorebase;
+	enum object_creation_mode object_creation_mode;
 	int apply_sparse_checkout;
 	int trust_ctime;
 	int check_stat;
@@ -212,12 +218,6 @@ extern unsigned long pack_size_limit_cfg;
 
 extern int protect_hfs;
 extern int protect_ntfs;
-
-enum object_creation_mode {
-	OBJECT_CREATION_USES_HARDLINKS = 0,
-	OBJECT_CREATION_USES_RENAMES = 1
-};
-extern enum object_creation_mode object_creation_mode;
 
 extern int grafts_keep_true_parents;
 

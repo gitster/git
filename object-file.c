@@ -415,7 +415,7 @@ int finalize_object_file_flags(struct repository *repo,
 retry:
 	ret = 0;
 
-	if (object_creation_mode == OBJECT_CREATION_USES_RENAMES)
+	if (repo_config_values(repo)->object_creation_mode == OBJECT_CREATION_USES_RENAMES)
 		goto try_rename;
 	else if (link(tmpfile, filename))
 		ret = errno;
