@@ -94,6 +94,8 @@ struct repo_config_values {
 	char *editor_program;
 	char *pager_program;
 	char *askpass_program;
+	char *apply_default_whitespace;
+	char *apply_default_ignorewhitespace;
 	int apply_sparse_checkout;
 	int trust_ctime;
 	int check_stat;
@@ -182,8 +184,6 @@ extern int has_symlinks;
 extern int minimum_abbrev, default_abbrev;
 extern int ignore_case;
 extern int assume_unchanged;
-extern char *apply_default_whitespace;
-extern char *apply_default_ignorewhitespace;
 extern unsigned long pack_size_limit_cfg;
 
 extern int protect_hfs;

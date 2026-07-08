@@ -49,8 +49,6 @@ int assume_unchanged;
 int is_bare_repository_cfg = -1; /* unspecified */
 char *git_commit_encoding;
 char *git_log_output_encoding;
-char *apply_default_whitespace;
-char *apply_default_ignorewhitespace;
 int fsync_object_files = -1;
 int use_fsync = -1;
 enum fsync_method fsync_method = FSYNC_METHOD_DEFAULT;
@@ -725,6 +723,8 @@ void repo_config_values_init(struct repo_config_values *cfg)
 	cfg->editor_program = NULL;
 	cfg->pager_program = NULL;
 	cfg->askpass_program = NULL;
+	cfg->apply_default_whitespace = NULL;
+	cfg->apply_default_ignorewhitespace = NULL;
 	cfg->apply_sparse_checkout = 0;
 	cfg->branch_track = BRANCH_TRACK_REMOTE;
 	cfg->trust_ctime = 1;
@@ -758,4 +758,6 @@ void repo_config_values_clear(struct repository *repo)
 	FREE_AND_NULL(cfg->editor_program);
 	FREE_AND_NULL(cfg->pager_program);
 	FREE_AND_NULL(cfg->askpass_program);
+	FREE_AND_NULL(cfg->apply_default_whitespace);
+	FREE_AND_NULL(cfg->apply_default_ignorewhitespace);
 }
