@@ -1676,10 +1676,6 @@ static void odb_transaction_files_commit(struct odb_transaction *base)
 struct odb_transaction *odb_transaction_files_begin(struct odb_source *source)
 {
 	struct odb_transaction_files *transaction;
-	struct object_database *odb = source->odb;
-
-	if (odb->transaction)
-		return NULL;
 
 	transaction = xcalloc(1, sizeof(*transaction));
 	transaction->base.source = source;
