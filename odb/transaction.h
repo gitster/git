@@ -1,6 +1,7 @@
 #ifndef ODB_TRANSACTION_H
 #define ODB_TRANSACTION_H
 
+#include "gettext.h"
 #include "odb.h"
 #include "odb/source.h"
 
@@ -36,11 +37,21 @@ struct odb_transaction {
 };
 
 /*
- * Starts an ODB transaction. Subsequent objects are written to the transaction
- * and not committed until odb_transaction_commit() is invoked on the
- * transaction. If the ODB already has a pending transaction, NULL is returned.
+ * Starts an ODB transaction and returns it via `out`. Subsequent objects are
+ * written to the transaction and not committed until odb_transaction_commit()
+ * is invoked on the transaction. Returns 0 on success and a negative value on
+ * error. Note that it is considered an error to start a new transaction if the
+ * ODB already has an inflight transaction pending.
  */
-struct odb_transaction *odb_transaction_begin(struct object_database *odb);
+int odb_transaction_begin(struct object_database *odb,
+			  struct odb_transaction **out);
+
+static inline void odb_transaction_begin_or_die(struct object_database *odb,
+						struct odb_transaction **out)
+{
+	if (odb_transaction_begin(odb, out))
+		die(_("failed to start ODB transaction"));
+}
 
 /*
  * Commits an ODB transaction making the written objects visible. If the
