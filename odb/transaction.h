@@ -34,6 +34,14 @@ struct odb_transaction {
 	int (*write_object_stream)(struct odb_transaction *transaction,
 				   struct odb_write_stream *stream, size_t len,
 				   struct object_id *oid);
+
+	/*
+	 * This callback is expected to populate the provided strvec with the
+	 * environment variables that a child process should inherit so that its
+	 * object writes participate in the transaction. Returns 0 on success, a
+	 * negative error code otherwise.
+	 */
+	int (*env)(struct odb_transaction *transaction, struct strvec *env);
 };
 
 /*
@@ -68,5 +76,14 @@ int odb_transaction_commit(struct odb_transaction *transaction);
 int odb_transaction_write_object_stream(struct odb_transaction *transaction,
 					struct odb_write_stream *stream,
 					size_t len, struct object_id *oid);
+
+/*
+ * Populates the provided strvec with the environment variables that a child
+ * process should inherit so that its object writes participate in the
+ * transaction, suitable for using via child_process.env. Returns 0 on success,
+ * a negative error code otherwise. Note that, if the specified transaction is
+ * NULL, the function is a no-op and no error is returned.
+ */
+int odb_transaction_env(struct odb_transaction *transaction, struct strvec *env);
 
 #endif

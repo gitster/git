@@ -42,3 +42,11 @@ int odb_transaction_write_object_stream(struct odb_transaction *transaction,
 {
 	return transaction->write_object_stream(transaction, stream, len, oid);
 }
+
+int odb_transaction_env(struct odb_transaction *transaction, struct strvec *env)
+{
+	if (!transaction)
+		return 0;
+
+	return transaction->env(transaction, env);
+}
