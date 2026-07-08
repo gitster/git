@@ -90,6 +90,7 @@ struct repository;
 struct repo_config_values {
 	/* section "core" config values */
 	char *attributes_file;
+	char *excludes_file;
 	int apply_sparse_checkout;
 	int trust_ctime;
 	int check_stat;
@@ -132,6 +133,8 @@ int git_default_config(const char *, const char *,
 		       const struct config_context *, void *);
 int git_default_core_config(const char *var, const char *value,
 			    const struct config_context *ctx, void *cb);
+
+const char *repo_excludes_file(struct repository *repo);
 
 void repo_config_values_init(struct repo_config_values *cfg);
 
@@ -217,7 +220,6 @@ extern char *git_log_output_encoding;
 
 extern char *editor_program;
 extern char *askpass_program;
-extern char *excludes_file;
 
 /*
  * The character that begins a commented line in user-editable file
