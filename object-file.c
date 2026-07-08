@@ -543,41 +543,6 @@ static void odb_transaction_files_fsync(struct odb_transaction *base,
 	}
 }
 
-/*
- * Cleanup after batch-mode fsync_object_files.
- */
-static void flush_loose_object_transaction(struct odb_transaction_files *transaction)
-{
-	struct strbuf temp_path = STRBUF_INIT;
-	struct tempfile *temp;
-
-	if (!transaction->objdir)
-		return;
-
-	/*
-	 * Issue a full hardware flush against a temporary file to ensure
-	 * that all objects are durable before any renames occur. The code in
-	 * odb_transaction_files_fsync has already issued a writeout
-	 * request, but it has not flushed any writeback cache in the storage
-	 * hardware or any filesystem logs. This fsync call acts as a barrier
-	 * to ensure that the data in each new object file is durable before
-	 * the final name is visible.
-	 */
-	strbuf_addf(&temp_path, "%s/bulk_fsync_XXXXXX",
-		    repo_get_object_directory(transaction->base.source->odb->repo));
-	temp = xmks_tempfile(temp_path.buf);
-	fsync_or_die(get_tempfile_fd(temp), get_tempfile_path(temp));
-	delete_tempfile(&temp);
-	strbuf_release(&temp_path);
-
-	/*
-	 * Make the object files visible in the primary ODB after their data is
-	 * fully durable.
-	 */
-	tmp_objdir_migrate(transaction->objdir);
-	transaction->objdir = NULL;
-}
-
 /* Finalize a file on disk, and close it. */
 static void close_loose_object(struct odb_source_loose *loose,
 			       int fd, const char *filename)
@@ -1677,7 +1642,34 @@ static void odb_transaction_files_commit(struct odb_transaction *base)
 	struct odb_transaction_files *transaction =
 		container_of(base, struct odb_transaction_files, base);
 
-	flush_loose_object_transaction(transaction);
+	if (transaction->objdir) {
+		struct strbuf temp_path = STRBUF_INIT;
+		struct tempfile *temp;
+
+		/*
+		 * Issue a full hardware flush against a temporary file to ensure
+		 * that all objects are durable before any renames occur. The code in
+		 * odb_transaction_files_fsync has already issued a writeout
+		 * request, but it has not flushed any writeback cache in the storage
+		 * hardware or any filesystem logs. This fsync call acts as a barrier
+		 * to ensure that the data in each new object file is durable before
+		 * the final name is visible.
+		 */
+		strbuf_addf(&temp_path, "%s/bulk_fsync_XXXXXX",
+			    repo_get_object_directory(transaction->base.source->odb->repo));
+		temp = xmks_tempfile(temp_path.buf);
+		fsync_or_die(get_tempfile_fd(temp), get_tempfile_path(temp));
+		delete_tempfile(&temp);
+		strbuf_release(&temp_path);
+
+		/*
+		 * Make the object files visible in the primary ODB after their data is
+		 * fully durable.
+		 */
+		tmp_objdir_migrate(transaction->objdir);
+		transaction->objdir = NULL;
+	}
+
 	flush_packfile_transaction(transaction);
 }
 
