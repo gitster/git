@@ -37,6 +37,17 @@ void clear_prio_queue(struct prio_queue *queue)
 	queue->get_pending = 0;
 }
 
+static void sift_up(struct prio_queue *queue, size_t ix)
+{
+	while (ix) {
+		size_t parent = (ix - 1) / 2;
+		if (compare(queue, parent, ix) <= 0)
+			break;
+		swap(queue, parent, ix);
+		ix = parent;
+	}
+}
+
 static void sift_down_root(struct prio_queue *queue)
 {
 	size_t ix, child;
@@ -66,8 +77,6 @@ static inline void flush_get(struct prio_queue *queue)
 
 void prio_queue_put(struct prio_queue *queue, void *thing)
 {
-	size_t ix, parent;
-
 	if (queue->get_pending) {
 		queue->get_pending = 0;
 		queue->array[0].ctr = queue->insertion_ctr++;
@@ -85,13 +94,7 @@ void prio_queue_put(struct prio_queue *queue, void *thing)
 		return; /* LIFO */
 
 	/* Bubble up the new one */
-	for (ix = queue->nr_ - 1; ix; ix = parent) {
-		parent = (ix - 1) / 2;
-		if (compare(queue, parent, ix) <= 0)
-			break;
-
-		swap(queue, parent, ix);
-	}
+	sift_up(queue, queue->nr_ - 1);
 }
 
 void *prio_queue_get(struct prio_queue *queue)
