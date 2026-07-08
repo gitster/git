@@ -16,8 +16,11 @@ struct odb_transaction {
 	/* The ODB source the transaction is opened against. */
 	struct odb_source *source;
 
-	/* The ODB source specific callback invoked to commit a transaction. */
-	void (*commit)(struct odb_transaction *transaction);
+	/*
+	 * The ODB source specific callback invoked to commit a transaction.
+	 * Returns 0 on success, a negative error code otherwise.
+	 */
+	int (*commit)(struct odb_transaction *transaction);
 
 	/*
 	 * This callback is expected to write the given object stream into

@@ -499,7 +499,7 @@ struct odb_transaction_files {
 	struct transaction_packfile packfile;
 };
 
-static void odb_transaction_files_prepare(struct odb_transaction *base)
+static int odb_transaction_files_prepare(struct odb_transaction *base)
 {
 	struct odb_transaction_files *transaction =
 		container_of_or_null(base, struct odb_transaction_files, base);
@@ -511,11 +511,15 @@ static void odb_transaction_files_prepare(struct odb_transaction *base)
 	 * added at the time they call odb_transaction_files_begin.
 	 */
 	if (!transaction || transaction->objdir)
-		return;
+		return 0;
 
 	transaction->objdir = tmp_objdir_create(base->source->odb->repo, "bulk-fsync");
-	if (transaction->objdir)
-		tmp_objdir_replace_primary_odb(transaction->objdir, 0);
+	if (!transaction->objdir)
+		return error(_("unable to create temporary object directory"));
+
+	tmp_objdir_replace_primary_odb(transaction->objdir, 0);
+
+	return 0;
 }
 
 static void odb_transaction_files_fsync(struct odb_transaction *base,
@@ -1637,7 +1641,7 @@ out:
 	return ret;
 }
 
-static void odb_transaction_files_commit(struct odb_transaction *base)
+static int odb_transaction_files_commit(struct odb_transaction *base)
 {
 	struct odb_transaction_files *transaction =
 		container_of(base, struct odb_transaction_files, base);
@@ -1666,14 +1670,19 @@ static void odb_transaction_files_commit(struct odb_transaction *base)
 		 * Make the object files visible in the primary ODB after their data is
 		 * fully durable.
 		 */
-		tmp_objdir_migrate(transaction->objdir);
+		if (tmp_objdir_migrate(transaction->objdir))
+			return error(_("unable to migrate temporary objects"));
+
 		transaction->objdir = NULL;
 	}
 
 	flush_packfile_transaction(transaction);
+
+	return 0;
 }
 
-struct odb_transaction *odb_transaction_files_begin(struct odb_source *source)
+int odb_transaction_files_begin(struct odb_source *source,
+				struct odb_transaction **out)
 {
 	struct odb_transaction_files *transaction;
 
@@ -1681,6 +1690,7 @@ struct odb_transaction *odb_transaction_files_begin(struct odb_source *source)
 	transaction->base.source = source;
 	transaction->base.commit = odb_transaction_files_commit;
 	transaction->base.write_object_stream = odb_transaction_files_write_object_stream;
+	*out = &transaction->base;
 
-	return &transaction->base;
+	return 0;
 }

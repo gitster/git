@@ -196,6 +196,7 @@ struct odb_transaction;
  * multiple objects. odb_transaction_files_commit must be called
  * to make new objects visible.
  */
-struct odb_transaction *odb_transaction_files_begin(struct odb_source *source);
+int odb_transaction_files_begin(struct odb_source *source,
+				struct odb_transaction **out);
 
 #endif /* OBJECT_FILE_H */
