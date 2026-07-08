@@ -518,11 +518,16 @@ static void odb_transaction_files_prepare(struct odb_transaction *base)
 		tmp_objdir_replace_primary_odb(transaction->objdir, 0);
 }
 
-static void fsync_loose_object_transaction(struct odb_transaction *base,
-					   int fd, const char *filename)
+static void odb_transaction_files_fsync(struct odb_transaction *base,
+					int fd, const char *filename)
 {
 	struct odb_transaction_files *transaction =
 		container_of_or_null(base, struct odb_transaction_files, base);
+
+	if (!transaction || !transaction->objdir) {
+		fsync_or_die(fd, filename);
+		return;
+	}
 
 	/*
 	 * If we have an active ODB transaction, we issue a call that
@@ -531,8 +536,7 @@ static void fsync_loose_object_transaction(struct odb_transaction *base,
 	 * before renaming the objects to their final names as part of
 	 * flush_batch_fsync.
 	 */
-	if (!transaction || !transaction->objdir ||
-	    git_fsync(fd, FSYNC_WRITEOUT_ONLY) < 0) {
+	if (git_fsync(fd, FSYNC_WRITEOUT_ONLY) < 0) {
 		if (errno == ENOSYS)
 			warning(_("core.fsyncMethod = batch is unsupported on this platform"));
 		fsync_or_die(fd, filename);
@@ -553,7 +557,7 @@ static void flush_loose_object_transaction(struct odb_transaction_files *transac
 	/*
 	 * Issue a full hardware flush against a temporary file to ensure
 	 * that all objects are durable before any renames occur. The code in
-	 * fsync_loose_object_transaction has already issued a writeout
+	 * odb_transaction_files_fsync has already issued a writeout
 	 * request, but it has not flushed any writeback cache in the storage
 	 * hardware or any filesystem logs. This fsync call acts as a barrier
 	 * to ensure that the data in each new object file is durable before
@@ -582,7 +586,7 @@ static void close_loose_object(struct odb_source_loose *loose,
 		goto out;
 
 	if (batch_fsync_enabled(FSYNC_COMPONENT_LOOSE_OBJECT))
-		fsync_loose_object_transaction(loose->base.odb->transaction, fd, filename);
+		odb_transaction_files_fsync(loose->base.odb->transaction, fd, filename);
 	else if (fsync_object_files > 0)
 		fsync_or_die(fd, filename);
 	else
