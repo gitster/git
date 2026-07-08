@@ -4044,7 +4044,7 @@ int add_files_to_cache(struct repository *repo, const char *prefix,
 	 * may not have their own transaction active.
 	 */
 	if (!inflight)
-		odb_transaction_begin_or_die(repo->objects, &transaction);
+		odb_transaction_begin_or_die(repo->objects, &transaction, 0);
 	run_diff_files(&rev, DIFF_RACY_IS_MODIFIED);
 	if (!inflight)
 		odb_transaction_commit(transaction);

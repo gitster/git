@@ -3,7 +3,6 @@
 
 #include "gettext.h"
 #include "odb.h"
-#include "odb/source.h"
 
 /*
  * A transaction may be started for an object database prior to writing new
@@ -44,6 +43,12 @@ struct odb_transaction {
 	int (*env)(struct odb_transaction *transaction, struct strvec *env);
 };
 
+/* Flags used to configure an ODB transaction. */
+enum odb_transaction_flags {
+	/* Configures the transaction for use with git-receive-pack(1). */
+	ODB_TRANSACTION_RECEIVE = (1 << 0),
+};
+
 /*
  * Starts an ODB transaction and returns it via `out`. Subsequent objects are
  * written to the transaction and not committed until odb_transaction_commit()
@@ -52,12 +57,14 @@ struct odb_transaction {
  * ODB already has an inflight transaction pending.
  */
 int odb_transaction_begin(struct object_database *odb,
-			  struct odb_transaction **out);
+			  struct odb_transaction **out,
+			  enum odb_transaction_flags flags);
 
 static inline void odb_transaction_begin_or_die(struct object_database *odb,
-						struct odb_transaction **out)
+						struct odb_transaction **out,
+						enum odb_transaction_flags flags)
 {
-	if (odb_transaction_begin(odb, out))
+	if (odb_transaction_begin(odb, out, flags))
 		die(_("failed to start ODB transaction"));
 }
 
