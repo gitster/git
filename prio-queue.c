@@ -66,13 +66,31 @@ static void sift_down_root(struct prio_queue *queue)
 	}
 }
 
+/* Cascade vacancy toward a leaf, promoting the smaller child at each level */
+static size_t cascade_down(struct prio_queue *queue)
+{
+	size_t ix, child;
+
+	for (ix = 0; (child = ix * 2 + 1) < queue->nr_; ix = child) {
+		if (child + 1 < queue->nr_ &&
+		    compare(queue, child, child + 1) >= 0)
+			child++;
+		queue->array[ix] = queue->array[child];
+	}
+	return ix;
+}
+
 static inline void flush_get(struct prio_queue *queue)
 {
+	size_t ix;
+
 	if (!queue->get_pending)
 		return;
 	queue->get_pending = 0;
-	queue->array[0] = queue->array[--queue->nr_];
-	sift_down_root(queue);
+	--queue->nr_;
+	ix = cascade_down(queue);
+	queue->array[ix] = queue->array[queue->nr_];
+	sift_up(queue, ix);
 }
 
 void prio_queue_put(struct prio_queue *queue, void *thing)
