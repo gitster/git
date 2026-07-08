@@ -17,19 +17,23 @@ int odb_transaction_begin(struct object_database *odb,
 	return ret;
 }
 
-void odb_transaction_commit(struct odb_transaction *transaction)
+int odb_transaction_commit(struct odb_transaction *transaction)
 {
+	int ret;
+
 	if (!transaction)
-		return;
+		return 0;
 
 	/*
 	 * Ensure the transaction ending matches the pending transaction.
 	 */
 	ASSERT(transaction == transaction->source->odb->transaction);
 
-	transaction->commit(transaction);
+	ret = transaction->commit(transaction);
 	transaction->source->odb->transaction = NULL;
 	free(transaction);
+
+	return ret;
 }
 
 int odb_transaction_write_object_stream(struct odb_transaction *transaction,

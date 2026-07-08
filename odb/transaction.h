@@ -54,10 +54,11 @@ static inline void odb_transaction_begin_or_die(struct object_database *odb,
 }
 
 /*
- * Commits an ODB transaction making the written objects visible. If the
- * specified transaction is NULL, the function is a no-op.
+ * Commits an ODB transaction making the written objects visible. Returns 0 on
+ * success, a negative error code otherwise. Note that, if the specified
+ * transaction is NULL, the function is a no-op and no error is returned.
  */
-void odb_transaction_commit(struct odb_transaction *transaction);
+int odb_transaction_commit(struct odb_transaction *transaction);
 
 /*
  * Writes the object in the provided stream into the transaction. The resulting
