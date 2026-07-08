@@ -93,6 +93,7 @@ struct repo_config_values {
 	char *excludes_file;
 	char *editor_program;
 	char *pager_program;
+	char *askpass_program;
 	int apply_sparse_checkout;
 	int trust_ctime;
 	int check_stat;
