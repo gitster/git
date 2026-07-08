@@ -102,6 +102,13 @@ enum push_default_type {
 	PUSH_DEFAULT_UNSPECIFIED
 };
 
+enum rebase_setup_type {
+	AUTOREBASE_NEVER = 0,
+	AUTOREBASE_LOCAL,
+	AUTOREBASE_REMOTE,
+	AUTOREBASE_ALWAYS
+};
+
 struct repo_config_values {
 	/* section "core" config values */
 	char *attributes_file;
@@ -112,6 +119,7 @@ struct repo_config_values {
 	char *apply_default_whitespace;
 	char *apply_default_ignorewhitespace;
 	enum push_default_type push_default;
+	enum rebase_setup_type autorebase;
 	int apply_sparse_checkout;
 	int trust_ctime;
 	int check_stat;
@@ -204,14 +212,6 @@ extern unsigned long pack_size_limit_cfg;
 
 extern int protect_hfs;
 extern int protect_ntfs;
-
-enum rebase_setup_type {
-	AUTOREBASE_NEVER = 0,
-	AUTOREBASE_LOCAL,
-	AUTOREBASE_REMOTE,
-	AUTOREBASE_ALWAYS
-};
-extern enum rebase_setup_type autorebase;
 
 enum object_creation_mode {
 	OBJECT_CREATION_USES_HARDLINKS = 0,

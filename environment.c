@@ -58,7 +58,6 @@ enum auto_crlf auto_crlf = AUTO_CRLF_FALSE;
 enum eol core_eol = EOL_UNSET;
 int global_conv_flags_eol = CONV_EOL_RNDTRP_WARN;
 char *check_roundtrip_encoding;
-enum rebase_setup_type autorebase = AUTOREBASE_NEVER;
 #ifndef OBJECT_CREATION_MODE
 #define OBJECT_CREATION_MODE OBJECT_CREATION_USES_HARDLINKS
 #endif
@@ -600,13 +599,13 @@ static int git_default_branch_config(const char *var, const char *value)
 		if (!value)
 			return config_error_nonbool(var);
 		else if (!strcmp(value, "never"))
-			autorebase = AUTOREBASE_NEVER;
+			cfg->autorebase = AUTOREBASE_NEVER;
 		else if (!strcmp(value, "local"))
-			autorebase = AUTOREBASE_LOCAL;
+			cfg->autorebase = AUTOREBASE_LOCAL;
 		else if (!strcmp(value, "remote"))
-			autorebase = AUTOREBASE_REMOTE;
+			cfg->autorebase = AUTOREBASE_REMOTE;
 		else if (!strcmp(value, "always"))
-			autorebase = AUTOREBASE_ALWAYS;
+			cfg->autorebase = AUTOREBASE_ALWAYS;
 		else
 			return error(_("malformed value for %s"), var);
 		return 0;
@@ -727,6 +726,7 @@ void repo_config_values_init(struct repo_config_values *cfg)
 	cfg->apply_default_whitespace = NULL;
 	cfg->apply_default_ignorewhitespace = NULL;
 	cfg->push_default = PUSH_DEFAULT_UNSPECIFIED;
+	cfg->autorebase = AUTOREBASE_NEVER;
 	cfg->apply_sparse_checkout = 0;
 	cfg->branch_track = BRANCH_TRACK_REMOTE;
 	cfg->trust_ctime = 1;
