@@ -6,21 +6,31 @@
 #
 # This can be used to simulate the effects of the repository changing in
 # between HTTP request-response pairs.
-if test -f one-time-script
+#
+# Apache can run this CGI for concurrent requests (for example a partial fetch
+# that lazily fetches a missing object while the first response is still in
+# flight), so the helper claims the marker atomically with a rename, and only
+# once it has decided to modify the response. A request that loses the race
+# finds the marker already gone and serves its response unchanged; no request
+# is left emitting an empty body, which the server would report as HTTP 500.
+# Scratch files are per-request ($$) so concurrent requests do not clobber each
+# other.
+
+test -f one-time-script || exec "$GIT_EXEC_PATH/git-http-backend"
+
+LC_ALL=C
+export LC_ALL
+
+out=out.$$
+modified=out-modified.$$
+"$GIT_EXEC_PATH/git-http-backend" >"$out"
+
+if ./one-time-script "$out" 2>/dev/null >"$modified" &&
+   ! cmp -s "$out" "$modified" &&
+   mv one-time-script one-time-script.$$ 2>/dev/null
 then
-	LC_ALL=C
-	export LC_ALL
-
-	"$GIT_EXEC_PATH/git-http-backend" >out
-	./one-time-script out >out_modified
-
-	if cmp -s out out_modified
-	then
-		cat out
-	else
-		cat out_modified
-		rm one-time-script
-	fi
+	cat "$modified"
 else
-	"$GIT_EXEC_PATH/git-http-backend"
+	cat "$out"
 fi
+rm -f "$out" "$modified" one-time-script.$$
