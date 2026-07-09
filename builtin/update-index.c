@@ -1133,6 +1133,8 @@ int cmd_update_index(int argc,
 			break;
 		switch (parseopt_state) {
 		case PARSE_OPT_HELP:
+			exit(0);
+		case PARSE_OPT_HELP_ERROR:
 		case PARSE_OPT_ERROR:
 			exit(129);
 		case PARSE_OPT_COMPLETE:
