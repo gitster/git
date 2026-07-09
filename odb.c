@@ -691,8 +691,8 @@ static int oid_object_info_convert(struct repository *r,
 			return -1;
 		}
 	}
-	input_oi->whence = new_oi.whence;
-	input_oi->u = new_oi.u;
+	if (input_oi->source_infop)
+		*input_oi->source_infop = *new_oi.source_infop;
 	return ret;
 }
 
