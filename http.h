@@ -255,7 +255,6 @@ struct http_object_request {
 	struct object_id oid;
 	struct object_id real_oid;
 	struct git_hash_ctx c;
-	int hash_ctx_valid;
 	git_zstream stream;
 	int zret;
 	int rename;

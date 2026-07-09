@@ -615,7 +615,7 @@ static void hmac_hash(unsigned char *out,
 	/* RFC 2104 2. (1) */
 	memset(key, '\0', GIT_MAX_BLKSZ);
 	if (the_hash_algo->blksz < key_len) {
-		the_hash_algo->init_fn(&ctx);
+		git_hash_init(&ctx, the_hash_algo);
 		git_hash_update(&ctx, key_in, key_len);
 		git_hash_final(key, &ctx);
 	} else {
@@ -629,13 +629,13 @@ static void hmac_hash(unsigned char *out,
 	}
 
 	/* RFC 2104 2. (3) & (4) */
-	the_hash_algo->init_fn(&ctx);
+	git_hash_init(&ctx, the_hash_algo);
 	git_hash_update(&ctx, k_ipad, sizeof(k_ipad));
 	git_hash_update(&ctx, text, text_len);
 	git_hash_final(out, &ctx);
 
 	/* RFC 2104 2. (6) & (7) */
-	the_hash_algo->init_fn(&ctx);
+	git_hash_init(&ctx, the_hash_algo);
 	git_hash_update(&ctx, k_opad, sizeof(k_opad));
 	git_hash_update(&ctx, out, the_hash_algo->rawsz);
 	git_hash_final(out, &ctx);

@@ -281,6 +281,7 @@ struct git_hash_ctx {
 		git_SHA_CTX_unsafe sha1_unsafe;
 		git_SHA256_CTX sha256;
 	} state;
+	bool active;
 };
 
 typedef void (*git_hash_init_fn)(struct git_hash_ctx *ctx);
@@ -309,22 +310,15 @@ struct git_hash_algo {
 	/* The block size of the hash. */
 	size_t blksz;
 
-	/* The hash initialization function. */
+	/*
+	 * Low-level implementation hooks. Callers should use the git_hash_*
+	 * wrappers below rather than invoking these directly.
+	 */
 	git_hash_init_fn init_fn;
-
-	/* The hash context cloning function. */
 	git_hash_clone_fn clone_fn;
-
-	/* The hash update function. */
 	git_hash_update_fn update_fn;
-
-	/* The hash finalization function. */
 	git_hash_final_fn final_fn;
-
-	/* The hash finalization function for object IDs. */
 	git_hash_final_oid_fn final_oid_fn;
-
-	/* Discard an initialized hash without finalizing. */
 	git_hash_discard_fn discard_fn;
 
 	/* The OID of the empty tree. */
@@ -341,12 +335,40 @@ struct git_hash_algo {
 };
 extern const struct git_hash_algo hash_algos[GIT_HASH_NALGOS];
 
+/*
+ * Prepare an uninitialized hash context for use. You must eventually release
+ * the context with git_hash_final() (or final_oid()) or by calling
+ * git_hash_discard().
+ */
 void git_hash_init(struct git_hash_ctx *ctx, const struct git_hash_algo *algop);
+
+/*
+ * Clone the state of a hash. Both src and dst must have been initialized with
+ * git_hash_init().
+ */
 void git_hash_clone(struct git_hash_ctx *dst, const struct git_hash_ctx *src);
+
+/*
+ * Add more data to an initialized hash context.
+ */
 void git_hash_update(struct git_hash_ctx *ctx, const void *in, size_t len);
+
+/*
+ * Retrieve the final hash value from a context, releasing any resources.
+ */
 void git_hash_final(unsigned char *hash, struct git_hash_ctx *ctx);
+
+/*
+ * Like git_hash_final(), but write the result into an object_id.
+ */
 void git_hash_final_oid(struct object_id *oid, struct git_hash_ctx *ctx);
+
+/*
+ * Discard a hash context without computing the final value, but still
+ * releasing any resources.
+ */
 void git_hash_discard(struct git_hash_ctx *ctx);
+
 const struct git_hash_algo *hash_algo_ptr_by_number(uint32_t algo);
 struct git_hash_ctx *git_hash_alloc(void);
 void git_hash_free(struct git_hash_ctx *ctx);
