@@ -37,6 +37,17 @@ void clear_prio_queue(struct prio_queue *queue)
 	queue->get_pending = 0;
 }
 
+static void sift_up(struct prio_queue *queue, size_t ix)
+{
+	while (ix) {
+		size_t parent = (ix - 1) / 2;
+		if (compare(queue, parent, ix) <= 0)
+			break;
+		swap(queue, parent, ix);
+		ix = parent;
+	}
+}
+
 static void sift_down_root(struct prio_queue *queue)
 {
 	size_t ix, child;
@@ -55,19 +66,35 @@ static void sift_down_root(struct prio_queue *queue)
 	}
 }
 
+/* Cascade vacancy toward a leaf, promoting the smaller child at each level */
+static size_t cascade_down(struct prio_queue *queue)
+{
+	size_t ix, child;
+
+	for (ix = 0; (child = ix * 2 + 1) < queue->nr_; ix = child) {
+		if (child + 1 < queue->nr_ &&
+		    compare(queue, child, child + 1) >= 0)
+			child++;
+		queue->array[ix] = queue->array[child];
+	}
+	return ix;
+}
+
 static inline void flush_get(struct prio_queue *queue)
 {
+	size_t ix;
+
 	if (!queue->get_pending)
 		return;
 	queue->get_pending = 0;
-	queue->array[0] = queue->array[--queue->nr_];
-	sift_down_root(queue);
+	--queue->nr_;
+	ix = cascade_down(queue);
+	queue->array[ix] = queue->array[queue->nr_];
+	sift_up(queue, ix);
 }
 
 void prio_queue_put(struct prio_queue *queue, void *thing)
 {
-	size_t ix, parent;
-
 	if (queue->get_pending) {
 		queue->get_pending = 0;
 		queue->array[0].ctr = queue->insertion_ctr++;
@@ -85,13 +112,7 @@ void prio_queue_put(struct prio_queue *queue, void *thing)
 		return; /* LIFO */
 
 	/* Bubble up the new one */
-	for (ix = queue->nr_ - 1; ix; ix = parent) {
-		parent = (ix - 1) / 2;
-		if (compare(queue, parent, ix) <= 0)
-			break;
-
-		swap(queue, parent, ix);
-	}
+	sift_up(queue, queue->nr_ - 1);
 }
 
 void *prio_queue_get(struct prio_queue *queue)
