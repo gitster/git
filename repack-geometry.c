@@ -246,50 +246,6 @@ struct packed_git *pack_geometry_preferred_pack(struct pack_geometry *geometry)
 	return NULL;
 }
 
-static void remove_redundant_packs(struct packed_git **pack,
-				   uint32_t pack_nr,
-				   struct string_list *names,
-				   struct existing_packs *existing,
-				   const char *packdir,
-				   bool wrote_incremental_midx)
-{
-	const struct git_hash_algo *algop = existing->repo->hash_algo;
-	struct strbuf buf = STRBUF_INIT;
-	uint32_t i;
-
-	for (i = 0; i < pack_nr; i++) {
-		struct packed_git *p = pack[i];
-		if (string_list_has_string(names, hash_to_hex_algop(p->hash,
-								    algop)))
-			continue;
-
-		strbuf_reset(&buf);
-		strbuf_addstr(&buf, pack_basename(p));
-		strbuf_strip_suffix(&buf, ".pack");
-
-		if ((p->pack_keep) ||
-		    (string_list_has_string(&existing->kept_packs, buf.buf)))
-			continue;
-
-		repack_remove_redundant_pack(existing->repo, packdir, buf.buf,
-					     wrote_incremental_midx);
-	}
-
-	strbuf_release(&buf);
-}
-
-void pack_geometry_remove_redundant(struct pack_geometry *geometry,
-				    struct string_list *names,
-				    struct existing_packs *existing,
-				    const char *packdir,
-				    bool wrote_incremental_midx)
-{
-	remove_redundant_packs(geometry->pack, geometry->split,
-			       names, existing, packdir, wrote_incremental_midx);
-	remove_redundant_packs(geometry->promisor_pack, geometry->promisor_split,
-			       names, existing, packdir, wrote_incremental_midx);
-}
-
 void pack_geometry_release(struct pack_geometry *geometry)
 {
 	if (!geometry)

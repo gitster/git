@@ -891,4 +891,255 @@ test_expect_success 'repack rescues once-cruft objects above geometric split' '
 	git repack --geometric=2 -d --write-midx --write-bitmap-index
 '
 
+test_expect_success 'repack --geometric --cruft combines packs and writes cruft' '
+	git init geometric-cruft-basic &&
+	(
+		cd geometric-cruft-basic &&
+
+		test_commit A &&
+		test_commit B &&
+
+		B="$(git rev-parse B)" &&
+
+		git reset --hard $B^ &&
+		git tag -d B &&
+		git reflog expire --all --expire=all &&
+
+		# Initial state: one non-cruft pack, one cruft pack.
+		git repack -d --cruft &&
+
+		ls $packdir/pack-*.mtimes >cruft.before &&
+		test_line_count = 1 cruft.before &&
+
+		test_commit C &&
+		git repack &&
+
+		# At this point we have three packs:
+		#   - the non-cruft pack from A
+		#   - the cruft pack from B
+		#   - a new non-cruft pack from C
+		#
+		# The two non-cruft packs are not in a geometric
+		# progression, so they should be rolled up.
+		git repack -d --geometric=2 --cruft &&
+
+		# The old cruft pack for B is retained, since the
+		# geometric repack does not touch cruft packs.
+		ls $packdir/pack-*.mtimes >cruft.after &&
+		test_line_count = 1 cruft.after &&
+
+		# Ensure that all reachable objects are present.
+		git fsck
+	)
+'
+
+test_expect_success 'repack --geometric --cruft writes new cruft for loose unreachable' '
+	git init geometric-cruft-new-cruft &&
+	(
+		cd geometric-cruft-new-cruft &&
+
+		git config set maintenance.auto false &&
+
+		test_commit A &&
+		git repack &&
+
+		test_commit B &&
+		git repack &&
+
+		# Create an unreachable commit whose objects are
+		# still loose (never packed).
+		test_commit C &&
+		C="$(git rev-parse C)" &&
+		git reset --hard $C^ &&
+		git tag -d C &&
+		git reflog expire --all --expire=all &&
+
+		# At this point we have two non-cruft packs of
+		# similar size that are not in geometric progression,
+		# and loose unreachable objects from commit C.
+		ls $packdir/pack-*.idx >packs.before &&
+		test_line_count = 2 packs.before &&
+
+		# Geometric+cruft repack should roll up the two
+		# non-cruft packs and write a new cruft pack for C
+		# (whose objects are loose and unreachable).
+		git repack -d --geometric=2 --cruft &&
+
+		ls $packdir/pack-*.mtimes >cruft.after &&
+		test_line_count = 1 cruft.after &&
+
+		git fsck
+	)
+'
+
+test_expect_success 'repack --geometric --cruft -d deletes rolled-up packs' '
+	git init geometric-cruft-delete &&
+	(
+		cd geometric-cruft-delete &&
+
+		test_commit A &&
+		git repack -d &&
+
+		test_commit B &&
+		git repack -d &&
+
+		ls $packdir/pack-*.idx >before &&
+
+		git repack -d --geometric=2 --cruft &&
+
+		# Two packs should have been rolled into one. No cruft
+		# pack is written because there are no unreachable objects.
+		ls $packdir/pack-*.idx >after &&
+		test_line_count = 1 after &&
+
+		# The rolled-up packs should be gone.
+		! test_cmp before after
+	)
+'
+
+test_expect_success 'repack --geometric --cruft collects loose unreachable objects' '
+	git init geometric-cruft-loose &&
+	(
+		cd geometric-cruft-loose &&
+
+		test_commit A &&
+		git repack -d &&
+
+		test_commit B &&
+		git repack &&
+
+		# Create a loose unreachable object by making it
+		# orphaned (not in any pack).
+		loose="$(echo "cruft object" | git hash-object -w --stdin)" &&
+
+		# We have two non-cruft packs and a loose unreachable
+		# object. The geometric+cruft repack should roll up
+		# the packs AND write a cruft pack for the loose
+		# unreachable object.
+		git repack -d --geometric=2 --cruft &&
+
+		ls $packdir/pack-*.mtimes >cruft.packs &&
+		test_line_count = 1 cruft.packs &&
+
+		git fsck
+	)
+'
+
+test_expect_success 'repack --geometric --cruft accumulates cruft packs' '
+	git init geometric-cruft-accumulate &&
+	(
+		cd geometric-cruft-accumulate &&
+
+		git config set maintenance.auto false &&
+
+		test_commit A &&
+		git repack &&
+
+		# First round: create unreachable objects and do a
+		# geometric+cruft repack.
+		unreachable_1="$(echo "cruft 1" | git hash-object -w --stdin)" &&
+		git repack -d --geometric=2 --cruft &&
+
+		ls $packdir/pack-*.mtimes >cruft.1 &&
+		test_line_count = 1 cruft.1 &&
+
+		test_commit B &&
+		git repack &&
+
+		# Second round: create more unreachable objects and
+		# repack again. The old cruft pack should be retained
+		# and a new one written.
+		unreachable_2="$(echo "cruft 2" | git hash-object -w --stdin)" &&
+		git repack -d --geometric=2 --cruft &&
+
+		ls $packdir/pack-*.mtimes >cruft.2 &&
+		test_line_count = 2 cruft.2 &&
+
+		git fsck
+	)
+'
+
+test_expect_success 'repack --geometric --cruft --combine-cruft-below-size' '
+	git init geometric-cruft-combine &&
+	(
+		cd geometric-cruft-combine &&
+
+		git config set maintenance.auto false &&
+
+		test_commit A &&
+		git repack &&
+
+		# Create a small cruft pack.
+		unreachable_1="$(echo "cruft 1" | git hash-object -w --stdin)" &&
+		git repack -d --geometric=2 --cruft &&
+
+		ls $packdir/pack-*.mtimes >cruft.before &&
+		test_line_count = 1 cruft.before &&
+
+		test_commit B &&
+		git repack &&
+
+		# Create another small cruft pack.
+		unreachable_2="$(echo "cruft 2" | git hash-object -w --stdin)" &&
+		git repack -d --geometric=2 --cruft &&
+
+		ls $packdir/pack-*.mtimes >cruft.mid &&
+		test_line_count = 2 cruft.mid &&
+
+		test_commit C &&
+		git repack &&
+
+		# With --combine-cruft-below-size, the two small cruft
+		# packs should be combined into one.
+		unreachable_3="$(echo "cruft 3" | git hash-object -w --stdin)" &&
+		git repack -d --geometric=2 --cruft \
+			--combine-cruft-below-size=10M &&
+
+		ls $packdir/pack-*.mtimes >cruft.after &&
+		test_line_count = 1 cruft.after &&
+
+		git fsck
+	)
+'
+
+test_expect_success 'repack --geometric --cruft --expire-to' '
+	git init geometric-cruft-expire-to &&
+	(
+		cd geometric-cruft-expire-to &&
+
+		git config set maintenance.auto false &&
+
+		test_commit A &&
+		git repack &&
+
+		test_commit B &&
+		git repack &&
+
+		# Create unreachable objects and record them.
+		test_commit C &&
+		C="$(git rev-parse C)" &&
+		git rev-list --objects --no-object-names B..C >unreachable.raw &&
+		sort unreachable.raw >unreachable.want &&
+
+		git reset --hard $C^ &&
+		git tag -d C &&
+		git reflog expire --all --expire=all &&
+
+		git init --bare expired.git &&
+		git repack -d --geometric=2 --cruft \
+			--cruft-expiration=now \
+			--expire-to="expired.git/objects/pack/pack" &&
+
+		# The expired objects should appear in the
+		# expire-to location.
+		expired="$(ls expired.git/objects/pack/pack-*.idx)" &&
+		test_path_is_file "${expired%.idx}.mtimes" &&
+		git show-index <"$expired" >expired.raw &&
+		cut -d" " -f2 expired.raw | sort >expired.objects &&
+		test_cmp unreachable.want expired.objects &&
+
+		git fsck
+	)
+'
+
 test_done
