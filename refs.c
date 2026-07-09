@@ -3328,7 +3328,7 @@ done:
 
 static int has_worktrees(void)
 {
-	struct worktree **worktrees = get_worktrees();
+	struct worktree **worktrees = get_worktrees(the_repository);
 	int ret = 0;
 	size_t i;
 

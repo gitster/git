@@ -226,7 +226,7 @@ static void prune_worktrees(void)
 	while ((d = readdir_skip_dot_and_dotdot(dir)) != NULL) {
 		char *path;
 		strbuf_reset(&reason);
-		if (should_prune_worktree(d->d_name, &reason, &path, expire))
+		if (should_prune_worktree(the_repository, d->d_name, &reason, &path, expire))
 			prune_worktree(d->d_name, reason.buf);
 		else if (path)
 			string_list_append_nodup(&kept, path)->util = xstrdup(d->d_name);
@@ -475,7 +475,7 @@ static int add_worktree(const char *path, const char *refname,
 	struct ref_store *wt_refs;
 	struct repo_config_values *cfg = repo_config_values(the_repository);
 
-	worktrees = get_worktrees();
+	worktrees = get_worktrees(the_repository);
 	check_candidate_path(path, opts->force, worktrees, "add");
 	free_worktrees(worktrees);
 	worktrees = NULL;
@@ -539,7 +539,8 @@ static int add_worktree(const char *path, const char *refname,
 
 	strbuf_reset(&sb);
 	strbuf_addf(&sb, "%s/gitdir", sb_repo.buf);
-	write_worktree_linking_files(sb_git.buf, sb.buf, opts->relative_paths);
+	write_worktree_linking_files(the_repository, sb_git.buf,
+				     sb.buf, opts->relative_paths);
 	strbuf_reset(&sb);
 	strbuf_addf(&sb, "%s/commondir", sb_repo.buf);
 	write_file(sb.buf, "../..");
@@ -547,7 +548,7 @@ static int add_worktree(const char *path, const char *refname,
 	/*
 	 * Set up the ref store of the worktree and create the HEAD reference.
 	 */
-	wt = get_linked_worktree(name, 1);
+	wt = get_linked_worktree(the_repository, name, 1);
 	if (!wt) {
 		ret = error(_("could not find created worktree '%s'"), name);
 		goto done;
@@ -1103,7 +1104,7 @@ static int list(int ac, const char **av, const char *prefix,
 	else if (!line_terminator && !porcelain)
 		die(_("the option '%s' requires '%s'"), "-z", "--porcelain");
 	else {
-		struct worktree **worktrees = get_worktrees();
+		struct worktree **worktrees = get_worktrees(the_repository);
 		int path_maxwidth = 0, abbrev = DEFAULT_ABBREV, i;
 		struct worktree_display *display = NULL;
 
@@ -1146,7 +1147,7 @@ static int lock_worktree(int ac, const char **av, const char *prefix,
 	if (ac != 1)
 		usage_with_options(git_worktree_lock_usage, options);
 
-	worktrees = get_worktrees();
+	worktrees = get_worktrees(the_repository);
 	wt = find_worktree(worktrees, prefix, av[0]);
 	if (!wt)
 		die(_("'%s' is not a working tree"), av[0]);
@@ -1183,7 +1184,7 @@ static int unlock_worktree(int ac, const char **av, const char *prefix,
 	if (ac != 1)
 		usage_with_options(git_worktree_unlock_usage, options);
 
-	worktrees = get_worktrees();
+	worktrees = get_worktrees(the_repository);
 	wt = find_worktree(worktrees, prefix, av[0]);
 	if (!wt)
 		die(_("'%s' is not a working tree"), av[0]);
@@ -1269,7 +1270,7 @@ static int move_worktree(int ac, const char **av, const char *prefix,
 	strbuf_addstr(&dst, path);
 	free(path);
 
-	worktrees = get_worktrees();
+	worktrees = get_worktrees(the_repository);
 	wt = find_worktree(worktrees, prefix, av[0]);
 	if (!wt)
 		die(_("'%s' is not a working tree"), av[0]);
@@ -1394,7 +1395,7 @@ static int remove_worktree(int ac, const char **av, const char *prefix,
 	if (ac != 1)
 		usage_with_options(git_worktree_remove_usage, options);
 
-	worktrees = get_worktrees();
+	worktrees = get_worktrees(the_repository);
 	wt = find_worktree(worktrees, prefix, av[0]);
 	if (!wt)
 		die(_("'%s' is not a working tree"), av[0]);
@@ -1456,8 +1457,9 @@ static int repair(int ac, const char **av, const char *prefix,
 	ac = parse_options(ac, av, prefix, options, git_worktree_repair_usage, 0);
 	p = ac > 0 ? av : self;
 	for (; *p; p++)
-		repair_worktree_at_path(*p, report_repair, &rc, use_relative_paths);
-	repair_worktrees(report_repair, &rc, use_relative_paths);
+		repair_worktree_at_path(the_repository, *p, report_repair,
+					&rc, use_relative_paths);
+	repair_worktrees(the_repository, report_repair, &rc, use_relative_paths);
 	return rc;
 }
 

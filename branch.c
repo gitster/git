@@ -394,7 +394,7 @@ static void prepare_checked_out_branches(void)
 		return;
 	initialized_checked_out_branches = 1;
 
-	worktrees = get_worktrees();
+	worktrees = get_worktrees(the_repository);
 
 	while (worktrees[i]) {
 		char *old, *wt_gitdir;
@@ -846,7 +846,7 @@ void remove_branch_state(struct repository *r, int verbose)
 
 void die_if_checked_out(const char *branch, int ignore_current_worktree)
 {
-	struct worktree **worktrees = get_worktrees();
+	struct worktree **worktrees = get_worktrees(the_repository);
 
 	for (int i = 0; worktrees[i]; i++) {
 		if (worktrees[i]->is_current && ignore_current_worktree)

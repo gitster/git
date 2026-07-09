@@ -579,7 +579,7 @@ static void copy_or_rename_branch(const char *oldname, const char *newname, int 
 	const char *interpreted_oldname = NULL;
 	const char *interpreted_newname = NULL;
 	int recovery = 0, oldref_usage = 0;
-	struct worktree **worktrees = get_worktrees();
+	struct worktree **worktrees = get_worktrees(the_repository);
 
 	if (check_branch_ref(&oldref, oldname)) {
 		/*
