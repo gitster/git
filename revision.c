@@ -4702,12 +4702,27 @@ struct commit *get_revision(struct rev_info *revs)
 				for (p = c->parents; p; p = p->next)
 					p->item->object.flags |= CHILD_SHOWN;
 		}
+	} else if (revs->graph) {
+		c = graph_pop_lookahead(revs->graph);
+		if (!c)
+			c = get_revision_internal(revs);
+
 	} else {
 		c = get_revision_internal(revs);
 	}
 
-	if (c && revs->graph)
+	if (c && revs->graph) {
+		if (!revs->max_count_stage && !revs->reverse_output_stage) {
+			while (graph_get_lookahead_room(revs->graph)) {
+				struct commit *next = get_revision_internal(revs);
+				if (!next)
+					break;
+				graph_push_lookahead(revs->graph, next);
+			}
+		}
 		graph_update(revs->graph, c);
+	}
+
 	if (!c) {
 		free_saved_parents(revs);
 		commit_list_free(revs->previous_parents);
