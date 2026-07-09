@@ -111,27 +111,28 @@ static int is_main_worktree_bare(struct repository *repo)
 /**
  * get the main worktree
  */
-static struct worktree *get_main_worktree(int skip_reading_head)
+static struct worktree *get_main_worktree(struct repository *repo,
+					  int skip_reading_head)
 {
 	struct worktree *worktree = NULL;
 	struct strbuf worktree_path = STRBUF_INIT;
 
-	strbuf_add_real_path(&worktree_path, repo_get_common_dir(the_repository));
+	strbuf_add_real_path(&worktree_path, repo_get_common_dir(repo));
 	strbuf_strip_suffix(&worktree_path, "/.git");
 
 	CALLOC_ARRAY(worktree, 1);
-	worktree->repo = the_repository;
+	worktree->repo = repo;
 	worktree->path = strbuf_detach(&worktree_path, NULL);
 	worktree->is_current = is_current_worktree(worktree);
-	worktree->is_bare = (the_repository->bare_cfg == 1) ||
-		is_bare_repository(the_repository) ||
+	worktree->is_bare = (repo->bare_cfg == 1) ||
+		is_bare_repository(repo) ||
 		/*
 		 * When in a secondary worktree we have to also verify if the main
 		 * worktree is bare in $commondir/config.worktree.
 		 * This check is unnecessary if we're currently in the main worktree,
 		 * as prior checks already consulted all configs of the current worktree.
 		 */
-		(!worktree->is_current && is_main_worktree_bare(the_repository));
+		(!worktree->is_current && is_main_worktree_bare(repo));
 
 	if (!skip_reading_head)
 		add_head_info(worktree);
@@ -182,7 +183,8 @@ done:
  * retrieving worktree metadata that could be used when the worktree is known
  * to not be in a healthy state, e.g. when creating or repairing it.
  */
-static struct worktree **get_worktrees_internal(int skip_reading_head)
+static struct worktree **get_worktrees_internal(struct repository *repo,
+						int skip_reading_head)
 {
 	struct worktree **list = NULL;
 	struct strbuf path = STRBUF_INIT;
@@ -192,9 +194,9 @@ static struct worktree **get_worktrees_internal(int skip_reading_head)
 
 	ALLOC_ARRAY(list, alloc);
 
-	list[counter++] = get_main_worktree(skip_reading_head);
+	list[counter++] = get_main_worktree(repo, skip_reading_head);
 
-	strbuf_addf(&path, "%s/worktrees", repo_get_common_dir(the_repository));
+	strbuf_addf(&path, "%s/worktrees", repo_get_common_dir(repo));
 	dir = opendir(path.buf);
 	strbuf_release(&path);
 	if (dir) {
@@ -216,12 +218,12 @@ static struct worktree **get_worktrees_internal(int skip_reading_head)
 
 struct worktree **get_worktrees(void)
 {
-	return get_worktrees_internal(0);
+	return get_worktrees_internal(the_repository, 0);
 }
 
 struct worktree **get_worktrees_without_reading_head(void)
 {
-	return get_worktrees_internal(1);
+	return get_worktrees_internal(the_repository, 1);
 }
 
 char *get_worktree_git_dir(const struct worktree *wt)
@@ -707,7 +709,7 @@ static void repair_noop(int iserr UNUSED,
 
 void repair_worktrees(worktree_repair_fn fn, void *cb_data, int use_relative_paths)
 {
-	struct worktree **worktrees = get_worktrees_internal(1);
+	struct worktree **worktrees = get_worktrees_internal(the_repository, 1);
 	struct worktree **wt = worktrees + 1; /* +1 skips main worktree */
 
 	if (!fn)
@@ -752,7 +754,7 @@ done:
 
 void repair_worktrees_after_gitdir_move(const char *old_path)
 {
-	struct worktree **worktrees = get_worktrees_internal(1);
+	struct worktree **worktrees = get_worktrees_internal(the_repository, 1);
 	struct worktree **wt = worktrees + 1; /* +1 skips main worktree */
 
 	for (; *wt; wt++)
@@ -786,7 +788,9 @@ static int is_main_worktree_path(const char *path)
  *
  * Returns -1 on failure and strbuf.len on success.
  */
-static ssize_t infer_backlink(const char *gitfile, struct strbuf *inferred)
+static ssize_t infer_backlink(struct repository *repo,
+			      const char *gitfile,
+			      struct strbuf *inferred)
 {
 	struct strbuf actual = STRBUF_INIT;
 	const char *id;
@@ -801,7 +805,7 @@ static ssize_t infer_backlink(const char *gitfile, struct strbuf *inferred)
 	id++; /* advance past '/' to point at <id> */
 	if (!*id)
 		goto error;
-	repo_common_path_replace(the_repository, inferred, "worktrees/%s", id);
+	repo_common_path_replace(repo, inferred, "worktrees/%s", id);
 	if (!is_directory(inferred->buf))
 		goto error;
 
@@ -842,7 +846,7 @@ void repair_worktree_at_path(const char *path,
 		goto done;
 	}
 
-	infer_backlink(dotgit.buf, &inferred_backlink);
+	infer_backlink(the_repository, dotgit.buf, &inferred_backlink);
 	strbuf_realpath_forgiving(&inferred_backlink, inferred_backlink.buf, 0);
 	dotgit_contents = xstrdup_or_null(read_gitfile_gently(dotgit.buf, &err));
 	if (dotgit_contents) {
@@ -1017,12 +1021,13 @@ done:
 	return rc;
 }
 
-static int move_config_setting(const char *key, const char *value,
+static int move_config_setting(struct repository *repo,
+			       const char *key, const char *value,
 			       const char *from_file, const char *to_file)
 {
-	if (repo_config_set_in_file_gently(the_repository, to_file, key, NULL, value))
+	if (repo_config_set_in_file_gently(repo, to_file, key, NULL, value))
 		return error(_("unable to set %s in '%s'"), key, to_file);
-	if (repo_config_set_in_file_gently(the_repository, from_file, key, NULL, NULL))
+	if (repo_config_set_in_file_gently(repo, from_file, key, NULL, NULL))
 		return error(_("unable to unset %s in '%s'"), key, from_file);
 	return 0;
 }
@@ -1058,7 +1063,7 @@ int init_worktree_config(struct repository *r)
 	 * _could_ be negating a global core.bare=true.
 	 */
 	if (!git_configset_get_bool(&cs, "core.bare", &bare) && bare) {
-		if ((res = move_config_setting("core.bare", "true",
+		if ((res = move_config_setting(r, "core.bare", "true",
 					       common_config_file,
 					       main_worktree_file)))
 			goto cleanup;
@@ -1070,7 +1075,7 @@ int init_worktree_config(struct repository *r)
 	 * upgrade to worktree config.
 	 */
 	if (!git_configset_get_value(&cs, "core.worktree", &core_worktree, NULL)) {
-		if ((res = move_config_setting("core.worktree", core_worktree,
+		if ((res = move_config_setting(r, "core.worktree", core_worktree,
 					       common_config_file,
 					       main_worktree_file)))
 			goto cleanup;
