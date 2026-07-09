@@ -26,7 +26,6 @@ struct merged_iter {
 	struct merged_subiter *subiters;
 	struct merged_iter_pqueue pq;
 	size_t subiters_len;
-	int suppress_deletions;
 	ssize_t advance_index;
 };
 
@@ -166,15 +165,7 @@ static int merged_iter_seek_void(void *it, struct reftable_record *want)
 
 static int merged_iter_next_void(void *p, struct reftable_record *rec)
 {
-	struct merged_iter *mi = p;
-	while (1) {
-		int err = merged_iter_next_entry(mi, rec);
-		if (err)
-			return err;
-		if (mi->suppress_deletions && reftable_record_is_deletion(rec))
-			continue;
-		return 0;
-	}
+	return merged_iter_next_entry(p, rec);
 }
 
 static struct reftable_iterator_vtable merged_iter_vtable = {
@@ -278,7 +269,6 @@ int merged_table_init_iter(struct reftable_merged_table *mt,
 		goto out;
 	}
 	mi->advance_index = -1;
-	mi->suppress_deletions = mt->suppress_deletions;
 	mi->subiters = subiters;
 	mi->subiters_len = mt->tables_len;
 

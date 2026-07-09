@@ -337,7 +337,6 @@ static int reftable_stack_reload_once(struct reftable_stack *st,
 	/* Update the stack to point to the new tables. */
 	if (st->merged)
 		reftable_merged_table_free(st->merged);
-	new_merged->suppress_deletions = 1;
 	st->merged = new_merged;
 
 	if (st->tables)
