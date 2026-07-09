@@ -214,3 +214,26 @@ test_expect_success "test bundle-uri with $BUNDLE_URI_PROTOCOL:// using protocol
 		>actual &&
 	test_cmp_config_output expect actual
 '
+
+test_expect_success "test bundle-uri with $BUNDLE_URI_PROTOCOL:// using protocol v2 with empty value" '
+	test_config -C "$BUNDLE_URI_PARENT" \
+		bundle.bundle1.uri "$BUNDLE_URI_BUNDLE_URI_ESCAPED-1.bdl" &&
+	test_config -C "$BUNDLE_URI_PARENT" \
+		bundle.bundle2.uri "" &&
+
+	# The empty bundle.bundle2.uri value is invalid configuration and the
+	# server must not advertise it to the client.
+	cat >expect <<-EOF &&
+	[bundle]
+		version = 1
+		mode = all
+	[bundle "bundle1"]
+		uri = $BUNDLE_URI_BUNDLE_URI_ESCAPED-1.bdl
+	EOF
+
+	test-tool bundle-uri \
+		ls-remote \
+		"$BUNDLE_URI_REPO_URI" \
+		>actual &&
+	test_cmp_config_output expect actual
+'
