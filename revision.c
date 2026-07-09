@@ -707,6 +707,8 @@ cleanup:
 
 static void prepare_to_use_bloom_filter(struct rev_info *revs)
 {
+	release_revisions_bloom_keyvecs(revs);
+
 	if (!revs->commits)
 		return;
 
