@@ -325,7 +325,8 @@ static void odb_source_inmemory_close(struct odb_source *source UNUSED)
 {
 }
 
-static void odb_source_inmemory_reprepare(struct odb_source *source UNUSED)
+static void odb_source_inmemory_prepare(struct odb_source *source UNUSED,
+					enum odb_prepare_flags flags UNUSED)
 {
 }
 
@@ -365,7 +366,7 @@ struct odb_source_inmemory *odb_source_inmemory_new(struct object_database *odb)
 
 	source->base.free = odb_source_inmemory_free;
 	source->base.close = odb_source_inmemory_close;
-	source->base.reprepare = odb_source_inmemory_reprepare;
+	source->base.prepare = odb_source_inmemory_prepare;
 	source->base.read_object_info = odb_source_inmemory_read_object_info;
 	source->base.read_object_stream = odb_source_inmemory_read_object_stream;
 	source->base.for_each_object = odb_source_inmemory_for_each_object;

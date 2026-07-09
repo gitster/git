@@ -83,11 +83,12 @@ struct odb_source {
 	void (*close)(struct odb_source *source);
 
 	/*
-	 * This callback is expected to clear underlying caches of the object
-	 * database source. The function is called when the repository has for
-	 * example just been repacked so that new objects will become visible.
+	 * This callback is expected to prepare the source so that it becomes
+	 * ready for use. It optionally clears underlying caches of the object
+	 * database source.
 	 */
-	void (*reprepare)(struct odb_source *source);
+	void (*prepare)(struct odb_source *source,
+			enum odb_prepare_flags flags);
 
 	/*
 	 * This callback is expected to read object information from the object
@@ -308,13 +309,14 @@ static inline void odb_source_close(struct odb_source *source)
 }
 
 /*
- * Reprepare the object database source and clear any caches. Depending on the
+ * Prepare the object database source and clear any caches. Depending on the
  * backend used this may have the effect that concurrently-written objects
  * become visible.
  */
-static inline void odb_source_reprepare(struct odb_source *source)
+static inline void odb_source_prepare(struct odb_source *source,
+				      enum odb_prepare_flags flags)
 {
-	source->reprepare(source);
+	source->prepare(source, flags);
 }
 
 /*
