@@ -562,8 +562,8 @@ run_and_verify_geometric_pack () {
 	rm -f "trace2.txt" &&
 	GIT_TRACE2_EVENT="$(pwd)/trace2.txt" \
 		git maintenance run --task=geometric-repack 2>/dev/null &&
-	test_subcommand git repack -d -l --geometric=2 \
-		--quiet --write-midx <trace2.txt &&
+	test_subcommand git repack -d -l -q --geometric=2 \
+		--write-midx <trace2.txt &&
 
 	# Verify that the number of packfiles matches our expectation.
 	ls -l .git/objects/pack/*.pack >packfiles &&
@@ -594,8 +594,8 @@ test_expect_success 'geometric repacking task' '
 		# The initial repack causes an all-into-one repack.
 		GIT_TRACE2_EVENT="$(pwd)/initial-repack.txt" \
 			git maintenance run --task=geometric-repack 2>/dev/null &&
-		test_subcommand git repack -d -l --cruft --cruft-expiration=2.weeks.ago \
-			--quiet --write-midx <initial-repack.txt &&
+		test_subcommand git repack -d -l -q --cruft --cruft-expiration=2.weeks.ago \
+			--write-midx <initial-repack.txt &&
 
 		# Repacking should now cause a no-op geometric repack because
 		# no packfiles need to be combined.
@@ -615,8 +615,8 @@ test_expect_success 'geometric repacking task' '
 		# an all-into-one-repack.
 		GIT_TRACE2_EVENT="$(pwd)/all-into-one-repack.txt" \
 			git maintenance run --task=geometric-repack 2>/dev/null &&
-		test_subcommand git repack -d -l --cruft --cruft-expiration=2.weeks.ago \
-			--quiet --write-midx <all-into-one-repack.txt &&
+		test_subcommand git repack -d -l -q --cruft --cruft-expiration=2.weeks.ago \
+			--write-midx <all-into-one-repack.txt &&
 
 		# The geometric repack soaks up unreachable objects.
 		echo blob-1 | git hash-object -w --stdin -t blob &&
@@ -650,8 +650,8 @@ test_expect_success 'geometric repacking task' '
 		run_and_verify_geometric_pack 3 &&
 		GIT_TRACE2_EVENT="$(pwd)/cruft-repack.txt" \
 			git maintenance run --task=geometric-repack 2>/dev/null &&
-		test_subcommand git repack -d -l --cruft --cruft-expiration=2.weeks.ago \
-			--quiet --write-midx <cruft-repack.txt &&
+		test_subcommand git repack -d -l -q --cruft --cruft-expiration=2.weeks.ago \
+			--write-midx <cruft-repack.txt &&
 		ls .git/objects/pack/*.pack >packs &&
 		test_line_count = 2 packs &&
 		ls .git/objects/pack/*.mtimes >cruft &&
@@ -742,7 +742,128 @@ test_expect_success 'geometric repacking honors configured split factor' '
 
 		test_geometric_repack_needed false splitFactor=2 &&
 		test_geometric_repack_needed true splitFactor=3 &&
-		test_subcommand git repack -d -l --geometric=3 --quiet --write-midx <trace2.txt
+		test_subcommand git repack -d -l -q --geometric=3 --write-midx <trace2.txt
+	)
+'
+
+test_expect_success 'pre-auto-gc hook runs exactly once' '
+	test_when_finished "rm -rf repo" &&
+	git init repo &&
+	(
+		cd repo &&
+		write_script .git/hooks/pre-auto-gc <<-\EOF &&
+		echo hook >>hook.log
+		EOF
+
+		# Satisfy the auto condition for multiple tasks, both in the
+		# foreground and in the background phase.
+		git config set maintenance.reflog-expire.auto -1 &&
+		git config set maintenance.geometric-repack.auto -1 &&
+		git config set maintenance.rerere-gc.auto -1 &&
+
+		GIT_TRACE2_EVENT="$(pwd)/trace2.txt" \
+			git maintenance run --auto 2>/dev/null &&
+
+		# The successful hook does not inhibit any of the tasks...
+		test_subcommand git reflog expire --all <trace2.txt &&
+		test_subcommand_flex git repack <trace2.txt &&
+		test_subcommand git rerere gc <trace2.txt &&
+		# ... but it must only have been executed a single time.
+		test_line_count = 1 hook.log
+	)
+'
+
+test_expect_success 'pre-auto-gc hook can inhibit geometric strategy' '
+	test_when_finished "rm -rf repo" &&
+	git init repo &&
+	(
+		cd repo &&
+		write_script .git/hooks/pre-auto-gc <<-\EOF &&
+		echo hook >>hook.log
+		exit 1
+		EOF
+
+		git config set maintenance.reflog-expire.auto -1 &&
+		git config set maintenance.geometric-repack.auto -1 &&
+		git config set maintenance.rerere-gc.auto -1 &&
+
+		# Maintenance would be required...
+		git maintenance is-needed --auto &&
+
+		GIT_TRACE2_EVENT="$(pwd)/trace2.txt" \
+			git maintenance run --auto 2>/dev/null &&
+
+		# ... but the failing hook inhibits all tasks. The hook itself
+		# is expected to be the only child process being spawned, and
+		# it must only run a single time.
+		test_grep "child_start.*pre-auto-gc" trace2.txt &&
+		test_subcommand_flex ! git trace2 &&
+		test_line_count = 1 hook.log
+	)
+'
+
+test_expect_success 'pre-auto-gc hook can inhibit gc strategy' '
+	test_when_finished "rm -rf repo" &&
+	git init repo &&
+	(
+		cd repo &&
+		write_script .git/hooks/pre-auto-gc <<-\EOF &&
+		echo hook >>hook.log
+		exit 1
+		EOF
+
+		git config set maintenance.strategy gc &&
+		git config set maintenance.auto false &&
+		git config set gc.auto 3 &&
+
+		test_oid_init &&
+
+		# We need to create two objects whose hashes start with 17
+		# since this is what the gc task counts.
+		test_commit "$(test_oid blob17_1)" &&
+		test_commit "$(test_oid blob17_2)" &&
+
+		# Maintenance would be required...
+		git maintenance is-needed --auto &&
+
+		GIT_TRACE2_EVENT="$(pwd)/trace2.txt" \
+			git maintenance run --auto 2>/dev/null &&
+
+		# ... but the failing hook inhibits all tasks. The hook itself
+		# is expected to be the only child process being spawned, and
+		# it must only run a single time.
+		test_grep "child_start.*pre-auto-gc" trace2.txt &&
+		test_subcommand_flex ! git trace2 &&
+		test_line_count = 1 hook.log
+	)
+'
+
+test_expect_success 'pre-auto-gc hook does not run when no maintenance is needed' '
+	test_when_finished "rm -rf repo" &&
+	git init repo &&
+	(
+		cd repo &&
+		write_script .git/hooks/pre-auto-gc <<-\EOF &&
+		echo hook >>hook.log
+		EOF
+		test_must_fail git maintenance is-needed --auto &&
+		git maintenance run --auto 2>/dev/null &&
+		test_path_is_missing hook.log
+	)
+'
+
+test_expect_success 'pre-auto-gc hook does not run without --auto' '
+	test_when_finished "rm -rf repo" &&
+	git init repo &&
+	test_hook -C repo pre-auto-gc <<-\EOF &&
+	echo hook >>hook.log
+	EOF
+	(
+		cd repo &&
+		GIT_TRACE2_EVENT="$(pwd)/trace2.txt" \
+			git maintenance run 2>/dev/null &&
+		test_grep "\[\"git\",\"repack\"," trace2.txt &&
+		test_path_is_missing hook.log
 	)
 '
 
@@ -1052,7 +1173,7 @@ test_expect_success 'maintenance.strategy is respected' '
 		test_strategy geometric <<-\EOF &&
 		git pack-refs --all --prune
 		git reflog expire --all
-		git repack -d -l --geometric=2 --quiet --write-midx
+		git repack -d -l -q --geometric=2 --write-midx
 		git commit-graph write --split --reachable --no-progress
 		git worktree prune --expire 3.months.ago
 		git rerere gc
@@ -1061,7 +1182,7 @@ test_expect_success 'maintenance.strategy is respected' '
 		test_strategy geometric --schedule=weekly <<-\EOF
 		git pack-refs --all --prune
 		git reflog expire --all
-		git repack -d -l --geometric=2 --quiet --write-midx
+		git repack -d -l -q --geometric=2 --write-midx
 		git commit-graph write --split --reachable --no-progress
 		git worktree prune --expire 3.months.ago
 		git rerere gc
