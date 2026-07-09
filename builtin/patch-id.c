@@ -173,6 +173,7 @@ static size_t get_one_patchid(struct object_id *next_oid, struct object_id *resu
 		oidclr(next_oid, the_repository->hash_algo);
 
 	flush_one_hunk(result, &ctx);
+	git_hash_discard(&ctx);
 
 	return patchlen;
 }

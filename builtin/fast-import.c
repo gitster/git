@@ -1216,6 +1216,7 @@ static void stream_blob(uintmax_t len, struct object_id *oidout, uintmax_t mark)
 out:
 	free(in_buf);
 	free(out_buf);
+	hashfile_checkpoint_release(&checkpoint);
 }
 
 /* All calls must be guarded by find_object() or find_mark() to
