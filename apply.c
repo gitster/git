@@ -47,11 +47,13 @@ struct gitdiff_data {
 	int p_value;
 };
 
-static void git_apply_config(void)
+static void git_apply_config(struct repository *repo)
 {
-	repo_config_get_string(the_repository, "apply.whitespace", &apply_default_whitespace);
-	repo_config_get_string(the_repository, "apply.ignorewhitespace", &apply_default_ignorewhitespace);
-	repo_config(the_repository, git_xmerge_config, NULL);
+	repo_config_get_string(repo, "apply.whitespace",
+			       &repo_config_values(repo)->apply_default_whitespace);
+	repo_config_get_string(repo, "apply.ignorewhitespace",
+			       &repo_config_values(repo)->apply_default_ignorewhitespace);
+	repo_config(repo, git_xmerge_config, NULL);
 }
 
 static int parse_whitespace_option(struct apply_state *state, const char *option)
@@ -126,10 +128,12 @@ int init_apply_state(struct apply_state *state,
 	strset_init(&state->kept_symlinks);
 	strbuf_init(&state->root, 0);
 
-	git_apply_config();
-	if (apply_default_whitespace && parse_whitespace_option(state, apply_default_whitespace))
+	git_apply_config(repo);
+	if (repo_config_values(repo)->apply_default_whitespace &&
+	    parse_whitespace_option(state, repo_config_values(repo)->apply_default_whitespace))
 		return -1;
-	if (apply_default_ignorewhitespace && parse_ignorewhitespace_option(state, apply_default_ignorewhitespace))
+	if (repo_config_values(repo)->apply_default_ignorewhitespace &&
+	    parse_ignorewhitespace_option(state, repo_config_values(repo)->apply_default_ignorewhitespace))
 		return -1;
 	return 0;
 }
@@ -192,7 +196,7 @@ int check_apply_state(struct apply_state *state, int force_apply)
 
 static void set_default_whitespace_mode(struct apply_state *state)
 {
-	if (!state->whitespace_option && !apply_default_whitespace)
+	if (!state->whitespace_option && !repo_config_values(state->repo)->apply_default_whitespace)
 		state->ws_error_action = (state->apply ? warn_on_ws_error : nowarn_ws_error);
 }
 
