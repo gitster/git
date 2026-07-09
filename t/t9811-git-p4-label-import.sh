@@ -62,9 +62,9 @@ test_expect_success 'basic p4 labels' '
 
 		cd main &&
 		git checkout TAG_F1_ONLY &&
-		! test -f f2 &&
+		test_path_is_missing f2 &&
 		git checkout TAG_WITH\$_SHELL_CHAR &&
-		test -f f1 && test -f f2 && test -f file_with_\$metachar &&
+		test_path_is_file f1 && test_path_is_file f2 && test_path_is_file file_with_\$metachar &&
 
 		git show TAG_LONG_LABEL | grep -q "A Label second line"
 	)
@@ -102,11 +102,11 @@ test_expect_success 'two labels on the same changelist' '
 
 		git checkout TAG_F1_1 &&
 		ls &&
-		test -f f1 &&
+		test_path_is_file f1 &&
 
 		git checkout TAG_F1_2 &&
 		ls &&
-		test -f f1
+		test_path_is_file f1
 	)
 '
 
@@ -135,9 +135,9 @@ test_expect_success 'export git tags to p4' '
 		p4 labels ... | grep LIGHTWEIGHT_TAG &&
 		p4 label -o GIT_TAG_1 | grep "tag created in git:xyzzy" &&
 		p4 sync ...@GIT_TAG_1 &&
-		! test -f main/f10 &&
+		test_path_is_missing main/f10 &&
 		p4 sync ...@GIT_TAG_2 &&
-		test -f main/f10
+		test_path_is_file main/f10
 	)
 '
 
@@ -168,9 +168,9 @@ test_expect_success 'export git tags to p4 with deletion' '
 		cd "$cli" &&
 		p4 sync ... &&
 		p4 sync ...@GIT_TAG_ON_DELETED &&
-		test -f main/deleted_file &&
+		test_path_is_file main/deleted_file &&
 		p4 sync ...@GIT_TAG_AFTER_DELETION &&
-		! test -f main/deleted_file &&
+		test_path_is_missing main/deleted_file &&
 		echo "checking label contents" &&
 		p4 label -o GIT_TAG_ON_DELETED | grep "tag on deleted file"
 	)
