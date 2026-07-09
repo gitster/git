@@ -392,7 +392,7 @@ int validate_worktree(const struct worktree *wt, struct strbuf *errmsg,
 	if (!is_absolute_path(wt->path)) {
 		strbuf_addf_gently(errmsg,
 				   _("'%s' file does not contain absolute path to the working tree location"),
-				   repo_common_path_replace(the_repository, &buf, "worktrees/%s/gitdir", wt->id));
+				   repo_common_path_replace(wt->repo, &buf, "worktrees/%s/gitdir", wt->id));
 		goto done;
 	}
 
@@ -414,12 +414,12 @@ int validate_worktree(const struct worktree *wt, struct strbuf *errmsg,
 		goto done;
 	}
 
-	strbuf_realpath(&realpath, repo_common_path_replace(the_repository, &buf, "worktrees/%s", wt->id), 1);
+	strbuf_realpath(&realpath, repo_common_path_replace(wt->repo, &buf, "worktrees/%s", wt->id), 1);
 	ret = fspathcmp(path, realpath.buf);
 
 	if (ret)
 		strbuf_addf_gently(errmsg, _("'%s' does not point back to '%s'"),
-				   wt->path, repo_common_path_replace(the_repository, &buf,
+				   wt->path, repo_common_path_replace(wt->repo, &buf,
 								      "worktrees/%s", wt->id));
 done:
 	free(path);
@@ -440,7 +440,7 @@ void update_worktree_location(struct worktree *wt, const char *path_,
 	if (is_main_worktree(wt))
 		BUG("can't relocate main worktree");
 
-	wt_gitdir = repo_common_path(the_repository, "worktrees/%s/gitdir", wt->id);
+	wt_gitdir = repo_common_path(wt->repo, "worktrees/%s/gitdir", wt->id);
 	strbuf_realpath(&gitdir, wt_gitdir, 1);
 	strbuf_realpath(&path, path_, 1);
 	strbuf_addf(&dotgit, "%s/.git", path.buf);
@@ -658,7 +658,7 @@ static void repair_gitfile(struct worktree *wt,
 		goto done;
 	}
 
-	path = repo_common_path(the_repository, "worktrees/%s", wt->id);
+	path = repo_common_path(wt->repo, "worktrees/%s", wt->id);
 	strbuf_realpath(&repo, path, 1);
 	strbuf_addf(&dotgit, "%s/.git", wt->path);
 	strbuf_addf(&gitdir, "%s/gitdir", repo.buf);
@@ -727,7 +727,7 @@ void repair_worktree_after_gitdir_move(struct worktree *wt, const char *old_path
 	if (is_main_worktree(wt))
 		goto done;
 
-	path = repo_common_path(the_repository, "worktrees/%s/gitdir", wt->id);
+	path = repo_common_path(wt->repo, "worktrees/%s/gitdir", wt->id);
 	strbuf_realpath(&gitdir, path, 1);
 
 	if (strbuf_read_file(&dotgit, gitdir.buf, 0) < 0)
@@ -1042,7 +1042,7 @@ int init_worktree_config(struct repository *r)
 	 */
 	if (r->repository_format_worktree_config)
 		return 0;
-	if ((res = repo_config_set_gently(the_repository, "extensions.worktreeConfig", "true")))
+	if ((res = repo_config_set_gently(r, "extensions.worktreeConfig", "true")))
 		return error(_("failed to set extensions.worktreeConfig setting"));
 
 	common_config_file = xstrfmt("%s/config", r->commondir);
