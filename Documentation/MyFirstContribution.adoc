@@ -1438,6 +1438,19 @@ substantial rework, and mention which parts of the current series will become
 obsolete so reviewers can avoid spending time on them until the updated series
 is ready.
 
+=== What if I don't get a reply?
+
+If you don't receive any review comments after a week or two, do not
+assume your patch has been accepted or merged.  In the Git project,
+silence does not equal approval.  It usually means reviewers are busy
+or haven't noticed your contribution.
+
+If your patch is overlooked, it is perfectly acceptable to send a
+polite ping to the thread.  You can do this by replying to your own
+cover letter (or patch) to ask if anyone has had a chance to look at
+it.  You can also CC additional people who might be interested; use
+the `git-contacts` script (mentioned earlier) to find relevant contributors.
+
 
 [[reviewing]]
 === Responding to Reviews
