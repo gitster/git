@@ -1534,10 +1534,20 @@ that received the `Reviewed-by:` trailer untouched.
 [[after-approval]]
 === After Review Approval
 
-The Git project has four integration branches: `seen`, `next`, `master`, and
-`maint`. Your change will be placed into `seen` fairly early on by the maintainer
-while it is still in the review process; from there, when it is ready for wider
-testing, it will be merged into `next`. Plenty of early testers use `next` and
+The Git project maintains four integration branches: `seen`, `next`,
+`master`, and `maint`.  The maintainer will often place your change
+into `seen` fairly early in the review process; sometimes even before
+it receives its first comments.
+
+However, being queued in `seen` does not mean your patch has been
+accepted.  It is only there for integration testing, CI, and giving
+wider exposure and ready access to reviewers.  To advance from `seen`
+to `next`, your topic needs positive reviews and community consensus
+on the mailing list.  If reviews are favorable, the maintainer will
+mark the topic as "Will merge to `next`" in the "What's cooking"
+report before actually merging it.
+
+Plenty of early testers use `next` and
 may report issues. Eventually, changes in `next` will make it to `master`,
 which is typically considered stable. Finally, when a new release is cut,
 `maint` is used to base bugfixes onto. As mentioned at the beginning of this
