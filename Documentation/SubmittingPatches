@@ -714,17 +714,26 @@ line via `git format-patch --notes`.
 
 When sending a topic, you can optionally propose a topic name and/or a
 one-paragraph summary that should appear in the "What's cooking"
-report when it is picked up to explain the topic.  If you choose to do
-so, please write a 2-5 line paragraph that will fit well in our
-release notes (see many bulleted entries in the
+report when it is picked up to explain the topic.
+
+If you choose to do so, please write a 2-5 line paragraph that will
+fit well in our release notes (see many bulleted entries in the
 Documentation/RelNotes/* files for examples), and make it the first
 (or second, if including a suggested topic name) paragraph of the
-cover letter.  If suggesting a topic name, use the format
-"XX/your-topic-name", where "XX" is a stand-in for the primary
-author's initials, and "your-topic-name" is a brief, dash-delimited
-description of what your topic does.  For a single-patch series, use
-the space between the three-dash line and the diffstat, as described
-earlier.
+cover letter.
+
+If suggesting a topic name, use the format "XX/your-topic-name", where
+"XX" is a stand-in for the primary author's initials, and
+"your-topic-name" is a brief, dash-delimited description of what your
+topic does.  For a single-patch series, use the space between the
+three-dash line and the diffstat, as described earlier.
+
+TIP: When proposing a topic summary in your cover letter, write it in
+the reporting style (passive voice, past or present perfect tense
+describing the change as completed, e.g., "The XYZ subsystem has
+been updated to...") rather than the imperative mood, like you do
+in the proposed commit log messages.  This matches the format
+used in the "What's cooking" report and release notes.
 
 [[multi-series-efforts]]
 If your patch series is part of a larger effort spanning multiple
