@@ -104,7 +104,9 @@ of review.
   branch, in order to make it easier for people to play with it
   without having to pick up and apply the patches to their trees
   themselves.  Being in `seen` has no other meaning.  Specifically, it
-  does not mean the patch was "accepted" in any way.
+  does not mean the patch was "accepted" in any way.  The maintainer
+  may reply with "Will queue" when choosing to add the patches to
+  `seen`, but it does not mean the patch has been "accepted", either.
 
 . When the discussion reaches a consensus that the latest iteration of
   the patches are in good enough shape, the maintainer includes the
