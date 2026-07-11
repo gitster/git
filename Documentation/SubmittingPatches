@@ -289,86 +289,76 @@ run `git diff --check` on your changes before you commit.
 
 The log message that explains your changes is just as important as the
 changes themselves.  Your code may be clearly written with in-code
-comment to sufficiently explain how it works with the surrounding
-code, but those who need to fix or enhance your code in the future
-will need to know _why_ your code does what it does, for a few
-reasons:
+comments, but future developers need to know *why* your code does what
+it does.  The goal of your log message is to convey the intent and
+rationales behind your changes.
 
-. Your code may be doing something differently from what you wanted it
-  to do.  Writing down what you actually wanted to achieve will help
-  them fix your code and make it do what it should have been doing
-  (also, you often discover your own bugs yourself, while writing the
-  log message to summarize the thought behind it).
-
-. Your code may be doing things that were only necessary for your
-  immediate needs (e.g. "do X to directories" without implementing or
-  even designing what is to be done on files).  Writing down why you
-  excluded what the code does not do will help guide future developers.
-  Writing down "we do X to directories, because directories have
-  characteristic Y" would help them infer "oh, files also have the same
-  characteristic Y, so perhaps doing X to them would also make sense?".
-  Saying "we don't do the same X to files, because ..." will help them
-  decide if the reasoning is sound (in which case they do not waste
-  time extending your code to cover files), or reason differently (in
-  which case, they can explain why they extend your code to cover
-  files, too).
-
-The goal of your log message is to convey the _why_ behind your change
-to help future developers.  The reviewers will also make sure that
-your proposed log message will serve this purpose well.
-
-The first line of the commit message should be a short description (50
-characters is the soft limit, see DISCUSSION in linkgit:git-commit[1]),
-and should skip the full stop.  It is also conventional in most cases to
-prefix the first line with "area: " where the area is a filename or
-identifier for the general area of the code being modified, e.g.
-
-* doc: clarify distinction between sign-off and pgp-signing
-* githooks.txt: improve the intro section
-
-If in doubt which identifier to use, run `git log --no-merges` on the
-files you are modifying to see the current conventions.
-
-[[summary-section]]
-The title sentence after the "area:" prefix omits the full stop at the
-end, and its first word is not capitalized (the omission
-of capitalization applies only to the word after the "area:"
-prefix of the title) unless there is a reason to
-capitalize it other than because it is the first word in the sentence.
-E.g. "doc: clarify...", not "doc: Clarify...", or "githooks.txt:
-improve...", not "githooks.txt: Improve...".  But "refs: HEAD is also
-treated as a ref" is correct, as we spell `HEAD` in all caps even when
-it appears in the middle of a sentence.
+Reviewers will evaluate your commit message for clarity and structure.
+A well-structured commit message typically follows a three-part flow:
+**Observation**, **Solution**, and **Command**.
 
 [[meaningful-message]]
-The body should provide a meaningful commit message, which:
+==== Structure of a Commit Message
 
-. explains the problem the change tries to solve, i.e. what is wrong
-  with the current code without the change.
+0. **Title**:
+   The first line of the commit log message is the title that lets
+   readers of `git log --oneline` quickly understand what area the
+   commit touches and what problem it addresses.
 
-. justifies the way the change solves the problem, i.e. why the
-  result with the change is better.
-
-. alternate solutions considered but discarded, if any.
-
-. records the resolution of design or viability concerns raised by the
-  community during the review, if any, ensuring the historical record
-  explains why the chosen approach was accepted over alternatives.
-
+1. **Observation (The Status Quo)**:
+   Explain the problem you are trying to solve.  Describe what is
+   wrong with the current code *without* your change.
++
 [[present-tense]]
-The problem statement that describes the status quo is written in the
-present tense.  Write "The code does X when it is given input Y",
-instead of "The code used to do Y when given input X".  You do not
-have to say "Currently"---the status quo in the problem statement is
-about the code _without_ your change, by project convention.
+Write this problem statement in the **present tense** (e.g., "The
+code does X when given input Y", not "The code used to do Y").  The
+status quo in the problem statement is always about the code without
+your change, by project convention.  Do not use words like
+"Currently" to describe this state.
 
-[[imperative-mood]]
-Describe your changes in imperative mood, e.g. "make xyzzy do frotz"
-instead of "[This patch] makes xyzzy do frotz" or "[I] changed xyzzy
-to do frotz", as if you are giving orders to the codebase to change
-its behavior.  Try to make sure your explanation can be understood
-without external resources. Instead of giving a URL to a mailing list
-archive, summarize the relevant points of the discussion.
+2. **Solution (The Approach)**:
+   Justify the way your change solves the problem.  Explain why the
+   proposed approach is better and mention any alternate solutions
+   considered and discarded.
++
+If your change only addresses a subset of a larger problem (e.g.,
+handles directories but not files because of characteristic Y),
+explain this limitation.  This helps future developers understand the
+boundaries of your work and whether it can be safely extended.
++
+If the change resolves design or viability concerns raised by the
+community during prior review rounds, ensure the message records the
+resolution, explaining why the chosen approach was accepted over
+alternatives.
+
+3. **Command (The Instruction)**:
+   [[imperative-mood]]
+   Command the codebase to change.  Write this in the **imperative
+   mood** (e.g., "make xyzzy do frotz" instead of "This patch makes
+   xyzzy do..." or "I changed xyzzy..."), as if you are giving orders
+   to the codebase to change its behavior.
+
+#### Formatting and Style Guidelines
+
+* **The Subject Line (First Line)**:
+  * Keep it short (50 characters is the soft limit).
+  * Skip the full stop at the end.
+  * Prefix the subject with the modified area followed by a colon
+    and a space (e.g., "area: subject").  The area is typically a
+    filename or identifier (e.g., `doc:`, `transport:`, `t5601:`).
+    Run `git log --no-merges` on target files to see conventions.
+  * [[summary-section]]
+    Do not capitalize the first word after the "area:" prefix unless
+    there is a specific reason (e.g., `HEAD` is always in caps).
+    E.g., use "doc: clarify...", not "doc: Clarify...".
+
+* **The Body**:
+  * Explain the *why* rather than repeating the *what* of the diff.
+  * Try to make the explanation self-contained.  Avoid relying on
+    external URLs (like mailing list archives) as the sole
+    explanation; summarize the relevant points of the discussion
+    instead.
+  * Wrap lines to 68-72 columns.
 
 [[commit-reference]]
 
