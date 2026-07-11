@@ -89,7 +89,6 @@ struct paint_state {
 	size_t parent1_count;
 	size_t parent2_count;
 	size_t mb_candidate_count;
-	int gen_ordered;
 	timestamp_t min_generation;
 	timestamp_t last_gen;
 };
@@ -166,7 +165,6 @@ static struct commit *paint_queue_get(struct paint_state *state)
 
 		/* one side is exhausted */
 		if ((!state->parent1_count || !state->parent2_count) &&
-		    state->gen_ordered &&
 		    generation < GENERATION_NUMBER_INFINITY)
 			return NULL;
 	}
@@ -187,9 +185,13 @@ static int paint_down_to_common(struct repository *r,
 				enum merge_base_flags mb_flags,
 				struct commit_list **result)
 {
+	/*
+	 * Generation ordering is required for the side-exhaustion and
+	 * single-result early exits, which rely on topological traversal
+	 * order (children visited before parents) in the finite region.
+	 */
 	struct paint_state state = {
-		.queue = { compare_commits_by_gen_then_commit_date },
-		.gen_ordered = 1,
+		.queue = { compare_commits_by_gen_then_commit_date }
 	};
 	struct commit *commit;
 	int i;
@@ -198,10 +200,6 @@ static int paint_down_to_common(struct repository *r,
 
 	state.min_generation = min_generation;
 	state.last_gen = GENERATION_NUMBER_INFINITY;
-	if (!min_generation && !corrected_commit_dates_enabled(r)) {
-		state.queue.compare = compare_commits_by_commit_date;
-		state.gen_ordered = 0;
-	}
 
 	one->object.flags |= PARENT1;
 	if (!n) {
@@ -229,7 +227,6 @@ static int paint_down_to_common(struct repository *r,
 				 * descendant of this one.
 				 */
 				if (!(mb_flags & MERGE_BASE_FIND_ALL) &&
-				    state.gen_ordered &&
 				    state.last_gen < GENERATION_NUMBER_INFINITY)
 					break;
 			}

@@ -44,10 +44,6 @@ ancestor is necessarily redundant.
 INFINITY and finite generation regions
 --------------------------------------
 
-The properties in this section assume generation-number ordering (the
-default comparator). They do NOT hold when the date-ordering fallback
-is active -- see <<date-ordering-fallback>>.
-
 The commit-graph stores a generation number for each commit.
 Commits not in the commit-graph have generation
 `GENERATION_NUMBER_INFINITY`. The graph is closed under
@@ -82,10 +78,12 @@ traversal: children are always visited before their parents. This
 means that paint on already-visited commits is final -- no future
 traversal step can add paint to them.
 
-In the INFINITY region, commit-date ordering can violate this: a
-parent with a later date can be visited before a child with an earlier
-date. Paint flags are therefore NOT final at visit time, and a
-commit visited with only one side's paint may later gain the other.
+In the INFINITY region, all commits share the same generation
+value, so the queue breaks ties by commit date. This can violate
+topological ordering: a parent with a later date can be visited
+before a child with an earlier date. Paint flags are therefore
+NOT final at visit time, and a commit visited with only one
+side's paint may later gain the other.
 
 Paint flags are only added, never removed. Since each flag can be set
 at most once per commit, the number of times a commit can be
@@ -148,43 +146,6 @@ common ancestor. No remaining commit in the queue can be a
 descendant of this candidate (generation ordering guarantees
 children are visited first), so it cannot be redundant and the walk
 can stop immediately.
-
-This optimization is NOT safe when the date-ordering fallback is
-active, because commit-date order can visit a deeper ancestor
-before a shallower one -- see <<date-ordering-fallback>>.
-
-[[date-ordering-fallback]]
-Date-ordering fallback
-----------------------
-
-When the commit-graph has generation numbers v1 and no
-generation floor is specified, topological ordering
-(via generation numbers) is disabled.  Topological levels are
-correct but unbalanced -- ordering by such generation numbers
-can sometimes cause the walk to detour too far before finding
-merge bases.  Commit-date ordering typically reaches them in
-fewer steps -- see this change for more details:
-
-   091f4cf3 (commit: don't use generation numbers if not needed,
-   2018-08-30)
-
-With generation number v2 (corrected commit dates) we have the best
-of both worlds and do not need this fallback.
-
-For v1, `paint_down_to_common()` falls back to pure commit-date
-ordering via `compare_commits_by_commit_date`.  Because commit
-dates are not monotonic (clock skew, rebases, etc.), the queue
-may visit commits out of topological order.
-
-This disables the optimizations that depend on generation ordering:
-
-  - *Single result*: the first merge-base candidate found may not
-    be the shallowest, because a deeper ancestor with a higher
-    commit date can be dequeued first.
-
-  - *Side exhaustion*: one paint side can appear to drain from the
-    queue while commits from that side are still waiting with lower
-    dates, causing premature termination.
 
 Related documentation
 ---------------------
