@@ -263,13 +263,15 @@ $ git add Makefile builtin.h builtin/psuh.c git.c .gitignore
 $ git commit -s
 ----
 
-You will be presented with your editor in order to write a commit message. Start
-the commit with a 50-column or less subject line, including the name of the
-component you're working on, followed by a blank line (always required) and then
-the body of your commit message, which should provide the bulk of the context.
-Remember to be explicit and provide the "Why" of your change, especially if it
-couldn't easily be understood from your diff. When editing your commit message,
-don't remove the `Signed-off-by` trailer which was added by `-s` above.
+You will be presented with your editor in order to write a commit message.
+Start the commit with a 50-column or less subject line, including the name
+of the component you're working on, followed by a blank line (always
+required) and then the body.  For details on how to structure your commit
+message (including the recommended **Observation**, **Solution**, and
+**Command** flow), see
+link:SubmittingPatches.html#meaningful-message[SubmittingPatches].
+When editing your commit message, don't remove the `Signed-off-by` trailer
+which was added by `-s` above.
 
 ----
 psuh: add a built-in by popular demand
@@ -279,12 +281,11 @@ present. So here's an implementation to help drive customer
 satisfaction and engagement: a pony which doubtfully greets the user,
 or, a Pony Saying "Um, Hello" (PSUH).
 
-This commit message is intentionally formatted to 72 columns per line,
-starts with a single line as "commit message subject" that is written as
-if to command the codebase to do something (add this, teach a command
-that). The body of the message is designed to add information about the
-commit that is not readily deduced from reading the associated diff,
-such as answering the question "why?".
+This example commit message follows the formatting guidelines (wrapping
+the body to 72 columns, using the imperative mood for the subject, and
+explaining the "why" behind the change).  See
+link:SubmittingPatches.html#meaningful-message[SubmittingPatches] for a
+complete style guide.
 
 Signed-off-by: A U Thor <author@example.com>
 ----
