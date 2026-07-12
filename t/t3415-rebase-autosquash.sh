@@ -461,13 +461,15 @@ test_expect_success 'abort last squash' '
 	git commit --allow-empty -m second &&
 	git commit --allow-empty --squash HEAD &&
 
+	: "squashing empty onto empty leaves an empty commit; --empty=keep" &&
+	: "keeps it so the squash still reaches the editor, which aborts" &&
 	test_must_fail git -c core.editor="grep -q ^pick" \
-		rebase -ki --autosquash HEAD~4 &&
+		rebase -ki --autosquash --empty=keep HEAD~4 &&
 	: do not finish the squash, but resolve it manually &&
 	git commit --allow-empty --amend -m edited-first &&
 	git rebase --skip &&
 	git show >actual &&
-	! grep first actual
+	test_grep ! first actual
 '
 
 test_expect_success 'fixup a fixup' '
@@ -508,6 +510,140 @@ test_expect_success 'pick and fixup respect commit.cleanup' '
 	git -c commit.cleanup=strip rebase -i --autosquash HEAD~3 &&
 	test_commit_message HEAD~1 -m "second commit" &&
 	test_commit_message HEAD -m "something"
+'
+
+test_expect_success 'fixup! that empties its target is dropped with --empty=drop' '
+	git reset --hard base &&
+	test_commit --no-tag addX fileX 1 &&
+	test_commit --no-tag changeX fileX 2 &&
+	test_commit --no-tag later fileW hello &&
+	echo 1 >fileX &&
+	git commit -m "fixup! changeX" fileX &&
+
+	git rebase -i --autosquash --empty=drop HEAD~4 &&
+
+	git log --format=%s >actual &&
+	test_grep ! changeX actual &&
+	test_grep addX actual &&
+	test_grep later actual &&
+	echo 1 >expect &&
+	test_cmp expect fileX &&
+	echo hello >expect &&
+	test_cmp expect fileW
+'
+
+test_expect_success 'fixup! that empties its target is kept with --empty=keep' '
+	git reset --hard base &&
+	test_commit --no-tag addY fileY 1 &&
+	test_commit --no-tag changeY fileY 2 &&
+	echo 1 >fileY &&
+	git commit -m "fixup! changeY" fileY &&
+
+	git rebase -i --autosquash --empty=keep HEAD~3 &&
+
+	git log --format=%s >actual &&
+	test_grep changeY actual &&
+	: "the retained commit is empty" &&
+	git diff --exit-code HEAD~1 HEAD &&
+	echo 1 >expect &&
+	test_cmp expect fileY
+'
+
+test_expect_success 'fixup! that empties its target stops with --empty=stop' '
+	git reset --hard base &&
+	test_commit --no-tag addZ fileZ 1 &&
+	test_commit --no-tag changeZ fileZ 2 &&
+	echo 1 >fileZ &&
+	git commit -m "fixup! changeZ" fileZ &&
+
+	test_when_finished "git rebase --abort" &&
+	test_must_fail git rebase -i --autosquash --empty=stop HEAD~3
+'
+
+test_expect_success 'squash! that empties its target is dropped with --empty=drop' '
+	git reset --hard base &&
+	test_commit --no-tag addS fileS 1 &&
+	test_commit --no-tag changeS fileS 2 &&
+	echo 1 >fileS &&
+	git commit -m "squash! changeS" fileS &&
+
+	git rebase -i --autosquash --empty=drop HEAD~3 &&
+
+	git log --format=%s >actual &&
+	test_grep ! changeS actual &&
+	test_grep addS actual &&
+	echo 1 >expect &&
+	test_cmp expect fileS
+'
+
+test_expect_success 'fixup! filling in an empty commit keeps a non-empty commit' '
+	git reset --hard base &&
+	git commit --allow-empty -m placeholder &&
+	test_commit --no-tag "fixup! placeholder" fileP content &&
+
+	git rebase -i --autosquash --empty=stop HEAD~2 &&
+
+	git log --format=%s >actual &&
+	test_grep placeholder actual &&
+	echo content >expect &&
+	test_cmp expect fileP &&
+	: "the once-empty placeholder is no longer empty" &&
+	test_must_fail git diff --exit-code HEAD~1 HEAD
+'
+
+test_expect_success 'fixup! leaving an empty commit empty stops with --empty=stop' '
+	git reset --hard base &&
+	git commit --allow-empty -m placeholder &&
+	git commit --allow-empty -m "fixup! placeholder" &&
+
+	test_when_finished "git rebase --abort" &&
+	test_must_fail git rebase -i --autosquash --empty=stop HEAD~2
+'
+
+test_expect_success 'fixup! leaving an empty commit empty is dropped with --empty=drop' '
+	git reset --hard base &&
+	git commit --allow-empty -m placeholder &&
+	git commit --allow-empty -m "fixup! placeholder" &&
+
+	git rebase -i --autosquash --empty=drop HEAD~2 &&
+
+	git log --format=%s >actual &&
+	test_grep ! placeholder actual
+'
+
+test_expect_success 'fixup! leaving an empty commit empty is kept with --empty=keep' '
+	git reset --hard base &&
+	git commit --allow-empty -m placeholder &&
+	git commit --allow-empty -m "fixup! placeholder" &&
+
+	git rebase -i --autosquash --empty=keep HEAD~2 &&
+
+	git log --format=%s >actual &&
+	test_grep placeholder actual &&
+	git diff --exit-code HEAD~1 HEAD
+'
+
+test_expect_success 'a dropped emptied fixup is not recorded as rewritten' '
+	git reset --hard base &&
+	test_commit --no-tag preR fileR 1 &&
+	test_commit --no-tag changeR fileR 2 &&
+	R=$(git rev-parse HEAD) &&
+	echo 1 >fileR &&
+	git commit -m "fixup! changeR" fileR &&
+	F=$(git rev-parse HEAD) &&
+	test_commit --no-tag keepR fileK keep &&
+
+	test_when_finished "rm -f .git/hooks/post-rewrite actual.rewrites" &&
+	write_script .git/hooks/post-rewrite <<-\EOF &&
+	cat >actual.rewrites
+	EOF
+
+	git rebase -i --autosquash --empty=drop HEAD~4 &&
+
+	: "changeR and its fixup were dropped, so must not be reported as" &&
+	: "rewritten, but the surviving keepR must be" &&
+	test_grep ! -e "$R" -e "$F" actual.rewrites &&
+	test_grep "$(git rev-parse HEAD)" actual.rewrites
 '
 
 test_done

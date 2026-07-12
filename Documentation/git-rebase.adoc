@@ -282,6 +282,11 @@ by `git log --cherry-mark ...`) are detected and dropped as a
 preliminary step (unless `--reapply-cherry-picks` or `--keep-base` is
 passed).
 +
+A commit can also become empty as a result of `--autosquash`, when a
+`fixup!` or `squash!` commit cancels out all of the changes of the
+commit it is melded into.  Such a commit is treated the same way and is
+dropped, kept, or stopped at according to this option.
++
 See also INCOMPATIBLE OPTIONS below.
 
 --no-keep-empty::
@@ -590,6 +595,13 @@ In the rebase todo list, the actions of squash, fixup and amend commits are
 changed from `pick` to `squash`, `fixup` or `fixup -C`, respectively, and they
 are moved right after the commit they modify.  The `--interactive` option can
 be used to review and edit the todo list before proceeding.
++
+If melding a `fixup!` or `squash!` commit cancels out all of the changes of
+the commit it is applied to, the result is an empty commit.  The handling of
+these empty commits can be configured with the `--empty` option: the emptied
+commit is dropped, kept, or stopped at.  This makes it possible to back a
+change out of a series by committing a revert of it as a `fixup!` and letting
+`--autosquash --empty=drop` remove both.
 +
 The recommended way to create commits with squash markers is by using the
 `--squash`, `--fixup`, `--fixup=amend:` or `--fixup=reword:` options of

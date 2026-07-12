@@ -1817,6 +1817,39 @@ static int allow_empty(struct repository *r,
 		return 0;
 }
 
+/*
+ * Melding a "fixup!"/"squash!" amends HEAD, so the resulting commit is empty
+ * when the index matches the tree of HEAD's parent (rather than of HEAD, as a
+ * plain pick would).  Returns 1 if the amended commit would be empty, 0 if not,
+ * and negative on error.
+ */
+static int amended_commit_is_empty(struct repository *r)
+{
+	struct object_id head_oid, *cache_tree_oid;
+	const struct object_id *parent_tree_oid;
+	struct commit *head_commit;
+
+	if (repo_get_oid(r, "HEAD", &head_oid))
+		return error(_("could not resolve HEAD commit"));
+	head_commit = lookup_commit_reference(r, &head_oid);
+	if (!head_commit || repo_parse_commit(r, head_commit))
+		return -1;
+
+	if (head_commit->parents) {
+		struct commit *parent = head_commit->parents->item;
+		if (repo_parse_commit(r, parent))
+			return -1;
+		parent_tree_oid = get_commit_tree_oid(parent);
+	} else {
+		parent_tree_oid = the_hash_algo->empty_tree;
+	}
+
+	if (!(cache_tree_oid = get_cache_tree_oid(r->index)))
+		return -1;
+
+	return oideq(cache_tree_oid, parent_tree_oid);
+}
+
 static struct {
 	char c;
 	const char *str;
@@ -2260,10 +2293,34 @@ static const char *reflog_message(struct replay_opts *opts,
 	return buf.buf;
 }
 
+/*
+ * A "fixup!"/"squash!" that melds into HEAD may empty it out.  In that case,
+ * with --empty=drop, we want to drop the commit entirely.  Since the commit
+ * being amended has already been created (by the preceding "pick"), and the
+ * index and worktree already match the tree of its parent, dropping it is a
+ * matter of moving HEAD back to that parent.
+ */
+static int reset_head_to_parent(struct repository *r, struct replay_opts *opts,
+				struct object_id *head)
+{
+	struct commit *head_commit = lookup_commit_reference(r, head);
+
+	if (!head_commit || repo_parse_commit(r, head_commit))
+		return error(_("could not parse HEAD commit"));
+	if (!head_commit->parents)
+		return error(_("cannot drop the root commit"));
+
+	return refs_update_ref(get_main_ref_store(r),
+			       reflog_message(opts, "fixup",
+					      "dropping emptied commit"),
+			       "HEAD", &head_commit->parents->item->object.oid,
+			       head, 0, UPDATE_REFS_MSG_ON_ERR);
+}
+
 static int do_pick_commit(struct repository *r,
 			  struct todo_item *item,
 			  struct replay_opts *opts,
-			  int final_fixup, int *check_todo)
+			  int final_fixup, int *check_todo, int *dropped)
 {
 	struct replay_ctx *ctx = opts->ctx;
 	unsigned int flags = should_edit(opts) ? EDIT_MSG : 0;
@@ -2276,6 +2333,9 @@ static int do_pick_commit(struct repository *r,
 	int res, unborn = 0, reword = 0, allow, drop_commit;
 	enum todo_command command = item->command;
 	struct commit *commit = item->commit;
+
+	if (dropped)
+		*dropped = 0;
 
 	if (is_rebase_i(opts))
 		reflog_action = reflog_message(
@@ -2493,23 +2553,67 @@ static int do_pick_commit(struct repository *r,
 	}
 
 	drop_commit = 0;
-	allow = allow_empty(r, opts, commit);
-	if (allow < 0) {
-		res = allow;
-		goto leave;
-	} else if (allow == 1) {
-		flags |= ALLOW_EMPTY;
-	} else if (allow == 2) {
-		drop_commit = 1;
-		refs_delete_ref(get_main_ref_store(r), "", "CHERRY_PICK_HEAD",
-				NULL, REF_NO_DEREF);
-		unlink(git_path_merge_msg(r));
-		refs_delete_ref(get_main_ref_store(r), "", "AUTO_MERGE",
-				NULL, REF_NO_DEREF);
-		fprintf(stderr,
-			_("dropping %s %s -- patch contents already upstream\n"),
-			oid_to_hex(&commit->object.oid), msg.subject);
-	} /* else allow == 0 and there's nothing special to do */
+	if (flags & AMEND_MSG) {
+		/*
+		 * A "fixup!"/"squash!" amends HEAD.  Separately from the usual
+		 * empty-commit handling, check whether applying it leaves the
+		 * commit empty and, if so, honor --empty (keep, drop, or -- when
+		 * neither is requested -- halt below in do_commit), just as for a
+		 * commit that becomes empty when picked.
+		 */
+		int melded_empty = amended_commit_is_empty(r);
+		if (melded_empty < 0) {
+			res = melded_empty;
+			goto leave;
+		} else if (melded_empty && opts->keep_redundant_commits) {
+			flags |= ALLOW_EMPTY;
+		} else if (melded_empty && opts->drop_redundant_commits) {
+			drop_commit = 1;
+			refs_delete_ref(get_main_ref_store(r), "", "CHERRY_PICK_HEAD",
+					NULL, REF_NO_DEREF);
+			unlink(git_path_merge_msg(r));
+			refs_delete_ref(get_main_ref_store(r), "", "AUTO_MERGE",
+					NULL, REF_NO_DEREF);
+			/*
+			 * The commit the fixup was melded into was already
+			 * created by the preceding "pick", so drop it by moving
+			 * HEAD back to its parent.  Since the commit is being
+			 * dropped rather than rewritten, discard the pending
+			 * rewrite records and tell our caller not to add one, so
+			 * that neither the dropped commit nor the fixup is
+			 * recorded as rewritten.
+			 */
+			res = reset_head_to_parent(r, opts, &head);
+			if (res)
+				goto leave;
+			unlink(rebase_path_rewritten_pending());
+			if (dropped)
+				*dropped = 1;
+			fprintf(stderr,
+				_("dropping %s %s -- resulting commit is empty\n"),
+				oid_to_hex(&commit->object.oid), msg.subject);
+		}
+		/* else the meld is non-empty, or empty but neither kept nor
+		 * dropped, in which case do_commit halts on the empty result. */
+	} else {
+		allow = allow_empty(r, opts, commit);
+		if (allow < 0) {
+			res = allow;
+			goto leave;
+		} else if (allow == 1) {
+			flags |= ALLOW_EMPTY;
+		} else if (allow == 2) {
+			drop_commit = 1;
+			refs_delete_ref(get_main_ref_store(r), "", "CHERRY_PICK_HEAD",
+					NULL, REF_NO_DEREF);
+			unlink(git_path_merge_msg(r));
+			refs_delete_ref(get_main_ref_store(r), "", "AUTO_MERGE",
+					NULL, REF_NO_DEREF);
+			fprintf(stderr,
+				_("dropping %s %s -- patch contents already upstream\n"),
+				oid_to_hex(&commit->object.oid), msg.subject);
+		} /* else allow == 0 and there's nothing special to do */
+	}
 	if (!opts->no_commit && !drop_commit) {
 		if (author || command == TODO_REVERT || (flags & AMEND_MSG))
 			res = do_commit(r, msg_file, author, reflog_action,
@@ -4958,12 +5062,12 @@ static int pick_one_commit(struct repository *r,
 			   struct replay_opts *opts,
 			   int *check_todo, int* reschedule)
 {
-	int res;
+	int res, dropped = 0;
 	struct todo_item *item = todo_list->items + todo_list->current;
 	const char *arg = todo_item_get_arg(todo_list, item);
 
 	res = do_pick_commit(r, item, opts, is_final_fixup(todo_list),
-			     check_todo);
+			     check_todo, &dropped);
 	if (is_rebase_i(opts) && res < 0) {
 		/* Reschedule */
 		*reschedule = 1;
@@ -4980,7 +5084,7 @@ static int pick_one_commit(struct repository *r,
 		return error_with_patch(r, commit,
 					arg, item->arg_len, opts, res, !res);
 	}
-	if (is_rebase_i(opts) && !res)
+	if (is_rebase_i(opts) && !res && !dropped)
 		record_in_rewritten(&item->commit->object.oid,
 				    peek_command(todo_list, 1));
 	if (res && is_fixup(item->command)) {
@@ -5545,7 +5649,7 @@ static int single_pick(struct repository *r,
 			TODO_PICK : TODO_REVERT;
 	item.commit = cmit;
 
-	return do_pick_commit(r, &item, opts, 0, &check_todo);
+	return do_pick_commit(r, &item, opts, 0, &check_todo, NULL);
 }
 
 int sequencer_pick_revisions(struct repository *r,
