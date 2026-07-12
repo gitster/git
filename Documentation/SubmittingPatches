@@ -316,7 +316,7 @@ status quo in the problem statement is always about the code without
 your change, by project convention.  Do not use words like
 "Currently" to describe this state.
 
-2. **Solution (The Approach)**:
+2. **Design (The Approach)**:
    Justify the way your change solves the problem.  Explain why the
    proposed approach is better and mention any alternate solutions
    considered and discarded.
@@ -331,14 +331,14 @@ community during prior review rounds, ensure the message records the
 resolution, explaining why the chosen approach was accepted over
 alternatives.
 
-3. **Command (The Instruction)**:
+3. **Implementation (The Execution)**:
    [[imperative-mood]]
-   Command the codebase to change.  Write this in the **imperative
-   mood** (e.g., "make xyzzy do frotz" instead of "This patch makes
-   xyzzy do..." or "I changed xyzzy..."), as if you are giving orders
-   to the codebase to change its behavior.
+   Describe how the changes are implemented.  Write this in the
+   **imperative mood** (e.g., "make xyzzy do frotz" instead of "This
+   patch makes xyzzy do..." or "I changed xyzzy..."), as if you are
+   giving orders to the codebase to change its behavior.
 
-#### Formatting and Style Guidelines
+==== Formatting and Style Guidelines
 
 * **The Subject Line (First Line)**:
   * Keep it short (50 characters is the soft limit).
@@ -358,7 +358,7 @@ alternatives.
     external URLs (like mailing list archives) as the sole
     explanation; summarize the relevant points of the discussion
     instead.
-  * Wrap lines to 68-72 columns.
+  * Wrap lines to around 70 columns.
 
 [[commit-reference]]
 
