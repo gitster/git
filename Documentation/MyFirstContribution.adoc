@@ -1438,6 +1438,19 @@ substantial rework, and mention which parts of the current series will become
 obsolete so reviewers can avoid spending time on them until the updated series
 is ready.
 
+=== What if I don't get a reply?
+
+If you don't receive any review comments after a week or two, do not
+assume your patch has been accepted or merged.  In the Git project,
+silence does not equal approval.  It usually means reviewers are busy,
+haven't noticed your contribution, or they are simply not interested.
+
+If your patch is overlooked, it is perfectly acceptable to send a
+polite ping to the thread.  You can do this by replying to your own
+cover letter (or patch) to ask if anyone has had a chance to look at
+it.  You can also CC additional people who might be interested; use
+the `git-contacts` script (mentioned earlier) to find relevant contributors.
+
 
 [[reviewing]]
 === Responding to Reviews
@@ -1496,17 +1509,49 @@ changing history, but since it's local history which you haven't shared with
 anyone, that is okay for now! (Later, it may not make sense to do this; take a
 look at the section below this one for some context.)
 
+=== Handling trailers in subsequent versions
+
+If a reviewer replies with an `Acked-by: Real Name <email>` trailer,
+carry it forward when preparing v2:
+
+- If your v2 changes are minor (e.g., fixing typos or making small
+  style tweaks) and do not affect the reviewed logic, add their
+  trailer to the commit message of the updated patch.  This lets the
+  maintainer know that the patch has received favorable review.
+
+- If your v2 contains significant logic changes or rewrites to address
+  feedback, do *not* carry over the trailer, as the reviewer has not
+  seen the new logic yet.  Mention in your cover letter that you made
+  changes that require re-review.
+
+The rule for the `Reviewed-by:` trailer is more strict: you generally
+should not carry it over to a new iteration unless you are resending
+the patch without any change.  For example, a new iteration of a patch
+series might update other patches while leaving the reviewed patch
+that received the `Reviewed-by:` trailer untouched.
+
+
 [[after-approval]]
 === After Review Approval
 
-The Git project has four integration branches: `seen`, `next`, `master`, and
-`maint`. Your change will be placed into `seen` fairly early on by the maintainer
-while it is still in the review process; from there, when it is ready for wider
-testing, it will be merged into `next`. Plenty of early testers use `next` and
-may report issues. Eventually, changes in `next` will make it to `master`,
-which is typically considered stable. Finally, when a new release is cut,
-`maint` is used to base bugfixes onto. As mentioned at the beginning of this
-document, you can read `Documents/SubmittingPatches` for some more info about
+The Git project maintains four integration branches: `seen`, `next`,
+`master`, and `maint`.  The maintainer will often place your change
+into `seen` fairly early in the review process; sometimes even before
+it receives its first comments.
+
+However, being queued in `seen` does not mean your patch has been
+accepted.  It is only there for integration testing, CI, and giving
+wider exposure and ready access to reviewers.  To advance from `seen`
+to `next`, your topic needs positive reviews and community consensus
+on the mailing list.  If reviews are favorable, the maintainer will
+mark the topic as "Will merge to `next`" in the "What's cooking"
+report before actually merging it.
+
+Plenty of early testers use `next` and may report issues. Eventually,
+changes in `next` will make it to `master`, which is typically
+considered stable. Finally, when a new release is cut, `maint` is used
+to base bugfixes onto. As mentioned at the beginning of this document,
+you can read `Documents/SubmittingPatches` for some more info about
 the use of the various integration branches.
 
 Back to now: your code has been lauded by the upstream reviewers. It is perfect.
