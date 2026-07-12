@@ -1456,47 +1456,16 @@ the `git-contacts` script (mentioned earlier) to find relevant contributors.
 [[reviewing]]
 === Responding to Reviews
 
-After a few days, you will hopefully receive a reply to your patchset with some
-comments. Woohoo! Now you can get back to work.
+After a few days, you will hopefully receive a reply to your patchset
+with some comments.  Woohoo!  Now you can get back to work.
 
-It's good manners to reply to each comment in the mailing list discussion
-instead of letting the next version of your patch be your only response. Tell
-the reviewer whether you plan to make the suggested change, keep the original,
-or pursue a different approach. This way reviewers can respond to your reasoning
-before you spend time preparing a version they may not agree with, and later do
-not need to inspect your v2 to figure out whether you implemented their comment
-or not.
+When responding to reviews, it is important to follow the project's
+mailing list etiquette (such as using plaintext, replying inline, and
+bottom-posting).  For detailed guidelines, see
+link:SubmittingPatches.html#respond-to-reviews[SubmittingPatches].
 
-Reviewers may ask you about what you wrote in the patchset, either in
-the proposed commit log message or in the changes themselves.  You
-should answer these questions in your response messages, but often the
-reason why reviewers asked these questions to understand what you meant
-to write is because your patchset needed clarification to be understood.
-
-Do not be satisfied by just answering their questions in your response
-and hear them say that they now understand what you wanted to say.
-Update your patches to clarify the points reviewers had trouble with,
-and prepare your v2; the words you used to explain your v1 to answer
-reviewers' questions may be useful thing to use.  Your goal is to make
-your v2 clear enough so that it becomes unnecessary for you to give the
-same explanation to the next person who reads it.
-
-If you are going to push back on a comment, be polite and explain why you feel
-your original is better; be prepared that the reviewer may still disagree with
-you, and the rest of the community may weigh in on one side or the other. As
-with all code reviews, it's important to keep an open mind to doing something a
-different way than you originally planned; other reviewers have a different
-perspective on the project than you do, and may be thinking of a valid side
-effect which had not occurred to you. It is always okay to ask for clarification
-if you aren't sure why a change was suggested, or what the reviewer is asking
-you to do.
-
-Make sure your email client has a plaintext email mode and it is turned on; the
-Git list rejects HTML email. Please also follow the mailing list etiquette
-outlined in the
-https://kernel.googlesource.com/pub/scm/git/git/+/todo/MaintNotes[Maintainer's
-Note], which are similar to etiquette rules in most open source communities
-surrounding bottom-posting and inline replies.
+Be prepared to explain your decisions politely, keep an open mind, and
+update your patches to clarify points that reviewers found confusing.
 
 When you're making changes to your code, it is cleanest - that is, the resulting
 commits are easiest to look at - if you use `git rebase -i` (interactive
