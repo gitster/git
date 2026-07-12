@@ -1512,24 +1512,10 @@ look at the section below this one for some context.)
 
 === Handling trailers in subsequent versions
 
-If a reviewer replies with an `Acked-by: Real Name <email>` trailer,
-carry it forward when preparing v2:
-
-- If your v2 changes are minor (e.g., fixing typos or making small
-  style tweaks) and do not affect the reviewed logic, add their
-  trailer to the commit message of the updated patch.  This lets the
-  maintainer know that the patch has received favorable review.
-
-- If your v2 contains significant logic changes or rewrites to address
-  feedback, do *not* carry over the trailer, as the reviewer has not
-  seen the new logic yet.  Mention in your cover letter that you made
-  changes that require re-review.
-
-The rule for the `Reviewed-by:` trailer is more strict: you generally
-should not carry it over to a new iteration unless you are resending
-the patch without any change.  For example, a new iteration of a patch
-series might update other patches while leaving the reviewed patch
-that received the `Reviewed-by:` trailer untouched.
+When preparing subsequent versions of your patch series, you should
+carry forward reviewer trailers (like `Acked-by:` and `Reviewed-by:`)
+according to the rules in
+link:SubmittingPatches.html#carry-forward-trailers[SubmittingPatches].
 
 
 [[after-approval]]

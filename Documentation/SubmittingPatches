@@ -531,6 +531,27 @@ someone else, who then in turn adds her own sign-off. Further, any
 trailers that you add beyond your sign-off should come before that
 sign-off. That makes it clear what trailers which person added.
 
+[[carry-forward-trailers]]
+==== Carrying forward trailers in subsequent revisions
+
+If a reviewer replies with a trailer (e.g., `Acked-by:`, `Reviewed-by:`),
+you should carry it forward when preparing subsequent versions of your
+patch series under the following conditions:
+
+*   `Acked-by:`: Carry this trailer forward if the changes in the new
+    version are minor (e.g., fixing typos, small style tweaks, or
+    clarifying documentation) and do not affect the reviewed logic.
+    Do *not* carry it forward if the logic has changed significantly.
+    Always mention in your cover letter if you made changes that require
+    re-review.
+
+*   `Reviewed-by:`: This trailer is more strict.  Do *not* carry it
+    forward to a new iteration of the patch unless that specific patch
+    in the series is resubmitted completely unchanged.  For example, if
+    a subsequent iteration of a series updates other patches but leaves
+    one reviewed patch untouched, that untouched patch may retain its
+    `Reviewed-by:` trailer.
+
 [[cover-letter]]
 === Cover Letter
 
