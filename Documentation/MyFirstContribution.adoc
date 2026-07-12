@@ -293,8 +293,8 @@ Signed-off-by: A U Thor <author@example.com>
 Go ahead and inspect your new commit with `git show`. "psuh:" indicates you
 have modified mainly the `psuh` command. The subject line gives readers an idea
 of what you've changed. The sign-off line (`-s`) indicates that you agree to
-the Developer's Certificate of Origin 1.1 (see the
-`Documentation/SubmittingPatches` +++[[dco]]+++ header).
+the
+link:SubmittingPatches.html#dco[Developer's Certificate of Origin 1.1].
 
 For the remainder of the tutorial, the subject line only will be listed for the
 sake of brevity. However, fully-fleshed example commit messages are available
