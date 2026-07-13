@@ -294,71 +294,80 @@ it does.  The goal of your log message is to convey the intent and
 rationales behind your changes.
 
 Reviewers will evaluate your commit message for clarity and structure.
-A well-structured commit message typically follows a three-part flow:
-**Observation**, **Solution**, and **Command**.
 
 [[meaningful-message]]
 ==== Structure of a Commit Message
 
-0. **Title**:
+1. Title:
    The first line of the commit log message is the title that lets
    readers of `git log --oneline` quickly understand what area the
    commit touches and what problem it addresses.
 
-1. **Observation (The Status Quo)**:
-   Explain the problem you are trying to solve.  Describe what is
-   wrong with the current code *without* your change.
-+
+   - Keep it short (50 characters is the soft limit).
+   - Skip the full stop at the end.
+   - Prefix the subject with the modified area followed by a colon
+     and a space (e.g., "area: subject").  The area is typically a
+     filename or identifier (e.g., `doc:`, `transport:`, `t5601:`).
+     Run `git log --no-merges` on target files to see conventions.
+   - Do not capitalize the first word after the "area:" prefix
+     unless there is a specific reason (e.g., `HEAD` is always in
+     uppercase).  For example, use "doc: clarify...", not "doc:
+     Clarify...".
+
+2. Body:
+   A well-structured commit message body typically follows a
+   three-part flow: Observation, Solution Design, and
+   Implementation.
+
+   - Leave a blank line between the title and the body.
+   - Wrap lines in the body of the commit log message to around 70
+     columns.
+   - The body of the log message must be self-contained.  Do not
+     rely on external URLs (including mailing list archives) as the
+     sole explanation.  Summarize the relevant points of external
+     material so that readers can understand the change with the log
+     message alone.
+
 [[present-tense]]
-Write this problem statement in the **present tense** (e.g., "The
-code does X when given input Y", not "The code used to do Y").  The
-status quo in the problem statement is always about the code without
-your change, by project convention.  Do not use words like
-"Currently" to describe this state.
+3. Observation (The Status Quo):
+   Explain the problem you are solving with your change by
+   describing what is wrong with the current code *without* your
+   change.
 
-2. **Design (The Approach)**:
-   Justify the way your change solves the problem.  Explain why the
-   proposed approach is better and mention any alternate solutions
-   considered and discarded.
-+
-If your change only addresses a subset of a larger problem (e.g.,
-handles directories but not files because of characteristic Y),
-explain this limitation.  This helps future developers understand the
-boundaries of your work and whether it can be safely extended.
-+
-If the change resolves design or viability concerns raised by the
-community during prior review rounds, ensure the message records the
-resolution, explaining why the chosen approach was accepted over
-alternatives.
+   - As this part is always about the current state by convention,
+     words like "currently" are unnecessary.
+   - Write this problem statement in the present tense (e.g., "The
+     code does X when given input Y", not "The code did X").
 
-3. **Implementation (The Execution)**:
-   [[imperative-mood]]
-   Describe how the changes are implemented.  Write this in the
-   **imperative mood** (e.g., "make xyzzy do frotz" instead of "This
-   patch makes xyzzy do..." or "I changed xyzzy..."), as if you are
-   giving orders to the codebase to change its behavior.
+4. Solution Design (The Approach):
+   Explain the approach you took, justify how it solves the problem,
+   and describe why you chose the particular design over other
+   alternatives.
 
-==== Formatting and Style Guidelines
+   - Focus on describing _why_, not _how_ (e.g., "The code does X
+     when given input Y, but it should do Z _because_...").
+   - If your change only addresses a subset of a larger problem
+     (e.g., it handles directories but not files because ...),
+     explain this limitation.  This helps future developers
+     understand the boundaries of your work and whether it can be
+     safely extended.
+   - If your change resolves design or viability concerns raised by
+     the community during prior review rounds, ensure the message
+     records the resolution, explaining why the chosen approach was
+     accepted over alternatives.
 
-* **The Subject Line (First Line)**:
-  * Keep it short (50 characters is the soft limit).
-  * Skip the full stop at the end.
-  * Prefix the subject with the modified area followed by a colon
-    and a space (e.g., "area: subject").  The area is typically a
-    filename or identifier (e.g., `doc:`, `transport:`, `t5601:`).
-    Run `git log --no-merges` on target files to see conventions.
-  * [[summary-section]]
-    Do not capitalize the first word after the "area:" prefix unless
-    there is a specific reason (e.g., `HEAD` is always in caps).
-    E.g., use "doc: clarify...", not "doc: Clarify...".
+[[imperative-mood]]
+5. Implementation (The Execution):
+   Finally, describe how the changes are implemented.
 
-* **The Body**:
-  * Explain the *why* rather than repeating the *what* of the diff.
-  * Try to make the explanation self-contained.  Avoid relying on
-    external URLs (like mailing list archives) as the sole
-    explanation; summarize the relevant points of the discussion
-    instead.
-  * Wrap lines to around 70 columns.
+   - Write this in the imperative mood (e.g., "Make xyzzy do frotz",
+     not "This patch makes xyzzy do..." or "I changed xyzzy..."), as
+     if you are instructing an agent to make changes to the
+     codebase.
+   - You do not have to repeat everything readers can discern from
+     the patch text.  Highlight the key points in your
+     implementation.
+
 
 [[commit-reference]]
 
