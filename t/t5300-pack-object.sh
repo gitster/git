@@ -211,6 +211,58 @@ test_expect_success 'pack with OFS_DELTA' '
 	test_grep " OFS_DELTA " deltas
 '
 
+test_expect_success 'pack without REF_DELTA' '
+	git pack-objects --no-ref-delta --stdout <obj-list >no-ref.pack &&
+	git index-pack -o no-ref.idx no-ref.pack &&
+
+	test-tool pack-deltas --list-deltas no-ref.idx >deltas &&
+	test_must_be_empty deltas
+'
+
+test_expect_success 'pack without REF_DELTA with OFS_DELTA' '
+	git pack-objects --delta-base-offset --no-ref-delta --stdout \
+		<obj-list >no-ref-ofs.pack &&
+	git index-pack -o no-ref-ofs.idx no-ref-ofs.pack &&
+
+	test-tool pack-deltas --list-deltas no-ref-ofs.idx >deltas &&
+	test_grep " OFS_DELTA " deltas &&
+	test_grep ! " REF_DELTA " deltas
+'
+
+test_expect_success 'pack without REF_DELTA skips excluded delta bases' '
+	test_when_finished "git read-tree $tree" &&
+
+	echo bar >>d &&
+	git update-index --add d &&
+	thin_tree=$(git write-tree) &&
+	thin_commit=$(git commit-tree $thin_tree -p $commit </dev/null) &&
+
+	{
+		echo $thin_commit &&
+		echo ^$commit
+	} >thin-revs &&
+
+	# Each type appears only once in the output, so any delta must
+	# use an excluded base and therefore be a REF_DELTA.
+	git pack-objects --thin --stdout --revs \
+		<thin-revs >thin.pack &&
+	git index-pack --fix-thin --stdin thin-fixed.pack \
+		<thin.pack >/dev/null &&
+
+	test-tool pack-deltas --list-deltas thin-fixed.idx >deltas &&
+	test_grep ! " OFS_DELTA " deltas &&
+	test_grep " REF_DELTA " deltas &&
+
+	git pack-objects --thin --stdout --revs \
+		--delta-base-offset --no-ref-delta \
+		<thin-revs >no-ref-thin.pack &&
+	git index-pack --fix-thin --stdin no-ref-thin-fixed.pack \
+		<no-ref-thin.pack >/dev/null &&
+
+	test-tool pack-deltas --list-deltas no-ref-thin-fixed.idx >deltas &&
+	test_must_be_empty deltas
+'
+
 test_expect_success 'unpack with OFS_DELTA' '
 	check_unpack test-3-${packname_3} obj-list
 '
