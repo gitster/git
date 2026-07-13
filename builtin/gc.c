@@ -430,19 +430,21 @@ out:
 
 static int too_many_loose_objects(struct odb_source_files *files, int limit)
 {
-	/*
-	 * This is weird, but stems from legacy behaviour: the GC auto
-	 * threshold was always essentially interpreted as if it was rounded up
-	 * to the next multiple 256 of, so we retain this behaviour for now.
-	 */
-	int auto_threshold = DIV_ROUND_UP(limit, 256) * 256;
 	unsigned long loose_count;
+
+	if (limit <= 0)
+		return 0;
 
 	if (odb_source_count_objects(&files->loose->base, ODB_COUNT_OBJECTS_APPROXIMATE,
 				     &loose_count) < 0)
 		return 0;
 
-	return loose_count > auto_threshold;
+	/*
+	 * This is weird, but stems from legacy behaviour: the GC auto
+	 * threshold was always essentially interpreted as if it was rounded up
+	 * to the next multiple 256 of, so we retain this behaviour for now.
+	 */
+	return loose_count > (DIV_ROUND_UP(((unsigned long) limit), 256) * 256);
 }
 
 static struct packed_git *find_base_packs(struct odb_source_files *files,
@@ -456,7 +458,7 @@ static struct packed_git *find_base_packs(struct odb_source_files *files,
 		if (e->pack->is_cruft)
 			continue;
 		if (limit) {
-			if (e->pack->pack_size >= limit)
+			if ((uintmax_t) e->pack->pack_size >= limit)
 				string_list_append(packs, e->pack->pack_name);
 		} else if (!base || base->pack_size < e->pack->pack_size) {
 			base = e->pack;
@@ -946,7 +948,7 @@ static int odb_optimize(struct object_database *odb,
 
 				if (big_pack_threshold) {
 					find_base_packs(files, &keep_pack, big_pack_threshold);
-					if (keep_pack.nr >= gc_auto_pack_limit) {
+					if (keep_pack.nr >= (unsigned long) gc_auto_pack_limit) {
 						string_list_clear(&keep_pack, 0);
 						find_base_packs(files, &keep_pack, 0);
 					}
