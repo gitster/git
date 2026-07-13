@@ -2207,6 +2207,13 @@ static int can_reuse_delta(const struct object_id *base_oid,
 	 */
 	base = packlist_find(&to_pack, base_oid);
 	if (base) {
+		/*
+		 * A preferred base is omitted from the resulting pack, so it
+		 * can only be referenced by object ID.
+		 */
+		if (base->preferred_base && !allow_ref_delta)
+			return 0;
+
 		if (!in_same_island(&delta->idx.oid, &base->idx.oid))
 			return 0;
 		*base_out = base;
@@ -2218,7 +2225,8 @@ static int can_reuse_delta(const struct object_id *base_oid,
 	 * even if it was buried too deep in history to make it into the
 	 * packing list.
 	 */
-	if (thin && bitmap_has_oid_in_uninteresting(bitmap_git, base_oid)) {
+	if (allow_ref_delta && thin &&
+	    bitmap_has_oid_in_uninteresting(bitmap_git, base_oid)) {
 		if (use_delta_islands) {
 			if (!in_same_island(&delta->idx.oid, base_oid))
 				return 0;
@@ -4668,7 +4676,7 @@ static int pack_options_allow_reuse(void)
 	       !ignore_packed_keep_on_disk &&
 	       !ignore_packed_keep_in_core &&
 	       (!local || !have_non_local_packs) &&
-	       !incremental && allow_ref_delta;
+	       !incremental && (allow_ref_delta || allow_ofs_delta);
 }
 
 static int get_object_list_from_bitmap(struct rev_info *revs)
@@ -4690,7 +4698,8 @@ static int get_object_list_from_bitmap(struct rev_info *revs)
 						   &reuse_packfiles,
 						   &reuse_packfiles_nr,
 						   &reuse_packfile_bitmap,
-						   allow_pack_reuse == MULTI_PACK_REUSE);
+						   allow_pack_reuse == MULTI_PACK_REUSE,
+						   allow_ref_delta);
 
 	if (reuse_packfiles) {
 		reuse_packfile_objects = bitmap_popcount(reuse_packfile_bitmap);
@@ -5317,7 +5326,7 @@ int cmd_pack_objects(int argc,
 	if (unpack_unreachable || keep_unreachable || pack_loose_unreachable)
 		use_internal_rev_list = 1;
 
-	if (!reuse_object || !allow_ref_delta)
+	if (!reuse_object || (!allow_ref_delta && !allow_ofs_delta))
 		reuse_delta = 0;
 	if (cfg->pack_compression_level == -1)
 		cfg->pack_compression_level = Z_DEFAULT_COMPRESSION;

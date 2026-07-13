@@ -229,6 +229,20 @@ test_expect_success 'pack without REF_DELTA with OFS_DELTA' '
 	test_grep ! " REF_DELTA " deltas
 '
 
+test_expect_success 'pack without REF_DELTA reuses deltas as OFS_DELTA' '
+	# Install the REF_DELTA pack above and disable delta search, so any
+	# output delta must be a reused REF_DELTA rewritten as OFS_DELTA.
+	test_when_finished "rm -f .git/objects/pack/pack-$packname_2.*" &&
+	git index-pack --stdin <test-2-${packname_2}.pack >/dev/null &&
+
+	git pack-objects --window=0 --delta-base-offset \
+		--no-ref-delta --stdout <obj-list >reused.pack &&
+	git index-pack -o reused.idx reused.pack &&
+	test-tool pack-deltas --list-deltas reused.idx >deltas &&
+	test_grep " OFS_DELTA " deltas &&
+	test_grep ! " REF_DELTA " deltas
+'
+
 test_expect_success 'pack without REF_DELTA skips excluded delta bases' '
 	test_when_finished "git read-tree $tree" &&
 
@@ -253,7 +267,12 @@ test_expect_success 'pack without REF_DELTA skips excluded delta bases' '
 	test_grep ! " OFS_DELTA " deltas &&
 	test_grep " REF_DELTA " deltas &&
 
-	git pack-objects --thin --stdout --revs \
+	# Store the REF_DELTA entries above and disable delta search below,
+	# so any output delta would have to reuse an excluded-base
+	# REF_DELTA.
+	git index-pack --stdin <thin-fixed.pack >/dev/null &&
+
+	git pack-objects --thin --window=0 --stdout --revs \
 		--delta-base-offset --no-ref-delta \
 		<thin-revs >no-ref-thin.pack &&
 	git index-pack --fix-thin --stdin no-ref-thin-fixed.pack \
