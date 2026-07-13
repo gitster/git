@@ -2668,7 +2668,10 @@ cleanup:
 
 void release_http_pack_request(struct http_pack_request *preq)
 {
-	if (preq->packfile) {
+	if (preq->tempfile) {
+		delete_tempfile(&preq->tempfile);
+		preq->packfile = NULL;
+	} else if (preq->packfile) {
 		fclose(preq->packfile);
 		preq->packfile = NULL;
 	}
@@ -2688,7 +2691,10 @@ int finish_http_pack_request(struct http_pack_request *preq)
 	int tmpfile_fd;
 	int ret = 0;
 
-	fclose(preq->packfile);
+	if (preq->tempfile)
+		close_tempfile_gently(preq->tempfile);
+	else
+		fclose(preq->packfile);
 	preq->packfile = NULL;
 
 	tmpfile_fd = xopen(preq->tmpfile.buf, O_RDONLY);
@@ -2711,7 +2717,10 @@ int finish_http_pack_request(struct http_pack_request *preq)
 
 cleanup:
 	close(tmpfile_fd);
-	unlink(preq->tmpfile.buf);
+	if (preq->tempfile)
+		delete_tempfile(&preq->tempfile);
+	else
+		unlink(preq->tmpfile.buf);
 	return ret;
 }
 
@@ -2723,20 +2732,8 @@ void http_install_packfile(struct packed_git *p,
 	packfile_store_add_pack(files->packed, p);
 }
 
-struct http_pack_request *new_http_pack_request(
-	const unsigned char *packed_git_hash, const char *base_url) {
-
-	struct strbuf buf = STRBUF_INIT;
-
-	end_url_with_slash(&buf, base_url);
-	strbuf_addf(&buf, "objects/pack/pack-%s.pack",
-		hash_to_hex(packed_git_hash));
-	return new_direct_http_pack_request(packed_git_hash,
-					    strbuf_detach(&buf, NULL));
-}
-
-struct http_pack_request *new_direct_http_pack_request(
-	const unsigned char *packed_git_hash, char *url)
+static struct http_pack_request *new_http_pack_request_for_url(
+	const unsigned char *packed_git_hash, char *url, int resumable)
 {
 	off_t prev_posn = 0;
 	struct http_pack_request *preq;
@@ -2746,9 +2743,22 @@ struct http_pack_request *new_direct_http_pack_request(
 
 	preq->url = url;
 
-	odb_pack_name(the_repository, &preq->tmpfile, packed_git_hash, "pack");
-	strbuf_addstr(&preq->tmpfile, ".temp");
-	preq->packfile = fopen(preq->tmpfile.buf, "a");
+	if (resumable) {
+		odb_pack_name(the_repository, &preq->tmpfile,
+			      packed_git_hash, "pack");
+		strbuf_addstr(&preq->tmpfile, ".temp");
+		preq->packfile = fopen(preq->tmpfile.buf, "a");
+	} else {
+		strbuf_addf(&preq->tmpfile, "%s/pack/tmp_pack_XXXXXX",
+			    repo_get_object_directory(the_repository));
+		preq->tempfile = mks_tempfile_m(preq->tmpfile.buf, 0444);
+		if (preq->tempfile) {
+			strbuf_reset(&preq->tmpfile);
+			strbuf_addstr(&preq->tmpfile,
+				      get_tempfile_path(preq->tempfile));
+			preq->packfile = fdopen_tempfile(preq->tempfile, "w");
+		}
+	}
 	if (!preq->packfile) {
 		error("Unable to open local file %s for pack",
 		      preq->tmpfile.buf);
@@ -2766,8 +2776,9 @@ struct http_pack_request *new_direct_http_pack_request(
 	 * If there is data present from a previous transfer attempt,
 	 * resume where it left off
 	 */
-	prev_posn = ftello(preq->packfile);
-	if (prev_posn>0) {
+	if (resumable)
+		prev_posn = ftello(preq->packfile);
+	if (prev_posn > 0) {
 		if (http_is_verbose)
 			fprintf(stderr,
 				"Resuming fetch of pack %s at byte %"PRIuMAX"\n",
@@ -2779,10 +2790,26 @@ struct http_pack_request *new_direct_http_pack_request(
 	return preq;
 
 abort:
-	strbuf_release(&preq->tmpfile);
-	free(preq->url);
-	free(preq);
+	release_http_pack_request(preq);
 	return NULL;
+}
+
+struct http_pack_request *new_http_pack_request(
+	const unsigned char *packed_git_hash, const char *base_url)
+{
+	struct strbuf buf = STRBUF_INIT;
+
+	end_url_with_slash(&buf, base_url);
+	strbuf_addf(&buf, "objects/pack/pack-%s.pack",
+		hash_to_hex(packed_git_hash));
+	return new_http_pack_request_for_url(packed_git_hash,
+					     strbuf_detach(&buf, NULL), 1);
+}
+
+struct http_pack_request *new_direct_http_pack_request(
+	const unsigned char *packed_git_hash, char *url)
+{
+	return new_http_pack_request_for_url(packed_git_hash, url, 0);
 }
 
 /* Helpers for fetching objects (loose) */
