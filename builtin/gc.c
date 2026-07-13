@@ -1011,6 +1011,13 @@ int cmd_gc(int argc,
 	if (opts.detach <= 0 && !skip_foreground_tasks)
 		gc_foreground_tasks(&opts, &cfg);
 
+	if (cfg.prune_worktrees_expire &&
+	    maintenance_task_worktree_prune(&opts, &cfg))
+		die(FAILED_RUN, "worktree");
+
+	if (maintenance_task_rerere_gc(&opts, &cfg))
+		die(FAILED_RUN, "rerere");
+
 	if (!the_repository->repository_format_precious_objects) {
 		struct child_process repack_cmd = CHILD_PROCESS_INIT;
 
@@ -1037,13 +1044,6 @@ int cmd_gc(int argc,
 				die(FAILED_RUN, prune_cmd.args.v[0]);
 		}
 	}
-
-	if (cfg.prune_worktrees_expire &&
-	    maintenance_task_worktree_prune(&opts, &cfg))
-		die(FAILED_RUN, "worktree");
-
-	if (maintenance_task_rerere_gc(&opts, &cfg))
-		die(FAILED_RUN, "rerere");
 
 	report_garbage = report_pack_garbage;
 	odb_reprepare(the_repository->objects);
