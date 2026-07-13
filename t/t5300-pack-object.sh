@@ -190,7 +190,9 @@ test_expect_success 'unpack without delta (core.fsyncmethod=batch)' '
 
 test_expect_success 'pack with REF_DELTA' '
 	packname_2=$(git pack-objects --progress test-2 <obj-list 2>stderr) &&
-	check_deltas stderr -gt 0
+	check_deltas stderr -gt 0 &&
+	test-tool pack-deltas --list-deltas test-2-$packname_2.idx >deltas &&
+	test_grep " REF_DELTA " deltas
 '
 
 test_expect_success 'unpack with REF_DELTA' '
@@ -204,7 +206,9 @@ test_expect_success 'unpack with REF_DELTA (core.fsyncmethod=batch)' '
 test_expect_success 'pack with OFS_DELTA' '
 	packname_3=$(git pack-objects --progress --delta-base-offset test-3 \
 			<obj-list 2>stderr) &&
-	check_deltas stderr -gt 0
+	check_deltas stderr -gt 0 &&
+	test-tool pack-deltas --list-deltas test-3-$packname_3.idx >deltas &&
+	test_grep " OFS_DELTA " deltas
 '
 
 test_expect_success 'unpack with OFS_DELTA' '
