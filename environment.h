@@ -136,6 +136,15 @@ int git_default_core_config(const char *var, const char *value,
 void repo_config_values_init(struct repo_config_values *cfg);
 
 /*
+ * Frees memory allocated for dynamically loaded configuration values
+ * inside `repo_config_values`.
+ *
+ * As dynamically allocated variables are migrated into this struct,
+ * their FREE_AND_NULL() calls should be appended here.
+ */
+void repo_config_values_clear(struct repo_config_values *cfg);
+
+/*
  * TODO: All the below state either explicitly or implicitly relies on
  * `the_repository`. We should eventually get rid of these and make the
  * dependency on a repository explicit:

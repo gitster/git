@@ -726,3 +726,8 @@ void repo_config_values_init(struct repo_config_values *cfg)
 	cfg->sparse_expect_files_outside_of_patterns = 0;
 	cfg->warn_on_object_refname_ambiguity = 1;
 }
+
+void repo_config_values_clear(struct repo_config_values *cfg)
+{
+	FREE_AND_NULL(cfg->attributes_file);
+}
