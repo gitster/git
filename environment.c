@@ -60,7 +60,6 @@ char *check_roundtrip_encoding;
 #ifndef OBJECT_CREATION_MODE
 #define OBJECT_CREATION_MODE OBJECT_CREATION_USES_HARDLINKS
 #endif
-enum object_creation_mode object_creation_mode = OBJECT_CREATION_MODE;
 int grafts_keep_true_parents;
 unsigned long pack_size_limit_cfg;
 
@@ -512,9 +511,9 @@ int git_default_core_config(const char *var, const char *value,
 		if (!value)
 			return config_error_nonbool(var);
 		if (!strcmp(value, "rename"))
-			object_creation_mode = OBJECT_CREATION_USES_RENAMES;
+			cfg->object_creation_mode = OBJECT_CREATION_USES_RENAMES;
 		else if (!strcmp(value, "link"))
-			object_creation_mode = OBJECT_CREATION_USES_HARDLINKS;
+			cfg->object_creation_mode = OBJECT_CREATION_USES_HARDLINKS;
 		else
 			die(_("invalid mode for object creation: %s"), value);
 		return 0;
@@ -728,6 +727,7 @@ void repo_config_values_init(struct repo_config_values *cfg)
 	cfg->apply_default_ignorewhitespace = NULL;
 	cfg->push_default = PUSH_DEFAULT_UNSPECIFIED;
 	cfg->autorebase = AUTOREBASE_NEVER;
+	cfg->object_creation_mode = OBJECT_CREATION_MODE;
 	cfg->apply_sparse_checkout = 0;
 	cfg->branch_track = BRANCH_TRACK_REMOTE;
 	cfg->trust_ctime = 1;
