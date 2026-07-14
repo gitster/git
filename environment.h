@@ -93,6 +93,7 @@ struct repo_config_values {
 	char *excludes_file;
 	char *editor_program;
 	char *pager_program;
+	char *askpass_program;
 	int apply_sparse_checkout;
 	int trust_ctime;
 	int check_stat;
@@ -219,8 +220,6 @@ const char *get_commit_output_encoding(void);
 
 extern char *git_commit_encoding;
 extern char *git_log_output_encoding;
-
-extern char *askpass_program;
 
 /*
  * The character that begins a commented line in user-editable file
