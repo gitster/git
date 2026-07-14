@@ -55,7 +55,6 @@ int fsync_object_files = -1;
 int use_fsync = -1;
 enum fsync_method fsync_method = FSYNC_METHOD_DEFAULT;
 enum fsync_component fsync_components = FSYNC_COMPONENTS_DEFAULT;
-char *editor_program;
 char *askpass_program;
 enum auto_crlf auto_crlf = AUTO_CRLF_FALSE;
 enum eol core_eol = EOL_UNSET;
@@ -437,8 +436,8 @@ int git_default_core_config(const char *var, const char *value,
 	}
 
 	if (!strcmp(var, "core.editor")) {
-		FREE_AND_NULL(editor_program);
-		return git_config_string(&editor_program, var, value);
+		FREE_AND_NULL(cfg->editor_program);
+		return git_config_string(&cfg->editor_program, var, value);
 	}
 
 	if (!strcmp(var, "core.commentchar") ||
@@ -725,6 +724,7 @@ void repo_config_values_init(struct repo_config_values *cfg)
 {
 	cfg->attributes_file = NULL;
 	cfg->excludes_file = NULL;
+	cfg->editor_program = NULL;
 	cfg->apply_sparse_checkout = 0;
 	cfg->branch_track = BRANCH_TRACK_REMOTE;
 	cfg->trust_ctime = 1;
@@ -741,4 +741,5 @@ void repo_config_values_clear(struct repo_config_values *cfg)
 {
 	FREE_AND_NULL(cfg->attributes_file);
 	FREE_AND_NULL(cfg->excludes_file);
+	FREE_AND_NULL(cfg->editor_program);
 }

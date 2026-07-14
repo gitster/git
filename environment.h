@@ -91,6 +91,7 @@ struct repo_config_values {
 	/* section "core" config values */
 	char *attributes_file;
 	char *excludes_file;
+	char *editor_program;
 	int apply_sparse_checkout;
 	int trust_ctime;
 	int check_stat;
@@ -218,7 +219,6 @@ const char *get_commit_output_encoding(void);
 extern char *git_commit_encoding;
 extern char *git_log_output_encoding;
 
-extern char *editor_program;
 extern char *askpass_program;
 
 /*
