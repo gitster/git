@@ -874,7 +874,10 @@ a flush packet, followed by the old and new file content as packetized
 data, each terminated with a flush packet.  The pathname is relative
 to the repository root.  When `diff.<name>.textconv` is also set,
 the tool receives the textconv-transformed content rather than the
-raw blob.  Git does not send binary files to the diff process.
+raw blob, matching what the consuming feature itself diffs: patch
+output is textconv'd, the summary formats (noted below) are not, and
+`git blame` applies textconv only under `--textconv`.  Git does not
+send binary files to the diff process.
 
 -----------------------
 packet:          git> command=hunks
@@ -960,8 +963,8 @@ still slide or regroup those changes against matching context for
 display, exactly as it compacts its own diffs, so the tool controls
 which lines are reported as changed, not the precise hunk boundaries.
 Patch output features (word diff, function context, color) work
-normally.  Summary formats such as `--stat` still compute their counts
-with the builtin diff for now; see "Which features consult the diff
+normally, as do summary formats like `--stat`.  Not every feature
+consults the process, though; see "Which features consult the diff
 process" below for the full picture and the reasoning behind it.
 
 If no hunk lines precede the flush, followed by "success", Git
@@ -1040,6 +1043,17 @@ of the builtin algorithm:
   hunks without any further negotiation.
 - `git blame`: a commit whose change the tool reports as equivalent is
   skipped, and its lines are attributed to an earlier commit.
+- `--stat`, `--numstat`, and `--shortstat`: the inserted and deleted
+  counts come from the tool's hunks, so a file the tool calls
+  equivalent contributes no stat line, matching the empty patch that
+  `git diff` produces for it.  These summary formats do not apply
+  textconv (just as the builtin summary path does not), so the tool
+  is consulted on the raw blob content even when a `textconv` is also
+  configured for patch output; this mirrors how builtin `--stat`
+  already counts raw lines rather than the textconv'd view.  The
+  line-counting `--dirstat=lines` uses these same counts; the default
+  `--dirstat`, which weighs byte changes, is computed on its own and
+  does not consult the tool.
 
 Features that ask a different question do not consult the process, by
 design:
@@ -1065,13 +1079,12 @@ design:
 - `--raw`, `--name-only`, and `--name-status` compare object ids at
   the tree level and never run a line-level diff at all.
 
-Some features ask "which lines changed" but still use the builtin
-algorithm for now, and may consult the process in a later change: the
-summary formats (`--stat`, `--numstat`, `--shortstat`); `git log -L`'s
-commit selection and parent range propagation (as distinct from its
-display, which is covered above); and combined diffs (`--cc` and merge
-diffs), whose protocol would have to be extended from a single old/new
-pair to one comparison per merge parent.
+Two cases ask "which lines changed" but still use the builtin
+algorithm, and may consult the process in a later change: `git log
+-L`'s commit selection and parent range propagation (as distinct from
+its display, which is covered above), and combined diffs (`--cc` and
+merge diffs), whose protocol would have to be extended from a single
+old/new pair to one comparison per merge parent.
 
 `--no-ext-diff` and `--diff-algorithm` bypass the process entirely,
 for every feature listed above.  The whitespace-ignoring options

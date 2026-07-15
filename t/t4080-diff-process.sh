@@ -282,6 +282,21 @@ test_expect_success 'diff process works alongside textconv' '
 	test_must_be_empty stderr
 '
 
+test_expect_success 'diff process --stat is fed raw, not textconv, content' '
+	# Reuses textconv.c from the previous test (committed "hello
+	# world", modified to "goodbye world").  Unlike patch output,
+	# --stat does not apply textconv, so the tool sees raw lowercase
+	# content here even with a textconv configured.
+	test_when_finished "rm -f backend.log" &&
+	git -c diff.cdiff.textconv="./uppercase-filter" \
+	    -c diff.cdiff.process="$BACKEND --log=backend.log" \
+		diff --stat -- textconv.c >actual 2>stderr &&
+	test_grep "pathname=textconv.c" backend.log &&
+	test_grep "old=hello world" backend.log &&
+	test_grep "new=goodbye world" backend.log &&
+	test_must_be_empty stderr
+'
+
 #
 # Downstream features: word diff, log, equivalent files, exit code.
 #
@@ -384,6 +399,121 @@ test_expect_success 'diff process falls back for added file (empty old side)' '
 test_expect_success 'diff process with --exit-code and hunks returns failure' '
 	test_expect_code 1 git -c diff.cdiff.process="$BACKEND" \
 		diff --exit-code newfile.c
+'
+
+test_expect_success 'diff process feeds --numstat counts' '
+	# fixed-hunk reports only lines 5-6 as changed, so the stat
+	# counts come from the tool (2/2), not the builtin diff (4/4).
+	test_when_finished "rm -f backend.log" &&
+	git -c diff.cdiff.process="$BACKEND --mode=fixed-hunk --log=backend.log" \
+		diff --numstat boundary.c >actual 2>stderr &&
+	printf "2\t2\tboundary.c\n" >expect &&
+	test_cmp expect actual &&
+	test_grep "command=hunks pathname=boundary.c" backend.log &&
+	test_must_be_empty stderr
+'
+
+test_expect_success 'diff process --numstat sums multi-hunk counts' '
+	# multi-hunk reports both 2-line regions (5-6 and 9-10), so the
+	# counts add up across both hunks: 4 inserted, 4 deleted.  This
+	# exercises the two-region hunk path through builtin_diffstat.
+	git -c diff.cdiff.process="$BACKEND --mode=multi-hunk" \
+		diff --numstat boundary.c >actual &&
+	printf "4\t4\tboundary.c\n" >expect &&
+	test_cmp expect actual
+'
+
+test_expect_success 'diff process equivalent files produce no --stat line' '
+	# A file the tool calls equivalent contributes no stat line,
+	# matching the empty patch that git diff produces for it.
+	test_when_finished "rm -f backend.log" &&
+	git -c diff.cdiff.process="$BACKEND --mode=no-hunks --log=backend.log" \
+		diff --stat worddiff.c >actual 2>stderr &&
+	test_must_be_empty actual &&
+	test_grep "command=hunks pathname=worddiff.c" backend.log &&
+	test_must_be_empty stderr
+'
+
+test_expect_success 'diff process feeds --shortstat counts' '
+	# fixed-hunk reports lines 5-6 only, so the summary counts come
+	# from the tool (2 insertions, 2 deletions), not builtin (4/4).
+	git -c diff.cdiff.process="$BACKEND --mode=fixed-hunk" \
+		diff --shortstat boundary.c >actual &&
+	test_grep "2 insertions" actual &&
+	test_grep "2 deletions" actual
+'
+
+test_expect_success 'diff process equivalent file makes --stat --exit-code succeed' '
+	# The tool reports worddiff.c equivalent, so --exit-code reports
+	# no change (0); the builtin diff would report a change (1).
+	git -c diff.cdiff.process="$BACKEND --mode=no-hunks" \
+		diff --stat --exit-code worddiff.c &&
+	test_expect_code 1 git diff --no-ext-diff --stat --exit-code worddiff.c
+'
+
+test_expect_success 'diff process --numstat with mixed equivalent and changed files' '
+	test_when_finished "rm -f c.log h.log" &&
+	# Self-contained fixtures: *.c uses whole-file (changed); *.mh
+	# uses no-hunks (equivalent).
+	echo "*.mh diff=hdiff" >>.gitattributes &&
+	git add .gitattributes &&
+	printf "int a(void) { return 1; }\n" >mixed.c &&
+	printf "int b(void) { return 1; }\n" >mixed.mh &&
+	git add mixed.c mixed.mh &&
+	git commit -m "add mixed fixtures" &&
+	printf "int a(void) { return 2; }\n" >mixed.c &&
+	printf "int b(void) { return 2; }\n" >mixed.mh &&
+	git -c diff.cdiff.process="$BACKEND --mode=whole-file --log=c.log" \
+	    -c diff.hdiff.process="$BACKEND --mode=no-hunks --log=h.log" \
+		diff --numstat mixed.c mixed.mh >actual 2>stderr &&
+	test_grep "mixed.c" actual &&
+	test_grep ! "mixed.mh" actual &&
+	test_grep "pathname=mixed.c" c.log &&
+	test_grep "pathname=mixed.mh" h.log &&
+	test_must_be_empty stderr
+'
+
+test_expect_success POSIXPERM 'diff process keeps mode-only change in --stat' '
+	test_when_finished "rm -f backend.log" &&
+	cat >modeonly.c <<-\EOF &&
+	int m(void) { return 1; }
+	EOF
+	git add modeonly.c &&
+	git commit -m "add modeonly.c" &&
+	cat >modeonly.c <<-\EOF &&
+	int m(void) { return 2; }
+	EOF
+	git add modeonly.c &&
+	test_chmod +x modeonly.c &&
+	git commit -m "edit and chmod modeonly.c" &&
+	# Content and mode both changed, but no-hunks reports the content
+	# equivalent.  The tool is consulted (counts are zero, not the
+	# builtin 1/1), yet the mode change keeps the file from being
+	# pruned.
+	git -c diff.cdiff.process="$BACKEND --mode=no-hunks --log=backend.log" \
+		diff --stat HEAD^ HEAD >actual 2>stderr &&
+	test_grep "modeonly.c" actual &&
+	test_grep "command=hunks pathname=modeonly.c" backend.log &&
+	test_grep ! "1 insertion" actual &&
+	test_must_be_empty stderr
+'
+
+test_expect_success 'diff process not consulted for default --dirstat' '
+	# The default (change-based) --dirstat algorithm counts via its
+	# own path and never contacts the tool (here --dirstat=0 just
+	# sets a 0% threshold), so the change is still reported even
+	# though no-hunks would call it equivalent.  --dirstat=lines
+	# instead uses the process-aware stat path.
+	test_when_finished "rm -f backend.log" &&
+	mkdir -p dsub &&
+	printf "a\nb\nc\n" >dsub/d.c &&
+	git add dsub/d.c &&
+	git commit -m "add dsub/d.c" &&
+	printf "a\nB\nc\n" >dsub/d.c &&
+	git -c diff.cdiff.process="$BACKEND --mode=no-hunks --log=backend.log" \
+		diff --dirstat=0 dsub/d.c >actual &&
+	test_grep "dsub" actual &&
+	test_path_is_missing backend.log
 '
 
 #

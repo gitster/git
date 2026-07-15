@@ -4268,9 +4268,27 @@ static void builtin_diffstat(const char *name_a, const char *name_b,
 		xecfg.ctxlen = o->context;
 		xecfg.interhunkctxlen = o->interhunkcontext;
 		xecfg.flags = XDL_EMIT_NO_HUNK_HDR;
-		if (xdi_diff_outf(&mf1, &mf2, NULL,
+		/*
+		 * Consult the diff process so --stat reflects the
+		 * tool's view of which lines changed rather than the
+		 * builtin line diff.  --stat never applies textconv, so
+		 * the tool is fed the same raw mmfiles the stat itself
+		 * diffs (unlike builtin_diff, which consults the process
+		 * on textconv'd content).
+		 * When the tool reports the files as equivalent we skip
+		 * xdiff entirely, leaving added and deleted at zero so
+		 * the file is pruned below, just as builtin_diff() emits
+		 * no patch for an equivalent file.
+		 */
+		if (diff_process_fill_hunks(o, name_a, &mf1, &mf2,
+					    one->oid_valid ? &one->oid : NULL,
+					    two->oid_valid ? &two->oid : NULL,
+					    &xpp)
+		    != DIFF_PROCESS_EQUIVALENT &&
+		    xdi_diff_outf(&mf1, &mf2, NULL,
 				  diffstat_consume, diffstat, &xpp, &xecfg))
 			die("unable to generate diffstat for %s", one->path);
+		free(xpp.external_hunks);
 
 		if (DIFF_FILE_VALID(one) && DIFF_FILE_VALID(two)) {
 			struct diffstat_file *file =
