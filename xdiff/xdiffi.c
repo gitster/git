@@ -1085,16 +1085,96 @@ static void xdl_mark_ignorable_regex(xdchange_t *xscr, const xdfenv_t *xe,
 	}
 }
 
+/*
+ * Populate the changed[] arrays from externally supplied hunks,
+ * bypassing the diff algorithm.  The caller normalizes and validates
+ * the hunks first (order, overlap, and lockstep alignment), so this
+ * only marks lines changed after asserting the memory-safety
+ * preconditions it depends on: non-negative counts and 1-based starts
+ * (checked with BUG()), and an in-bounds range (a silent -1 so the
+ * caller can fall back to the builtin diff rather than index changed[]
+ * out of range).  Keeping this diagnostic-free leaves user-facing
+ * messages to the git layer.
+ *
+ * Returns 0 on success, -1 if a hunk is out of range.
+ */
+static int xdl_populate_hunks_from_external(xdfenv_t *xe,
+					    struct xdl_hunk *hunks,
+					    size_t nr_hunks)
+{
+	size_t i;
+	long j;
+
+	/*
+	 * xdl_prepare_env() may dirty changed[] via xdl_cleanup_records().
+	 * Clear them so only the external hunks are marked.
+	 */
+	xdl_clear_changed(&xe->xdf1);
+	xdl_clear_changed(&xe->xdf2);
+
+	for (i = 0; i < nr_hunks; i++) {
+		struct xdl_hunk *h = &hunks[i];
+
+		/*
+		 * Non-negative counts and 1-based starts are caller
+		 * preconditions (it normalizes hunks into xdiff coordinates
+		 * before this point), so a violation is a bug, not a bad
+		 * tool response.
+		 */
+		if (h->old_count < 0 || h->new_count < 0)
+			BUG("external hunk %"PRIuMAX": "
+				"negative count (old=%ld, new=%ld)",
+				(uintmax_t)(i + 1),
+				h->old_count, h->new_count);
+		if (h->old_start < 1 || h->new_start < 1)
+			BUG("external hunk %"PRIuMAX": "
+				"start not 1-based (old=%ld, new=%ld)",
+				(uintmax_t)(i + 1),
+				h->old_start, h->new_start);
+
+		/*
+		 * The caller validates ordering, overlap and lockstep
+		 * alignment (and diagnoses a bad response).  This is only a
+		 * silent in-bounds guard so the marking loop cannot index
+		 * changed[] out of range: start + count - 1 <= nrec,
+		 * rewritten to avoid overflow.  A count of 0 (pure
+		 * insert/delete) allows start == nrec + 1, the position
+		 * after the last line.  On a miss, return -1 and let the
+		 * caller fall back to the builtin diff.
+		 */
+		if (h->old_count > (long)xe->xdf1.nrec - h->old_start + 1 ||
+		    h->new_count > (long)xe->xdf2.nrec - h->new_start + 1)
+			return -1;
+
+		for (j = 0; j < h->old_count; j++)
+			xe->xdf1.changed[h->old_start - 1 + j] = true;
+		for (j = 0; j < h->new_count; j++)
+			xe->xdf2.changed[h->new_start - 1 + j] = true;
+	}
+
+	return 0;
+}
+
 int xdl_diff(mmfile_t *mf1, mmfile_t *mf2, xpparam_t const *xpp,
 	     xdemitconf_t const *xecfg, xdemitcb_t *ecb) {
 	xdchange_t *xscr;
 	xdfenv_t xe;
 	emit_func_t ef = xecfg->hunk_func ? xdl_call_hunk_func : xdl_emit_diff;
 
-	if (xdl_do_diff(mf1, mf2, xpp, &xe) < 0) {
-
-		return -1;
+	if (xpp->external_hunks) {
+		if (xdl_prepare_env(mf1, mf2, xpp, &xe) < 0)
+			return -1;
+		if (xdl_populate_hunks_from_external(&xe,
+						     xpp->external_hunks,
+						     xpp->external_hunks_nr) == 0)
+			goto diff_done;
+		xdl_free_env(&xe);
 	}
+
+	if (xdl_do_diff(mf1, mf2, xpp, &xe) < 0)
+		return -1;
+
+diff_done:
 	if (xdl_change_compact(&xe.xdf1, &xe.xdf2, xpp->flags) < 0 ||
 	    xdl_change_compact(&xe.xdf2, &xe.xdf1, xpp->flags) < 0 ||
 	    xdl_build_script(&xe, &xscr) < 0) {
