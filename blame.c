@@ -19,6 +19,8 @@
 #include "tag.h"
 #include "trace2.h"
 #include "blame.h"
+#include "diff-process.h"
+#include "xdiff-interface.h"
 #include "alloc.h"
 #include "commit-slab.h"
 #include "bloom.h"
@@ -1943,6 +1945,9 @@ static void pass_blame_to_parent(struct blame_scoreboard *sb,
 				 struct blame_origin *parent, int ignore_diffs)
 {
 	mmfile_t file_p, file_o;
+	xpparam_t xpp = {0};
+	xdemitconf_t xecfg = {0};
+	xdemitcb_t ecb = {NULL};
 	struct blame_chunk_cb_data d;
 	struct blame_entry *newdest = NULL;
 
@@ -1961,7 +1966,24 @@ static void pass_blame_to_parent(struct blame_scoreboard *sb,
 			 &sb->num_read_blob, ignore_diffs);
 	sb->num_get_patch++;
 
-	if (diff_hunks(&file_p, &file_o, blame_chunk_cb, &d, sb->xdl_opts))
+	xpp.flags = sb->xdl_opts;
+	xecfg.hunk_func = blame_chunk_cb;
+	ecb.priv = &d;
+	/*
+	 * Consult the diff process, then attribute the resulting chunks
+	 * via blame_chunk_cb.  It bypasses the process for the whitespace-
+	 * ignoring options it cannot honor (they live in xpp.flags, which
+	 * the consultation checks), and when the process reports the blobs
+	 * equivalent it runs no diff, so blame passes this commit and looks
+	 * past it.  Look up the driver by the parent (old) path, as
+	 * builtin_diff() does with name_a, so a renamed file resolves to the
+	 * same driver across diff, blame, and line-log.  Pass no
+	 * old-oid/new-oid: blame diffs each blob pair once, so the tool gains
+	 * nothing from a per-invocation cache key.
+	 */
+	if (xdi_diff_process(&sb->revs->diffopt, parent->path,
+			     &file_p, &file_o, NULL, NULL, &xpp, &xecfg, &ecb)
+	    == DIFF_PROCESS_ERROR)
 		die("unable to generate diff (%s -> %s)",
 		    oid_to_hex(&parent->commit->object.oid),
 		    oid_to_hex(&target->commit->object.oid));

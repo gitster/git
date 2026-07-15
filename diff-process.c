@@ -37,6 +37,7 @@
 #include "sub-process.h"
 #include "pkt-line.h"
 #include "strbuf.h"
+#include "xdiff-interface.h"
 #include "xdiff/xdiff.h"
 
 #define CAP_HUNKS (1u << 0)
@@ -488,4 +489,41 @@ enum diff_process_result diff_process_fill_hunks(
 		return DIFF_PROCESS_ERROR;
 	}
 	return DIFF_PROCESS_SKIP;
+}
+
+enum diff_process_result xdi_diff_process(
+		struct diff_options *diffopt,
+		const char *path,
+		mmfile_t *file_a,
+		mmfile_t *file_b,
+		const struct object_id *oid_a,
+		const struct object_id *oid_b,
+		xpparam_t *xpp,
+		xdemitconf_t *xecfg,
+		xdemitcb_t *ecb)
+{
+	enum diff_process_result res;
+
+	/*
+	 * Consult the diff process, then run xdiff either constrained to
+	 * the tool's hunks or, when the process does not apply, computing
+	 * the diff itself as a fallback.  EQUIVALENT short-circuits: the
+	 * caller decides what "no change" means for it (drop the commit,
+	 * skip the file, ...), so xdiff is not run.
+	 *
+	 * A SKIP/ERROR from the process just selects the builtin path
+	 * (its warning, if any, was already emitted), so the result then
+	 * reflects whether xdiff itself succeeded, not the process.
+	 */
+	res = diff_process_fill_hunks(diffopt, path, file_a, file_b,
+				      oid_a, oid_b, xpp);
+	if (res == DIFF_PROCESS_EQUIVALENT)
+		return res;
+
+	res = xdi_diff(file_a, file_b, xpp, xecfg, ecb) < 0
+		? DIFF_PROCESS_ERROR : DIFF_PROCESS_OK;
+
+	FREE_AND_NULL(xpp->external_hunks);
+	xpp->external_hunks_nr = 0;
+	return res;
 }

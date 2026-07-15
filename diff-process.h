@@ -46,4 +46,30 @@ enum diff_process_result diff_process_fill_hunks(
 		const struct object_id *oid_b,
 		xpparam_t *xpp);
 
+/*
+ * Process-aware xdi_diff(): consult the diff process for 'path', then
+ * run xdiff either constrained to the tool's hunks or computing the
+ * diff itself when the process does not apply or fails.  Frees any
+ * hunks it obtained before returning.
+ *
+ * Returns DIFF_PROCESS_EQUIVALENT (without running xdiff) when the tool
+ * reports the blobs equal, so the caller can drop or skip the change;
+ * DIFF_PROCESS_OK when xdiff ran (on tool hunks or builtin); and
+ * DIFF_PROCESS_ERROR if xdiff itself errored.
+ *
+ * The caller fills xpp (flags, ignore_regex, anchors) and xecfg/ecb as
+ * for a direct xdi_diff() call.  oid_a/oid_b are forwarded to
+ * diff_process_fill_hunks() (see there).
+ */
+enum diff_process_result xdi_diff_process(
+		struct diff_options *diffopt,
+		const char *path,
+		mmfile_t *file_a,
+		mmfile_t *file_b,
+		const struct object_id *oid_a,
+		const struct object_id *oid_b,
+		xpparam_t *xpp,
+		xdemitconf_t *xecfg,
+		xdemitcb_t *ecb);
+
 #endif /* DIFF_PROCESS_H */

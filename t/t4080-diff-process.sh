@@ -658,4 +658,130 @@ test_expect_success 'diff process omits old-oid and new-oid for textconv content
 	test_must_be_empty stderr
 '
 
+#
+# Blame integration.
+#
+
+test_expect_success 'blame uses tool-provided hunks' '
+	cat >blame-hunk.c <<-\EOF &&
+	line1
+	line2
+	line3
+	line4
+	original5
+	original6
+	line7
+	line8
+	line9
+	line10
+	EOF
+	git add blame-hunk.c &&
+	git commit -m "add blame-hunk.c" &&
+	ORIG=$(git rev-parse --short HEAD) &&
+
+	cat >blame-hunk.c <<-\EOF &&
+	line1
+	line2
+	line3
+	line4
+	changed5
+	changed6
+	line7
+	line8
+	changed9
+	changed10
+	EOF
+	git add blame-hunk.c &&
+	git commit -m "change blame-hunk.c" &&
+	CHANGE=$(git rev-parse --short HEAD) &&
+
+	# With fixed-hunk mode the tool reports only lines 5-6 as changed,
+	# so blame should attribute lines 9-10 to the original commit
+	# even though the builtin diff would show them as changed.
+	git -c diff.cdiff.process="$BACKEND --mode=fixed-hunk" \
+		blame blame-hunk.c >actual &&
+	sed -n "9p" actual >line9 &&
+	sed -n "10p" actual >line10 &&
+	test_grep "$ORIG" line9 &&
+	test_grep "$ORIG" line10 &&
+	sed -n "5p" actual >line5 &&
+	sed -n "6p" actual >line6 &&
+	test_grep "$CHANGE" line5 &&
+	test_grep "$CHANGE" line6
+'
+
+test_expect_success 'blame skips commits with no hunks from diff process' '
+	cat >blame.c <<-\EOF &&
+	int main(void) {
+	return 0;
+	}
+	EOF
+	git add blame.c &&
+	git commit -m "add blame.c" &&
+	ORIG_COMMIT=$(git rev-parse --short HEAD) &&
+
+	cat >blame.c <<-\EOF &&
+	int main(void)
+	{
+	return 0;
+	}
+	EOF
+	git add blame.c &&
+	git commit -m "reformat blame.c" &&
+	BLAME_COMMIT=$(git rev-parse --short HEAD) &&
+
+	# Without no-hunks mode, blame attributes the change.
+	git blame blame.c >without &&
+	test_grep "$BLAME_COMMIT" without &&
+
+	# With no-hunks mode, the process considers the files equivalent
+	# and blame skips the reformat commit, attributing to the original.
+	git -c diff.cdiff.process="$BACKEND --mode=no-hunks" \
+		blame blame.c >with &&
+	test_grep ! "$BLAME_COMMIT" with &&
+	test_grep "$ORIG_COMMIT" with
+'
+
+test_expect_success 'blame --no-ext-diff bypasses diff process' '
+	test_when_finished "rm -f backend.log" &&
+	git -c diff.cdiff.process="$BACKEND --mode=no-hunks --log=backend.log" \
+		blame --no-ext-diff blame.c >actual &&
+	# Without the process, blame attributes the reformat commit normally.
+	test_grep "$BLAME_COMMIT" actual &&
+	test_path_is_missing backend.log
+'
+
+test_expect_success 'blame --no-ext-diff uses builtin hunks' '
+	# fixed-hunk mode would narrow blame to lines 5-6, but
+	# --no-ext-diff should bypass it and use the builtin diff.
+	test_when_finished "rm -f backend.log" &&
+	git -c diff.cdiff.process="$BACKEND --mode=fixed-hunk --log=backend.log" \
+		blame --no-ext-diff blame-hunk.c >actual &&
+	# Builtin diff attributes lines 9-10 to the change commit.
+	sed -n "9p" actual >line9 &&
+	test_grep "$CHANGE" line9 &&
+	test_path_is_missing backend.log
+'
+
+test_expect_success 'blame -w bypasses diff process' '
+	test_when_finished "rm -f backend.log" &&
+	printf "alpha\nbeta\ngamma\n" >blamew.c &&
+	git add blamew.c &&
+	git commit -m "add blamew.c" &&
+	orig=$(git rev-parse --short HEAD) &&
+	printf "alpha\n   beta   \ngamma\n" >blamew.c &&
+	git commit -am "reindent beta" &&
+	reindent=$(git rev-parse --short HEAD) &&
+	# blame -w must ignore the whitespace-only change and attribute
+	# beta to the original commit, not the reindent commit.  The tool
+	# is never told about -w, so blame must bypass it (not let tool
+	# hunks override -w).
+	git -c diff.cdiff.process="$BACKEND --mode=whole-file --log=backend.log" \
+		blame -w blamew.c >actual &&
+	sed -n "2p" actual >line2 &&
+	test_grep "$orig" line2 &&
+	test_grep ! "$reindent" line2 &&
+	test_path_is_missing backend.log
+'
+
 test_done
