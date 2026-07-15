@@ -914,4 +914,37 @@ test_expect_success 'blame -w bypasses diff process' '
 	test_path_is_missing backend.log
 '
 
+#
+# Line-log (git log -L) range tracking.
+#
+
+test_expect_success 'diff process drops equivalent commit from log -L' '
+	test_when_finished "rm -f backend.log" &&
+	cat >linelog.c <<-\EOF &&
+	int tracked(void) { return 1; }
+	EOF
+	git add linelog.c &&
+	git commit -m "add linelog.c" &&
+
+	cat >linelog.c <<-\EOF &&
+	int tracked(void) { return 2; }
+	EOF
+	git commit -am "change tracked line" &&
+
+	# Builtin line tracking selects the change commit.
+	git log --no-ext-diff -L1,1:linelog.c --format="%s" >builtin &&
+	test_grep "change tracked line" builtin &&
+
+	# With the tool reporting the change as equivalent, tracking
+	# drops the commit (the range maps across unchanged) instead of
+	# selecting it and rendering an empty diff.
+	git -c diff.cdiff.process="$BACKEND --mode=no-hunks --log=backend.log" \
+		log -L1,1:linelog.c --format="%s" >actual &&
+	test_grep ! "change tracked line" actual &&
+	# The creating commit still appears, so the change commit was
+	# selectively dropped rather than the whole log going empty.
+	test_grep "add linelog.c" actual &&
+	test_grep "command=hunks pathname=linelog.c" backend.log
+'
+
 test_done

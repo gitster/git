@@ -7,11 +7,11 @@
 #include "tag.h"
 #include "tree.h"
 #include "diff.h"
+#include "diff-process.h"
 #include "commit.h"
 #include "decorate.h"
 #include "repository.h"
 #include "revision.h"
-#include "xdiff-interface.h"
 #include "strbuf.h"
 #include "log-tree.h"
 #include "line-log.h"
@@ -331,12 +331,15 @@ static int collect_diff_cb(long start_a, long count_a,
 	return 0;
 }
 
-static int collect_diff(mmfile_t *parent, mmfile_t *target, struct diff_ranges *out)
+static int collect_diff(struct diff_options *diffopt, const char *path,
+			mmfile_t *parent, mmfile_t *target,
+			struct diff_ranges *out)
 {
 	struct collect_diff_cbdata cbdata = {NULL};
 	xpparam_t xpp;
 	xdemitconf_t xecfg;
 	xdemitcb_t ecb;
+	int ret = 0;
 
 	memset(&xpp, 0, sizeof(xpp));
 	memset(&xecfg, 0, sizeof(xecfg));
@@ -346,7 +349,23 @@ static int collect_diff(mmfile_t *parent, mmfile_t *target, struct diff_ranges *
 	xecfg.hunk_func = collect_diff_cb;
 	memset(&ecb, 0, sizeof(ecb));
 	ecb.priv = &cbdata;
-	return xdi_diff(parent, target, &xpp, &xecfg, &ecb);
+
+	/*
+	 * Consult the diff process so range tracking agrees with the
+	 * diff that will be shown.  When the tool reports the files as
+	 * equivalent we collect no ranges, so the tracked range maps
+	 * across unchanged and the commit drops out of the log, rather
+	 * than being selected here but rendered with an empty diff by
+	 * the process-aware builtin_diff().  Blob oids are not threaded to
+	 * this path yet, so pass NULL and send no old-oid/new-oid (a later
+	 * change can supply the pair, where they would let the tool cache
+	 * across the range-tracking and display passes over the same
+	 * commit).
+	 */
+	if (xdi_diff_process(diffopt, path, parent, target,
+			     NULL, NULL, &xpp, &xecfg, &ecb) == DIFF_PROCESS_ERROR)
+		ret = -1;
+	return ret;
 }
 
 /*
@@ -928,7 +947,13 @@ static int process_diff_filepair(struct rev_info *rev,
 	}
 
 	diff_ranges_init(&diff);
-	if (collect_diff(&file_parent, &file_target, &diff))
+	/*
+	 * Select the driver by the old (parent) path, as builtin_diff() does
+	 * with name_a, so a renamed file resolves to the same driver for
+	 * range tracking as for the diff that is shown.
+	 */
+	if (collect_diff(&rev->diffopt, pair->one->path,
+			 &file_parent, &file_target, &diff))
 		die("unable to generate diff for %s", pair->one->path);
 
 	/* NEEDSWORK should apply some heuristics to prevent mismatches */

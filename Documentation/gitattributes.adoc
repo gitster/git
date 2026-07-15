@@ -1037,12 +1037,16 @@ Features that ask "which lines changed" use the tool's hunks in place
 of the builtin algorithm:
 
 - `git diff` patch output, together with everything layered on it:
-  word diff, function context (`-W`), `--color-moved`, the `@@` hunk
-  headers, and the `-L` line-range display.  These operate on the
-  lines the patch step already emitted, so they reflect the tool's
-  hunks without any further negotiation.
+  word diff, function context (`-W`), `--color-moved`, and the `@@`
+  hunk headers.  These operate on the lines the patch step already
+  emitted, so they reflect the tool's hunks without any further
+  negotiation.
 - `git blame`: a commit whose change the tool reports as equivalent is
   skipped, and its lines are attributed to an earlier commit.
+- `git log -L`: both the line-range display and the underlying range
+  tracking consult the tool, so a commit it reports as equivalent is
+  dropped from the log (its tracked range maps across unchanged)
+  rather than selected and then shown with an empty diff.
 - `--stat`, `--numstat`, and `--shortstat`: the inserted and deleted
   counts come from the tool's hunks, so a file the tool calls
   equivalent contributes no stat line, matching the empty patch that
@@ -1079,11 +1083,9 @@ design:
 - `--raw`, `--name-only`, and `--name-status` compare object ids at
   the tree level and never run a line-level diff at all.
 
-Two cases ask "which lines changed" but still use the builtin
-algorithm, and may consult the process in a later change: `git log
--L`'s commit selection and parent range propagation (as distinct from
-its display, which is covered above), and combined diffs (`--cc` and
-merge diffs), whose protocol would have to be extended from a single
+Combined diffs (`--cc` and merge diffs) ask "which lines changed" but
+still use the builtin algorithm, and may consult the process in a
+later change; their protocol would have to be extended from a single
 old/new pair to one comparison per merge parent.
 
 `--no-ext-diff` and `--diff-algorithm` bypass the process entirely,
