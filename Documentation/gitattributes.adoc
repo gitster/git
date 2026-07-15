@@ -1073,9 +1073,9 @@ display, which is covered above); and combined diffs (`--cc` and merge
 diffs), whose protocol would have to be extended from a single old/new
 pair to one comparison per merge parent.
 
-`--diff-algorithm` bypasses the process entirely, for every feature
-listed above.  The whitespace-ignoring options (`-w`,
-`--ignore-space-change`, `--ignore-blank-lines`, and the like),
+`--no-ext-diff` and `--diff-algorithm` bypass the process entirely,
+for every feature listed above.  The whitespace-ignoring options
+(`-w`, `--ignore-space-change`, `--ignore-blank-lines`, and the like),
 `-I<regex>`, and `--anchored` also bypass it for the affected files:
 the tool is never told about these options, so it could not honor
 them, and Git falls back to the builtin diff, which does.
