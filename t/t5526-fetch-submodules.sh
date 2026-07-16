@@ -1262,4 +1262,76 @@ test_expect_success "fetch --all with --no-recurse-submodules only fetches super
 	! grep "Fetching submodule" fetch-log
 '
 
+# Create an isolated environment for submodule fetch error tests.
+#
+# Sets up sub_bare (the submodule upstream), super_bare (the superproject
+# upstream), super_work (a working clone of super_bare with an initialized
+# submodule), and clone (a clone of super_bare with an initialized submodule
+# at a reachable commit). The caller can then create an unreachable commit
+# and push the superproject to put the clone one commit behind a state it
+# cannot fully fetch.
+#
+# Usage: create_err_env <envdir>
+create_err_env () {
+	local envdir="$1" &&
+	mkdir "$envdir" &&
+
+	git init --bare "$envdir/sub_bare" &&
+	git clone "$envdir/sub_bare" "$envdir/sub_work" &&
+	test_commit -C "$envdir/sub_work" "${envdir}_base" &&
+	git -C "$envdir/sub_work" push &&
+
+	git init --bare "$envdir/super_bare" &&
+	git clone "$envdir/super_bare" "$envdir/super_work" &&
+	git -C "$envdir/super_work" submodule add \
+		"$pwd/$envdir/sub_bare" sub &&
+	git -C "$envdir/super_work" commit -m "add submodule" &&
+	git -C "$envdir/super_work" push &&
+
+	git clone "$envdir/super_bare" "$envdir/clone" &&
+	git -C "$envdir/clone" submodule update --init
+}
+
+# Push a commit to <envdir>/super_bare that records a submodule SHA that is
+# present locally in super_work/sub but NOT pushed to sub_bare, making the
+# submodule commit unreachable from clone's sub remote.
+push_unreachable_commit () {
+	local envdir="$1" &&
+	git -C "$envdir/super_work/sub" commit --allow-empty -m "unreachable" &&
+	git -C "$envdir/super_work" add sub &&
+	git -C "$envdir/super_work" commit -m "point sub to unreachable commit" &&
+	git -C "$envdir/super_work" push
+}
+
+test_expect_success 'setup for submodule fetch error tests' '
+	git config --global protocol.file.allow always
+'
+
+test_expect_success 'failed submodule fetch is fatal even when its commits are present locally' '
+	# Create the same commit (unreferenced, via commit-tree with fixed
+	# dates) in both super_work/sub and clone/sub, point the gitlink at
+	# it, and break clone/sub'\''s remote. The commit exists in clone/sub
+	# but is unreachable, so the submodule stays in the changed list; the
+	# fetch failure must still be reported even though there is nothing
+	# left to fetch by commit hash.
+	test_when_finished "rm -fr env_phase1" &&
+	create_err_env env_phase1 &&
+	commit=$(GIT_AUTHOR_DATE="1234567890 +0000" \
+		 GIT_COMMITTER_DATE="1234567890 +0000" \
+		 git -C env_phase1/super_work/sub commit-tree \
+			"HEAD^{tree}" -p HEAD -m present) &&
+	present=$(GIT_AUTHOR_DATE="1234567890 +0000" \
+		  GIT_COMMITTER_DATE="1234567890 +0000" \
+		  git -C env_phase1/clone/sub commit-tree \
+			"HEAD^{tree}" -p HEAD -m present) &&
+	test "$commit" = "$present" &&
+	git -C env_phase1/super_work/sub checkout "$commit" &&
+	git -C env_phase1/super_work add sub &&
+	git -C env_phase1/super_work commit -m "gitlink to locally-present commit" &&
+	git -C env_phase1/super_work push &&
+	git -C env_phase1/clone/sub remote set-url origin "$pwd/env_phase1/missing" &&
+	test_must_fail git -C env_phase1/clone fetch --recurse-submodules 2>err &&
+	test_grep "Errors during submodule fetch" err
+'
+
 test_done
