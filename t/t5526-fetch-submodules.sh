@@ -1307,6 +1307,57 @@ test_expect_success 'setup for submodule fetch error tests' '
 	git config --global protocol.file.allow always
 '
 
+test_expect_success 'fetch --recurse-submodules fails when submodule commit is unreachable (default)' '
+	test_when_finished "rm -fr env_default" &&
+	create_err_env env_default &&
+	push_unreachable_commit env_default &&
+	test_must_fail git -C env_default/clone fetch --recurse-submodules 2>err &&
+	test_grep "Errors during submodule fetch" err
+'
+
+test_expect_success 'fetch.submoduleErrors=warn: unreachable submodule commit is non-fatal' '
+	test_when_finished "rm -fr env_warn_cfg" &&
+	create_err_env env_warn_cfg &&
+	push_unreachable_commit env_warn_cfg &&
+	git -C env_warn_cfg/clone -c fetch.submoduleErrors=warn \
+		fetch --recurse-submodules 2>err &&
+	test_grep "Errors during submodule fetch" err
+'
+
+test_expect_success '--submodule-errors=warn: unreachable submodule commit is non-fatal' '
+	test_when_finished "rm -fr env_warn_cli" &&
+	create_err_env env_warn_cli &&
+	push_unreachable_commit env_warn_cli &&
+	git -C env_warn_cli/clone fetch --recurse-submodules \
+		--submodule-errors=warn 2>err &&
+	test_grep "Errors during submodule fetch" err
+'
+
+test_expect_success '--submodule-errors=fail: unreachable submodule commit is fatal' '
+	test_when_finished "rm -fr env_fail_cli" &&
+	create_err_env env_fail_cli &&
+	push_unreachable_commit env_fail_cli &&
+	test_must_fail git -C env_fail_cli/clone fetch --recurse-submodules \
+		--submodule-errors=fail 2>err &&
+	test_grep "Errors during submodule fetch" err
+'
+
+test_expect_success 'fetch.submoduleErrors=warn does not suppress successful fetch' '
+	# A new reachable submodule commit (pushed to sub_bare) should be
+	# fetched without any error summary.
+	test_when_finished "rm -fr env_ok" &&
+	create_err_env env_ok &&
+	test_commit -C env_ok/sub_work reachable_ok &&
+	git -C env_ok/sub_work push &&
+	git -C env_ok/super_work submodule update --remote &&
+	git -C env_ok/super_work add sub &&
+	git -C env_ok/super_work commit -m "point sub to reachable commit" &&
+	git -C env_ok/super_work push &&
+	git -C env_ok/clone -c fetch.submoduleErrors=warn \
+		fetch --recurse-submodules 2>err &&
+	test_grep ! "Errors during submodule fetch" err
+'
+
 test_expect_success 'failed submodule fetch is fatal even when its commits are present locally' '
 	# Create the same commit (unreferenced, via commit-tree with fixed
 	# dates) in both super_work/sub and clone/sub, point the gitlink at
@@ -1332,6 +1383,44 @@ test_expect_success 'failed submodule fetch is fatal even when its commits are p
 	git -C env_phase1/clone/sub remote set-url origin "$pwd/env_phase1/missing" &&
 	test_must_fail git -C env_phase1/clone fetch --recurse-submodules 2>err &&
 	test_grep "Errors during submodule fetch" err
+'
+
+test_expect_success '--submodule-errors=warn is honored by fetch --all' '
+	# A second remote forces fetch_multiple(), which hands the submodule
+	# recursion off to per-remote child processes; the option must be
+	# forwarded to them.
+	test_when_finished "rm -fr env_all" &&
+	create_err_env env_all &&
+	push_unreachable_commit env_all &&
+	git -C env_all/clone remote add second "$pwd/env_all/super_bare" &&
+	git -C env_all/clone fetch --all --recurse-submodules \
+		--submodule-errors=warn 2>err &&
+	test_grep "Errors during submodule fetch" err
+'
+
+test_expect_success '--submodule-errors=fail overrides warn config for fetch --all' '
+	# The per-remote child processes re-read the repository config, so
+	# the command-line override must be forwarded to them explicitly.
+	test_when_finished "rm -fr env_override" &&
+	create_err_env env_override &&
+	push_unreachable_commit env_override &&
+	git -C env_override/clone remote add second "$pwd/env_override/super_bare" &&
+	git -C env_override/clone config fetch.submoduleErrors warn &&
+	test_must_fail git -C env_override/clone fetch --all --recurse-submodules \
+		--submodule-errors=fail 2>err &&
+	test_grep "Errors during submodule fetch" err
+'
+
+test_expect_success 'fetch.submoduleErrors=warn: inaccessible submodule is non-fatal' '
+	test_when_finished "rm -fr env_access" &&
+	create_err_env env_access &&
+	rm env_access/clone/sub/.git &&
+	rm -r env_access/clone/.git/modules/sub &&
+	git -C env_access/clone -c fetch.submoduleErrors=warn \
+		fetch --recurse-submodules 2>err &&
+	test_grep "Could not access submodule" err &&
+	test_must_fail git -C env_access/clone fetch --recurse-submodules 2>err &&
+	test_grep "Could not access submodule" err
 '
 
 test_done
