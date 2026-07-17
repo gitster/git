@@ -98,10 +98,6 @@ int for_each_file_in_obj_subdir(unsigned int subdir_nr,
 int format_object_header(char *str, size_t size, enum object_type type,
 			 size_t objsize);
 
-int force_object_loose(struct odb_source *source,
-		       const struct object_id *oid,
-		       const time_t *mtime);
-
 /**
  * With in-core object data in "buf", rehash it to make sure the
  * object name actually matches "oid" to detect object corruption.
