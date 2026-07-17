@@ -119,6 +119,14 @@ values that they return:
 `path.gitdir.relative`::
 	The path to the Git repository directory relative to the current working directory.
 
+`path.grafts.absolute`::
+	The canonical absolute path to the repository grafts file.
+	Respects the `GIT_GRAFT_FILE` environment override.
+
+`path.grafts.relative`::
+	The path to the repository grafts file relative to the current working
+	directory. Respects the `GIT_GRAFT_FILE` environment override.
+
 `path.hooks.absolute`::
 	The canonical absolute path to the repository's hooks directory.
 	Respects `core.hooksPath` configuration adjustments.
