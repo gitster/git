@@ -439,7 +439,7 @@ static int handle_path(unsigned char *hash, struct rerere_io *io, int marker_siz
 	struct strbuf buf = STRBUF_INIT, out = STRBUF_INIT;
 	int has_conflicts = 0;
 	if (hash)
-		the_hash_algo->init_fn(&ctx);
+		git_hash_init(&ctx, the_hash_algo);
 
 	while (!io->getline(&buf, io)) {
 		if (is_cmarker(buf.buf, '<', marker_size)) {

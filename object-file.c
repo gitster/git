@@ -124,7 +124,7 @@ int stream_object_signature(struct repository *r,
 	hdrlen = format_object_header(hdr, sizeof(hdr), st->type, st->size);
 
 	/* Sha1.. */
-	r->hash_algo->init_fn(&c);
+	git_hash_init(&c, r->hash_algo);
 	git_hash_update(&c, hdr, hdrlen);
 	for (;;) {
 		char buf[1024 * 16];
@@ -320,7 +320,7 @@ static void hash_object_body(const struct git_hash_algo *algo, struct git_hash_c
 			     struct object_id *oid,
 			     char *hdr, size_t *hdrlen)
 {
-	algo->init_fn(c);
+	git_hash_init(c, algo);
 	git_hash_update(c, hdr, *hdrlen);
 	git_hash_update(c, buf, len);
 	git_hash_final_oid(oid, c);
@@ -681,9 +681,9 @@ static int start_loose_object_common(struct odb_source_loose *loose,
 	git_deflate_init(stream, cfg->zlib_compression_level);
 	stream->next_out = buf;
 	stream->avail_out = buflen;
-	algo->init_fn(c);
+	git_hash_init(c, algo);
 	if (compat && compat_c)
-		compat->init_fn(compat_c);
+		git_hash_init(compat_c, compat);
 
 	/*  Start to feed header to zlib stream */
 	stream->next_in = (unsigned char *)hdr;
@@ -1141,7 +1141,7 @@ static int hash_blob_stream(struct odb_write_stream *stream,
 
 	header_len = format_object_header((char *)buf, sizeof(buf),
 					  OBJ_BLOB, size);
-	hash_algo->init_fn(&ctx);
+	git_hash_init(&ctx, hash_algo);
 	git_hash_update(&ctx, buf, header_len);
 
 	while (!stream->is_finished) {
@@ -1313,7 +1313,7 @@ static int odb_transaction_files_write_object_stream(struct odb_transaction *bas
 
 	header_len = format_object_header((char *)obuf, sizeof(obuf),
 					  OBJ_BLOB, size);
-	transaction->base.source->odb->repo->hash_algo->init_fn(&ctx);
+	git_hash_init(&ctx, transaction->base.source->odb->repo->hash_algo);
 	git_hash_update(&ctx, obuf, header_len);
 
 	/*
@@ -1560,7 +1560,7 @@ static int check_stream_oid(git_zstream *stream,
 	unsigned long total_read;
 	int status = Z_OK;
 
-	algop->init_fn(&c);
+	git_hash_init(&c, algop);
 	git_hash_update(&c, hdr, stream->total_out);
 
 	/*

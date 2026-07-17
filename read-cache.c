@@ -1722,7 +1722,7 @@ static int verify_hdr(const struct cache_header *hdr, unsigned long size)
 	if (oideq(&oid, null_oid(the_hash_algo)))
 		return 0;
 
-	the_hash_algo->init_fn(&c);
+	git_hash_init(&c, the_hash_algo);
 	git_hash_update(&c, hdr, size - the_hash_algo->rawsz);
 	git_hash_final(hash, &c);
 	if (!hasheq(hash, start, the_repository->hash_algo))
@@ -2957,7 +2957,7 @@ static int do_write_index(struct index_state *istate, struct tempfile *tempfile,
 	 */
 	if (offset && record_eoie()) {
 		CALLOC_ARRAY(eoie_c, 1);
-		the_hash_algo->init_fn(eoie_c);
+		git_hash_init(eoie_c, the_hash_algo);
 	}
 
 	/*
@@ -3600,7 +3600,7 @@ static size_t read_eoie_extension(const char *mmap, size_t mmap_size)
 	 *	 "REUC" + <binary representation of M>)
 	 */
 	src_offset = offset;
-	the_hash_algo->init_fn(&c);
+	git_hash_init(&c, the_hash_algo);
 	while (src_offset < mmap_size - the_hash_algo->rawsz - EOIE_SIZE_WITH_HEADER) {
 		/* After an array of active_nr index entries,
 		 * there can be arbitrary number of extended
