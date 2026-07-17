@@ -68,6 +68,7 @@ struct string_list;
 struct saved_parents;
 struct follow_pathspec_slab;
 struct bloom_keyvec;
+struct bloom_filter;
 struct bloom_filter_settings;
 struct option;
 struct parse_opt_ctx_t;
@@ -492,6 +493,22 @@ void reset_revision_walk(void);
  * get_revision() to do the iteration.
  */
 int prepare_revision_walk(struct rev_info *revs);
+
+/**
+ * Take in a changed-path Bloom filter that belongs to a commit, and consult it
+ * to see if it might have modified any of the paths in the `revs`.
+ * The caller should look up `filter`, probably with get_bloom_filter().
+ * prepare_revision_walk() needs to be called in advance to ensure
+ * pathspec key vectors are set up.
+ *
+ * Returns -1 if no sensible answer could be given because of missing
+ * preconditions (no pathspec key vectors).
+ * Returns 0 if the commit definitely did not change any of the paths and 1 if
+ * the commit maybe has changed one of them, although that might be a
+ * false-positive.
+ */
+int revs_maybe_changed_in_bloom(struct rev_info *revs,
+				struct bloom_filter *filter);
 
 /* Drain the commits linked list into the priority queue. */
 void rev_info_commit_list_to_queue(struct rev_info *revs);
