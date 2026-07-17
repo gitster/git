@@ -207,6 +207,25 @@ test_repo_info_path 'commondir with only GIT_DIR' 'commondir' \
 	'.git' \
 	'GIT_DIR="../.git" && export GIT_DIR'
 
+test_expect_success 'path.git-prefix at root and in a subdirectory' '
+	test_when_finished "rm -rf repo" &&
+	git init repo &&
+	(
+		cd repo &&
+
+		echo "path.git-prefix=" >expect.root &&
+		git repo info path.git-prefix >actual.root &&
+		test_cmp expect.root actual.root &&
+
+		mkdir -p sub/dir &&
+		cd sub/dir &&
+
+		echo "path.git-prefix=sub/dir/" >expect.sub &&
+		git repo info path.git-prefix >actual.sub &&
+		test_cmp expect.sub actual.sub
+	)
+'
+
 test_repo_info_path 'gitdir standard' 'gitdir' '.git'
 
 test_repo_info_path 'gitdir with explicit GIT_DIR' 'gitdir' \
