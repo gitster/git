@@ -25,20 +25,6 @@ struct object_info;
 struct odb_source;
 
 /*
- * Write the given stream into the loose object source. The only difference
- * from the generic implementation of this function is that we don't perform an
- * object existence check here.
- *
- * TODO: We should stop exposing this function altogether and move it into
- * "odb/source-loose.c". This requires a couple of refactorings though to make
- * `force_object_loose()` generic and is thus postponed to a later point in
- * time.
- */
-int odb_source_loose_write_stream(struct odb_source_loose *source,
-				  struct odb_write_stream *stream, size_t len,
-				  struct object_id *oid);
-
-/*
  * Put in `buf` the name of the file in the local object database that
  * would be used to store a loose object with the specified oid.
  */
@@ -131,10 +117,6 @@ int finalize_object_file_flags(struct repository *repo,
 void hash_object_file(const struct git_hash_algo *algo, const void *buf,
 		      size_t len, enum object_type type,
 		      struct object_id *oid);
-int write_loose_object(struct odb_source_loose *loose,
-		       const struct object_id *oid, char *hdr,
-		       int hdrlen, const void *buf, unsigned long len,
-		       const time_t *mtime, unsigned flags);
 
 /* Helper to check and "touch" a file */
 int check_and_freshen_file(const char *fn, int freshen,
@@ -194,5 +176,9 @@ struct odb_transaction;
 int odb_transaction_files_begin(struct odb_source *source,
 				struct odb_transaction **out,
 				enum odb_transaction_flags flags);
+
+int odb_transaction_files_prepare(struct odb_transaction *base);
+void odb_transaction_files_fsync(struct odb_transaction *base,
+				 int fd, const char *filename);
 
 #endif /* OBJECT_FILE_H */
