@@ -595,16 +595,12 @@ static int odb_source_loose_write_object(struct odb_source *source,
 
 	hdrlen = format_object_header(hdr, sizeof(hdr), type, len);
 
-	/*
-	 * Normally if we have it in the pack then we do not bother writing
-	 * it out into .git/objects/??/?{38} file.
-	 */
-	if (odb_freshen_object(source->odb, oid))
-		return 0;
 	if (write_loose_object(loose, oid, hdr, hdrlen, buf, len, 0, flags))
 		return -1;
+
 	if (compat_oid)
 		return repo_add_loose_object_map(loose, oid, compat_oid);
+
 	return 0;
 }
 

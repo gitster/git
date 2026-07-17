@@ -997,6 +997,13 @@ int odb_write_object_ext(struct object_database *odb,
 
 	hash_object_file(odb->repo->hash_algo, buf, len, type, oid);
 
+	/*
+	 * We can skip the write in case we already have the object available.
+	 * In that case, we only freshen its mtime.
+	 */
+	if (odb_freshen_object(odb, oid))
+		return 0;
+
 	if (compat) {
 		const struct git_hash_algo *algo = odb->repo->hash_algo;
 
