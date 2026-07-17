@@ -80,6 +80,8 @@ static int pack_objects(struct repository *r,
 		strvec_push(&po.args, "--thin");
 	if (args->use_ofs_delta)
 		strvec_push(&po.args, "--delta-base-offset");
+	if (args->no_ref_delta)
+		strvec_push(&po.args, "--no-ref-delta");
 	if (args->quiet || !args->progress)
 		strvec_push(&po.args, "-q");
 	if (args->progress)
@@ -570,6 +572,8 @@ int send_pack(struct repository *r,
 		allow_deleting_refs = 1;
 	if (server_supports("ofs-delta"))
 		args->use_ofs_delta = 1;
+	if (server_supports("no-ref-delta"))
+		args->no_ref_delta = 1;
 	if (server_supports("side-band-64k"))
 		use_sideband = 1;
 	if (server_supports("quiet"))

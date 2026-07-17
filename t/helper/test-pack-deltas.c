@@ -7,6 +7,7 @@
 #include "hash.h"
 #include "hex.h"
 #include "pack.h"
+#include "packfile.h"
 #include "pack-objects.h"
 #include "parse-options.h"
 #include "setup.h"
@@ -15,6 +16,7 @@
 
 static const char *usage_str[] = {
 	"test-tool pack-deltas --num-objects <num-objects>",
+	"test-tool pack-deltas --list-deltas <pack>.idx",
 	NULL
 };
 
@@ -81,18 +83,85 @@ static void write_ref_delta(struct hashfile *f,
 	free(delta_buf);
 }
 
+static int list_delta(const struct object_id *oid,
+		      struct packed_git *p,
+		      uint32_t pos,
+		      void *_w_curs)
+{
+	struct pack_window **w_curs = _w_curs;
+	off_t obj_offset = nth_packed_object_offset(p, pos);
+	off_t cur = obj_offset;
+	size_t size;
+	enum object_type type = unpack_object_header(p, w_curs, &cur,
+						      &size);
+
+	if (type < 0)
+		die("unable to parse object at position %"PRIu32, pos);
+	if (type != OBJ_REF_DELTA && type != OBJ_OFS_DELTA)
+		return 0;
+
+	if (type == OBJ_REF_DELTA) {
+		struct object_id base_oid;
+		const unsigned char *base = use_pack(p, w_curs, cur,
+						     NULL);
+
+		oidread(&base_oid, base, p->repo->hash_algo);
+		printf("%s REF_DELTA %s\n", oid_to_hex(oid),
+		       oid_to_hex(&base_oid));
+	} else {
+		off_t base_offset = get_delta_base(p, w_curs, &cur,
+						   type, obj_offset);
+
+		if (!base_offset)
+			die("unable to read base of object %s", oid_to_hex(oid));
+		printf("%s OFS_DELTA %"PRIuMAX"\n", oid_to_hex(oid),
+		       (uintmax_t)base_offset);
+	}
+
+	return 0;
+}
+
+static void list_deltas(const char *idx_name)
+{
+	struct packed_git *p;
+	struct pack_window *w_curs = NULL;
+
+	p = add_packed_git(the_repository, idx_name, strlen(idx_name), 1);
+	if (!p || open_pack_index(p))
+		die("unable to open pack index %s", idx_name);
+
+	if (for_each_object_in_pack(p, list_delta, &w_curs,
+				    ODB_FOR_EACH_OBJECT_PACK_ORDER))
+		die("unable to iterate over objects in %s", idx_name);
+
+	unuse_pack(&w_curs);
+	close_pack(p);
+	free(p);
+}
+
 int cmd__pack_deltas(int argc, const char **argv)
 {
 	int num_objects = -1;
+	int list_deltas_mode = 0;
 	struct hashfile *f;
 	struct strbuf line = STRBUF_INIT;
 	struct option options[] = {
 		OPT_INTEGER('n', "num-objects", &num_objects, N_("the number of objects to write")),
+		OPT_BOOL(0, "list-deltas", &list_deltas_mode,
+			 N_("list REF_DELTA and OFS_DELTA entries")),
 		OPT_END()
 	};
 
 	argc = parse_options(argc, argv, NULL,
 			     options, usage_str, 0);
+
+	if (list_deltas_mode) {
+		if (argc != 1 || num_objects >= 0)
+			usage_with_options(usage_str, options);
+		setup_git_directory(the_repository);
+		list_deltas(argv[0]);
+		return 0;
+	}
 
 	if (argc || num_objects < 0)
 		usage_with_options(usage_str, options);
