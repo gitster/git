@@ -1352,6 +1352,8 @@ static int odb_transaction_files_write_object_stream(struct odb_transaction *bas
 			   state->alloc_written);
 		state->written[state->nr_written++] = idx;
 	}
+
+	hashfile_checkpoint_release(&checkpoint);
 	return 0;
 }
 
@@ -1585,11 +1587,13 @@ static int check_stream_oid(git_zstream *stream,
 
 	if (status != Z_STREAM_END) {
 		error(_("corrupt loose object '%s'"), oid_to_hex(expected_oid));
+		git_hash_discard(&c);
 		return -1;
 	}
 	if (stream->avail_in) {
 		error(_("garbage at end of loose object '%s'"),
 		      oid_to_hex(expected_oid));
+		git_hash_discard(&c);
 		return -1;
 	}
 

@@ -37,6 +37,7 @@
 #    define platform_SHA1_Clone_unsafe openssl_SHA1_Clone
 #    define platform_SHA1_Update_unsafe openssl_SHA1_Update
 #    define platform_SHA1_Final_unsafe openssl_SHA1_Final
+#    define platform_SHA1_Discard_unsafe openssl_SHA1_Discard
 #  else
 #    define platform_SHA_CTX_unsafe SHA_CTX
 #    define platform_SHA1_Init_unsafe SHA1_Init
@@ -92,6 +93,7 @@
 #  define platform_SHA1_Final_unsafe   platform_SHA1_Final
 #  ifdef platform_SHA1_Clone
 #    define platform_SHA1_Clone_unsafe platform_SHA1_Clone
+#    define platform_SHA1_Discard_unsafe platform_SHA1_Discard
 #  endif
 #  ifdef SHA1_NEEDS_CLONE_HELPER
 #    define SHA1_NEEDS_CLONE_HELPER_UNSAFE
@@ -110,9 +112,11 @@
 
 #ifdef platform_SHA1_Clone
 #define git_SHA1_Clone	platform_SHA1_Clone
+#define git_SHA1_Discard platform_SHA1_Discard
 #endif
 #ifdef platform_SHA1_Clone_unsafe
 #  define git_SHA1_Clone_unsafe platform_SHA1_Clone_unsafe
+#  define git_SHA1_Discard_unsafe platform_SHA1_Discard_unsafe
 #endif
 
 #ifndef platform_SHA256_CTX
@@ -129,6 +133,7 @@
 
 #ifdef platform_SHA256_Clone
 #define git_SHA256_Clone	platform_SHA256_Clone
+#define git_SHA256_Discard	platform_SHA256_Discard
 #endif
 
 #ifdef SHA1_MAX_BLOCK_SIZE
@@ -142,6 +147,10 @@ static inline void git_SHA1_Clone(git_SHA_CTX *dst, const git_SHA_CTX *src)
 {
 	memcpy(dst, src, sizeof(*dst));
 }
+static inline void git_SHA1_Discard(git_SHA_CTX *ctx UNUSED)
+{
+	/* noop */
+}
 #endif
 #ifndef SHA1_NEEDS_CLONE_HELPER_UNSAFE
 static inline void git_SHA1_Clone_unsafe(git_SHA_CTX_unsafe *dst,
@@ -149,12 +158,20 @@ static inline void git_SHA1_Clone_unsafe(git_SHA_CTX_unsafe *dst,
 {
 	memcpy(dst, src, sizeof(*dst));
 }
+static inline void git_SHA1_Discard_unsafe(git_SHA_CTX_unsafe *ctx UNUSED)
+{
+	/* noop */
+}
 #endif
 
 #ifndef SHA256_NEEDS_CLONE_HELPER
 static inline void git_SHA256_Clone(git_SHA256_CTX *dst, const git_SHA256_CTX *src)
 {
 	memcpy(dst, src, sizeof(*dst));
+}
+static inline void git_SHA256_Discard(git_SHA256_CTX *ctx UNUSED)
+{
+	/* noop */
 }
 #endif
 
@@ -271,6 +288,7 @@ typedef void (*git_hash_clone_fn)(struct git_hash_ctx *dst, const struct git_has
 typedef void (*git_hash_update_fn)(struct git_hash_ctx *ctx, const void *in, size_t len);
 typedef void (*git_hash_final_fn)(unsigned char *hash, struct git_hash_ctx *ctx);
 typedef void (*git_hash_final_oid_fn)(struct object_id *oid, struct git_hash_ctx *ctx);
+typedef void (*git_hash_discard_fn)(struct git_hash_ctx *ctx);
 
 struct git_hash_algo {
 	/*
@@ -306,6 +324,9 @@ struct git_hash_algo {
 	/* The hash finalization function for object IDs. */
 	git_hash_final_oid_fn final_oid_fn;
 
+	/* Discard an initialized hash without finalizing. */
+	git_hash_discard_fn discard_fn;
+
 	/* The OID of the empty tree. */
 	const struct object_id *empty_tree;
 
@@ -325,6 +346,7 @@ void git_hash_clone(struct git_hash_ctx *dst, const struct git_hash_ctx *src);
 void git_hash_update(struct git_hash_ctx *ctx, const void *in, size_t len);
 void git_hash_final(unsigned char *hash, struct git_hash_ctx *ctx);
 void git_hash_final_oid(struct object_id *oid, struct git_hash_ctx *ctx);
+void git_hash_discard(struct git_hash_ctx *ctx);
 const struct git_hash_algo *hash_algo_ptr_by_number(uint32_t algo);
 struct git_hash_ctx *git_hash_alloc(void);
 void git_hash_free(struct git_hash_ctx *ctx);

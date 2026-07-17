@@ -55,11 +55,17 @@ void hashflush(struct hashfile *f)
 	}
 }
 
-void free_hashfile(struct hashfile *f)
+static void free_hashfile_memory(struct hashfile *f)
 {
 	free(f->buffer);
 	free(f->check_buffer);
 	free(f);
+}
+
+void free_hashfile(struct hashfile *f)
+{
+	git_hash_discard(&f->ctx);
+	free_hashfile_memory(f);
 }
 
 int finalize_hashfile(struct hashfile *f, unsigned char *result,
@@ -69,10 +75,12 @@ int finalize_hashfile(struct hashfile *f, unsigned char *result,
 
 	hashflush(f);
 
-	if (f->skip_hash)
+	if (f->skip_hash) {
+		git_hash_discard(&f->ctx);
 		hashclr(f->buffer, f->algop);
-	else
+	} else {
 		git_hash_final(f->buffer, &f->ctx);
+	}
 
 	if (result)
 		hashcpy(result, f->buffer, f->algop);
@@ -97,17 +105,8 @@ int finalize_hashfile(struct hashfile *f, unsigned char *result,
 		if (close(f->check_fd))
 			die_errno("%s: sha1 file error on close", f->name);
 	}
-	free_hashfile(f);
+	free_hashfile_memory(f);
 	return fd;
-}
-
-void discard_hashfile(struct hashfile *f)
-{
-	if (0 <= f->check_fd)
-		close(f->check_fd);
-	if (0 <= f->fd)
-		close(f->fd);
-	free_hashfile(f);
 }
 
 void hashwrite(struct hashfile *f, const void *buf, uint32_t count)
@@ -222,6 +221,11 @@ int hashfile_truncate(struct hashfile *f, struct hashfile_checkpoint *checkpoint
 	git_hash_clone(&f->ctx, &checkpoint->ctx);
 	f->offset = 0; /* hashflush() was called in checkpoint */
 	return 0;
+}
+
+void hashfile_checkpoint_release(struct hashfile_checkpoint *checkpoint)
+{
+	git_hash_discard(&checkpoint->ctx);
 }
 
 void crc32_begin(struct hashfile *f)
