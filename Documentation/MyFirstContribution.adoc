@@ -1442,8 +1442,8 @@ is ready.
 
 If you don't receive any review comments after a week or two, do not
 assume your patch has been accepted or merged.  In the Git project,
-silence does not equal approval.  It usually means reviewers are busy
-or haven't noticed your contribution.
+silence does not equal approval.  It usually means reviewers are busy,
+haven't noticed your contribution, or they are simply not interested.
 
 If your patch is overlooked, it is perfectly acceptable to send a
 polite ping to the thread.  You can do this by replying to your own
