@@ -489,6 +489,24 @@ test_expect_success 'rev-list dies for missing objects on cmd line' '
 	done
 '
 
+test_expect_success '--exclude-promisor-objects with ^@ on missing object' '
+	rm -rf repo &&
+	test_create_repo repo &&
+	test_commit -C repo foo &&
+	test_commit -C repo bar &&
+
+	COMMIT=$(git -C repo rev-parse foo) &&
+	promise_and_delete "$COMMIT" &&
+
+	git -C repo config core.repositoryformatversion 1 &&
+	git -C repo config extensions.partialclone "arbitrary string" &&
+
+	# Ensure that "$COMMIT^@" is handled gracefully even though the
+	# actual commits are missing.
+	git -C repo rev-list --exclude-promisor-objects "$COMMIT^@" >out &&
+	test_must_be_empty out
+'
+
 test_expect_success 'single promisor remote can be re-initialized gracefully' '
 	# ensure one promisor is in the promisors list
 	rm -rf repo &&
