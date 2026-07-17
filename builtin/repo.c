@@ -100,13 +100,13 @@ static int get_path_commondir_relative(struct repository *repo, struct strbuf *b
 	return 0;
 }
 
-static int get_path_git_prefix(struct repository *repo UNUSED, struct strbuf *buf)
+static int get_path_git_prefix(struct repository *repo, struct strbuf *buf)
 {
 	/*
-	 * startup_info->prefix is NULL if we are at the working tree root.
+	 * repo->prefix is NULL if we are at the working tree root.
 	 * We add an empty string to ensure the buffer is cleanly initialized.
 	 */
-	strbuf_addstr(buf, startup_info->prefix ? startup_info->prefix : "");
+	strbuf_addstr(buf, repo->prefix ? repo->prefix : "");
 	return 0;
 }
 
@@ -139,7 +139,7 @@ static int get_path_grafts_absolute(struct repository *repo, struct strbuf *buf)
 	if (!graft_file)
 		return error(_("unable to get graft file"));
 
-	format_path(buf, graft_file, startup_info->prefix, PATH_FORMAT_CANONICAL);
+	format_path(buf, graft_file, repo->prefix, PATH_FORMAT_CANONICAL);
 	return 0;
 }
 
@@ -150,7 +150,7 @@ static int get_path_grafts_relative(struct repository *repo, struct strbuf *buf)
 	if (!graft_file)
 		return error(_("unable to get graft file"));
 
-	format_path(buf, graft_file, startup_info->prefix, PATH_FORMAT_RELATIVE);
+	format_path(buf, graft_file, repo->prefix, PATH_FORMAT_RELATIVE);
 	return 0;
 }
 
@@ -159,7 +159,7 @@ static int get_path_hooks_absolute(struct repository *repo, struct strbuf *buf)
 	struct strbuf hooks_path = STRBUF_INIT;
 
 	repo_git_path_replace(repo, &hooks_path, "hooks");
-	format_path(buf, hooks_path.buf, startup_info->prefix, PATH_FORMAT_CANONICAL);
+	format_path(buf, hooks_path.buf, repo->prefix, PATH_FORMAT_CANONICAL);
 	strbuf_release(&hooks_path);
 	return 0;
 }
@@ -169,7 +169,7 @@ static int get_path_hooks_relative(struct repository *repo, struct strbuf *buf)
 	struct strbuf hooks_path = STRBUF_INIT;
 
 	repo_git_path_replace(repo, &hooks_path, "hooks");
-	format_path(buf, hooks_path.buf, startup_info->prefix, PATH_FORMAT_RELATIVE);
+	format_path(buf, hooks_path.buf, repo->prefix, PATH_FORMAT_RELATIVE);
 	strbuf_release(&hooks_path);
 	return 0;
 }
@@ -181,7 +181,7 @@ static int get_path_index_absolute(struct repository *repo, struct strbuf *buf)
 	if (!index_file)
 		return error(_("unable to get index file"));
 
-	format_path(buf, index_file, startup_info->prefix, PATH_FORMAT_CANONICAL);
+	format_path(buf, index_file, repo->prefix, PATH_FORMAT_CANONICAL);
 	return 0;
 }
 
@@ -192,7 +192,7 @@ static int get_path_index_relative(struct repository *repo, struct strbuf *buf)
 	if (!index_file)
 		return error(_("unable to get index file"));
 
-	format_path(buf, index_file, startup_info->prefix, PATH_FORMAT_RELATIVE);
+	format_path(buf, index_file, repo->prefix, PATH_FORMAT_RELATIVE);
 	return 0;
 }
 
@@ -203,7 +203,7 @@ static int get_path_objects_absolute(struct repository *repo, struct strbuf *buf
 	if (!obj_dir)
 		return error(_("unable to get object directory"));
 
-	format_path(buf, obj_dir, startup_info->prefix, PATH_FORMAT_CANONICAL);
+	format_path(buf, obj_dir, repo->prefix, PATH_FORMAT_CANONICAL);
 	return 0;
 }
 
@@ -214,11 +214,11 @@ static int get_path_objects_relative(struct repository *repo, struct strbuf *buf
 	if (!obj_dir)
 		return error(_("unable to get object directory"));
 
-	format_path(buf, obj_dir, startup_info->prefix, PATH_FORMAT_RELATIVE);
+	format_path(buf, obj_dir, repo->prefix, PATH_FORMAT_RELATIVE);
 	return 0;
 }
 
-static int get_path_superproject_absolute(struct repository *repo UNUSED, struct strbuf *buf)
+static int get_path_superproject_absolute(struct repository *repo, struct strbuf *buf)
 {
 	struct strbuf superproject = STRBUF_INIT;
 
@@ -228,12 +228,12 @@ static int get_path_superproject_absolute(struct repository *repo UNUSED, struct
 		return 0;
 	}
 
-	format_path(buf, superproject.buf, startup_info->prefix, PATH_FORMAT_CANONICAL);
+	format_path(buf, superproject.buf, repo->prefix, PATH_FORMAT_CANONICAL);
 	strbuf_release(&superproject);
 	return 0;
 }
 
-static int get_path_superproject_relative(struct repository *repo UNUSED, struct strbuf *buf)
+static int get_path_superproject_relative(struct repository *repo, struct strbuf *buf)
 {
 	struct strbuf superproject = STRBUF_INIT;
 
@@ -243,7 +243,7 @@ static int get_path_superproject_relative(struct repository *repo UNUSED, struct
 		return 0;
 	}
 
-	format_path(buf, superproject.buf, startup_info->prefix, PATH_FORMAT_RELATIVE);
+	format_path(buf, superproject.buf, repo->prefix, PATH_FORMAT_RELATIVE);
 	strbuf_release(&superproject);
 	return 0;
 }
@@ -257,7 +257,7 @@ static int get_path_toplevel_absolute(struct repository *repo, struct strbuf *bu
 		return 0;
 	}
 
-	format_path(buf, work_tree, startup_info->prefix, PATH_FORMAT_CANONICAL);
+	format_path(buf, work_tree, repo->prefix, PATH_FORMAT_CANONICAL);
 	return 0;
 }
 
@@ -270,7 +270,7 @@ static int get_path_toplevel_relative(struct repository *repo, struct strbuf *bu
 		return 0;
 	}
 
-	format_path(buf, work_tree, startup_info->prefix, PATH_FORMAT_RELATIVE);
+	format_path(buf, work_tree, repo->prefix, PATH_FORMAT_RELATIVE);
 	return 0;
 }
 
