@@ -4424,6 +4424,7 @@ static struct commit *get_revision_1(struct rev_info *revs)
 
 		switch (mode) {
 		case REV_WALK_REFLOG:
+		case REV_WALK_NO_WALK:
 			try_to_simplify_commit(revs, commit);
 			break;
 		case REV_WALK_TOPO:
@@ -4437,7 +4438,6 @@ static struct commit *get_revision_1(struct rev_info *revs)
 					    oid_to_hex(&commit->object.oid));
 			}
 			break;
-		case REV_WALK_NO_WALK:
 		case REV_WALK_LIMITED:
 			break;
 		}
