@@ -92,6 +92,7 @@ struct repo_config_values {
 	char *attributes_file;
 	int apply_sparse_checkout;
 	int trust_executable_bit;
+	int has_symlinks;
 
 	/* section "branch" config values */
 	enum branch_track branch_track;
@@ -125,6 +126,8 @@ int git_default_core_config(const char *var, const char *value,
 			    const struct config_context *ctx, void *cb);
 
 int repo_trust_executable_bit(struct repository *repo);
+
+int repo_has_symlinks(struct repository *repo);
 
 void repo_config_values_init(struct repo_config_values *cfg);
 
@@ -163,7 +166,6 @@ extern char *git_work_tree_cfg;
 /* Environment bits from configuration mechanism */
 extern int trust_ctime;
 extern int check_stat;
-extern int has_symlinks;
 extern int minimum_abbrev, default_abbrev;
 extern int ignore_case;
 extern int assume_unchanged;

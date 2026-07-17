@@ -43,7 +43,6 @@ static int zlib_compression_seen;
 
 int trust_ctime = 1;
 int check_stat = 1;
-int has_symlinks = 1;
 int minimum_abbrev = 4, default_abbrev = -1;
 int ignore_case;
 int assume_unchanged;
@@ -146,6 +145,17 @@ int repo_trust_executable_bit(struct repository *repo)
 	return repo->gitdir?
 		repo_config_values(repo)->trust_executable_bit :
 		1;
+}
+
+int repo_has_symlinks(struct repository *repo)
+{
+	if (!repo)
+		repo = the_repository;
+
+	if (!repo->gitdir)
+		return platform_has_symlinks();
+
+	return repo_config_values(repo)->has_symlinks;
 }
 
 int have_git_dir(void)
@@ -336,7 +346,8 @@ int git_default_core_config(const char *var, const char *value,
 	}
 
 	if (!strcmp(var, "core.symlinks")) {
-		has_symlinks = git_config_bool(var, value);
+		struct repo_config_values *cfg = repo_config_values(the_repository);
+		cfg->has_symlinks = git_config_bool(var, value);
 		return 0;
 	}
 
@@ -727,5 +738,6 @@ void repo_config_values_init(struct repo_config_values *cfg)
 	cfg->attributes_file = NULL;
 	cfg->apply_sparse_checkout = 0;
 	cfg->trust_executable_bit = 1;
+	cfg->has_symlinks = platform_has_symlinks();
 	cfg->branch_track = BRANCH_TRACK_REMOTE;
 }

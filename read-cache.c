@@ -207,7 +207,7 @@ static unsigned int st_mode_from_ce(const struct cache_entry *ce)
 {
 	switch (ce->ce_mode & S_IFMT) {
 	case S_IFLNK:
-		return has_symlinks ? S_IFLNK : (S_IFREG | 0644);
+		return repo_has_symlinks(the_repository) ? S_IFLNK : (S_IFREG | 0644);
 	case S_IFREG:
 		return (ce->ce_mode & (repo_trust_executable_bit(the_repository) ? 0755 : 0644)) | S_IFREG;
 	case S_IFGITLINK:
@@ -325,7 +325,7 @@ static int ce_match_stat_basic(const struct cache_entry *ce, struct stat *st)
 		break;
 	case S_IFLNK:
 		if (!S_ISLNK(st->st_mode) &&
-		    (has_symlinks || !S_ISREG(st->st_mode)))
+		    (repo_has_symlinks(the_repository) || !S_ISREG(st->st_mode)))
 			changed |= TYPE_CHANGED;
 		break;
 	case S_IFGITLINK:
@@ -740,7 +740,8 @@ int add_to_index(struct index_state *istate, const char *path, struct stat *st, 
 		ce->ce_flags |= CE_INTENT_TO_ADD;
 
 
-	if (repo_trust_executable_bit(istate->repo) && has_symlinks) {
+	if (repo_trust_executable_bit(istate->repo) &&
+	    repo_has_symlinks(istate->repo)) {
 		ce->ce_mode = create_ce_mode(st_mode);
 	} else {
 		/* If there is an existing entry, pick the mode bits and type
