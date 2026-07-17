@@ -91,6 +91,7 @@ struct repo_config_values {
 	/* section "core" config values */
 	char *attributes_file;
 	int apply_sparse_checkout;
+	int trust_executable_bit;
 
 	/* section "branch" config values */
 	enum branch_track branch_track;
@@ -122,6 +123,8 @@ int git_default_config(const char *, const char *,
 		       const struct config_context *, void *);
 int git_default_core_config(const char *var, const char *value,
 			    const struct config_context *ctx, void *cb);
+
+int repo_trust_executable_bit(struct repository *repo);
 
 void repo_config_values_init(struct repo_config_values *cfg);
 
@@ -158,7 +161,6 @@ int is_bare_repository(void);
 extern char *git_work_tree_cfg;
 
 /* Environment bits from configuration mechanism */
-extern int trust_executable_bit;
 extern int trust_ctime;
 extern int check_stat;
 extern int has_symlinks;

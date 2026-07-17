@@ -17,11 +17,11 @@ static inline unsigned int ce_mode_from_stat(struct repository *repo,
 					     const struct cache_entry *ce,
 					     unsigned int mode)
 {
-	extern int trust_executable_bit, has_symlinks;
+	extern int has_symlinks;
 	if (S_ISREG(mode) && !has_symlinks &&
 	    ce && S_ISLNK(ce->ce_mode))
 		return ce->ce_mode;
-	if (S_ISREG(mode) && !trust_executable_bit) {
+	if (S_ISREG(mode) && !repo_trust_executable_bit(repo)) {
 		if (ce && S_ISREG(ce->ce_mode))
 			return ce->ce_mode;
 		return create_ce_mode(0666);
