@@ -538,6 +538,23 @@ test_expect_success 'rev-list --verify-objects with bad sha1' '
 	test_grep -q "error: hash mismatch $(dirname $new)$(test_oid ff_2)" out
 '
 
+test_expect_success 'rev-list --verify-objects with truncated loose blob' '
+	git init truncated-blob &&
+	(
+		cd truncated-blob &&
+		blob=$(test-tool genrandom one 5k | git hash-object -t blob -w --stdin) &&
+		obj=.git/objects/$(test_oid_to_path $blob) &&
+
+		# Truncate the loose blob such that its header can still be
+		# parsed, but reading the object data fails mid-stream.
+		test_copy_bytes 64 <"$obj" >obj.tmp &&
+		mv obj.tmp "$obj" &&
+
+		test_must_fail git rev-list --verify-objects "$blob" 2>err &&
+		test_grep "hash mismatch" err
+	)
+'
+
 # An actual bit corruption is more likely than swapped commits, but
 # this provides an easy way to have commits which don't match their purported
 # hashes, but which aren't so broken we can't read them at all.

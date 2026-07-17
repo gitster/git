@@ -129,11 +129,8 @@ int stream_object_signature(struct repository *r,
 	for (;;) {
 		char buf[1024 * 16];
 		ssize_t readlen = odb_read_stream_read(st, buf, sizeof(buf));
-
-		if (readlen < 0) {
-			odb_read_stream_close(st);
+		if (readlen < 0)
 			return -1;
-		}
 		if (!readlen)
 			break;
 		git_hash_update(&c, buf, readlen);
