@@ -21,12 +21,10 @@
 #include "statinfo.h"
 #include "trace.h"
 
-void set_alternate_shallow_file(struct repository *r, const char *path, int override)
+void set_alternate_shallow_file(struct repository *r, const char *path)
 {
 	if (r->parsed_objects->is_shallow != -1)
 		BUG("is_repository_shallow must not be called before set_alternate_shallow_file");
-	if (r->parsed_objects->alternate_shallow_file && !override)
-		return;
 	free(r->parsed_objects->alternate_shallow_file);
 	r->parsed_objects->alternate_shallow_file = xstrdup_or_null(path);
 }
