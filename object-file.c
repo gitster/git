@@ -898,7 +898,7 @@ int force_object_loose(struct odb_source *source,
 {
 	struct odb_source_files *files = odb_source_files_downcast(source);
 	const struct git_hash_algo *compat = source->odb->repo->compat_hash_algo;
-	void *buf;
+	void *buf = NULL;
 	size_t len;
 	struct object_info oi = OBJECT_INFO_INIT;
 	struct object_id compat_oid;
@@ -916,19 +916,29 @@ int force_object_loose(struct odb_source *source,
 	oi.typep = &type;
 	oi.sizep = &len;
 	oi.contentp = &buf;
-	if (odb_read_object_info_extended(source->odb, oid, &oi, 0))
-		return error(_("cannot read object for %s"), oid_to_hex(oid));
-	if (compat) {
-		if (repo_oid_to_algop(source->odb->repo, oid, compat, &compat_oid))
-			return error(_("cannot map object %s to %s"),
-				     oid_to_hex(oid), compat->name);
+	if (odb_read_object_info_extended(source->odb, oid, &oi, 0)) {
+		ret = error(_("cannot read object for %s"), oid_to_hex(oid));
+		goto out;
 	}
+
+	if (compat) {
+		if (repo_oid_to_algop(source->odb->repo, oid, compat, &compat_oid)) {
+			ret = error(_("cannot map object %s to %s"),
+				    oid_to_hex(oid), compat->name);
+			goto out;
+		}
+	}
+
 	hdrlen = format_object_header(hdr, sizeof(hdr), type, len);
 	ret = write_loose_object(files->loose, oid, hdr, hdrlen, buf, len, mtime, 0);
-	if (!ret && compat)
-		ret = repo_add_loose_object_map(files->loose, oid, &compat_oid);
-	free(buf);
+	if (ret)
+		goto out;
 
+	if (compat)
+		ret = repo_add_loose_object_map(files->loose, oid, &compat_oid);
+
+out:
+	free(buf);
 	return ret;
 }
 
