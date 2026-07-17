@@ -122,6 +122,28 @@ static int get_path_gitdir_relative(struct repository *repo, struct strbuf *buf)
 	return 0;
 }
 
+static int get_path_objects_absolute(struct repository *repo, struct strbuf *buf)
+{
+	const char *obj_dir = repo_get_object_directory(repo);
+
+	if (!obj_dir)
+		return error(_("unable to get object directory"));
+
+	format_path(buf, obj_dir, startup_info->prefix, PATH_FORMAT_CANONICAL);
+	return 0;
+}
+
+static int get_path_objects_relative(struct repository *repo, struct strbuf *buf)
+{
+	const char *obj_dir = repo_get_object_directory(repo);
+
+	if (!obj_dir)
+		return error(_("unable to get object directory"));
+
+	format_path(buf, obj_dir, startup_info->prefix, PATH_FORMAT_RELATIVE);
+	return 0;
+}
+
 static int get_path_superproject_absolute(struct repository *repo UNUSED, struct strbuf *buf)
 {
 	struct strbuf superproject = STRBUF_INIT;
@@ -194,6 +216,8 @@ static const struct repo_info_field repo_info_field[] = {
 	{ "path.commondir.relative", get_path_commondir_relative },
 	{ "path.gitdir.absolute", get_path_gitdir_absolute },
 	{ "path.gitdir.relative", get_path_gitdir_relative },
+	{ "path.objects.absolute", get_path_objects_absolute },
+	{ "path.objects.relative", get_path_objects_relative },
 	{ "path.superproject-working-tree.absolute", get_path_superproject_absolute },
 	{ "path.superproject-working-tree.relative", get_path_superproject_relative },
 	{ "path.toplevel.absolute", get_path_toplevel_absolute },

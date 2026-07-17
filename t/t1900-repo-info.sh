@@ -213,6 +213,13 @@ test_repo_info_path 'gitdir with explicit GIT_DIR' 'gitdir' \
 	'.git' \
 	'GIT_DIR="../.git" && export GIT_DIR'
 
+test_repo_info_path 'objects standard' 'objects' '.git/objects'
+
+test_repo_info_path 'objects with GIT_OBJECT_DIRECTORY override' 'objects' \
+	'custom-objects' \
+	'GIT_OBJECT_DIRECTORY="$ROOT/custom-objects" && export GIT_OBJECT_DIRECTORY &&
+	 mkdir -p "$ROOT/custom-objects"'
+
 test_expect_success 'path.superproject-working-tree absolute and relative' '
 	test_when_finished "rm -rf sub super" &&
 	git init sub &&

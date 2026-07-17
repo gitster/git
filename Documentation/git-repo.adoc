@@ -119,6 +119,15 @@ values that they return:
 `path.gitdir.relative`::
 	The path to the Git repository directory relative to the current working directory.
 
+`path.objects.absolute`::
+	The canonical absolute path to the repository's object database directory.
+	Respects the `GIT_OBJECT_DIRECTORY` environment override.
+
+`path.objects.relative`::
+	The path to the repository's object database directory relative to the
+	current working directory. Respects the `GIT_OBJECT_DIRECTORY`
+	environment override.
+
 `path.superproject-working-tree.absolute`::
 	The canonical absolute path to the working tree root of the superproject
 	if the current repository is an initialized submodule. Outputs an empty
