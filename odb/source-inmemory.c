@@ -231,7 +231,7 @@ static int odb_source_inmemory_write_object(struct odb_source *source,
 					    const void *buf, size_t len,
 					    enum object_type type,
 					    struct object_id *oid,
-					    struct object_id *compat_oid UNUSED,
+					    const struct object_id *compat_oid UNUSED,
 					    enum odb_write_object_flags flags UNUSED)
 {
 	struct odb_source_inmemory *inmemory = odb_source_inmemory_downcast(source);
