@@ -529,7 +529,7 @@ static int odb_source_packed_write_object(struct odb_source *source UNUSED,
 					  const void *buf UNUSED,
 					  size_t len UNUSED,
 					  enum object_type type UNUSED,
-					  struct object_id *oid UNUSED,
+					  const struct object_id *oid UNUSED,
 					  const struct object_id *compat_oid UNUSED,
 					  unsigned flags UNUSED)
 {

@@ -995,6 +995,8 @@ int odb_write_object_ext(struct object_database *odb,
 	const struct git_hash_algo *compat = odb->repo->compat_hash_algo;
 	struct object_id compat_oid, *compat_oid_p = NULL;
 
+	hash_object_file(odb->repo->hash_algo, buf, len, type, oid);
+
 	if (compat) {
 		const struct git_hash_algo *algo = odb->repo->hash_algo;
 

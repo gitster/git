@@ -316,31 +316,6 @@ int parse_loose_header(const char *hdr, struct object_info *oi)
 	return 0;
 }
 
-static void hash_object_body(const struct git_hash_algo *algo, struct git_hash_ctx *c,
-			     const void *buf, size_t len,
-			     struct object_id *oid,
-			     char *hdr, size_t *hdrlen)
-{
-	git_hash_init(c, algo);
-	git_hash_update(c, hdr, *hdrlen);
-	git_hash_update(c, buf, len);
-	git_hash_final_oid(oid, c);
-}
-
-void write_object_file_prepare(const struct git_hash_algo *algo,
-			       const void *buf, size_t len,
-			       enum object_type type, struct object_id *oid,
-			       char *hdr, size_t *hdrlen)
-{
-	struct git_hash_ctx c;
-
-	/* Generate the header */
-	*hdrlen = format_object_header(hdr, *hdrlen, type, len);
-
-	/* Hash (function pointers) computation */
-	hash_object_body(algo, &c, buf, len, oid, hdr, hdrlen);
-}
-
 #define CHECK_COLLISION_DEST_VANISHED -2
 
 static int check_collision(const char *source, const char *dest)
@@ -476,10 +451,16 @@ void hash_object_file(const struct git_hash_algo *algo, const void *buf,
 		      size_t len, enum object_type type,
 		      struct object_id *oid)
 {
+	struct git_hash_ctx c;
 	char hdr[MAX_HEADER_LEN];
-	size_t hdrlen = sizeof(hdr);
+	int hdrlen;
 
-	write_object_file_prepare(algo, buf, len, type, oid, hdr, &hdrlen);
+	hdrlen = format_object_header(hdr, sizeof(hdr), type, len);
+
+	git_hash_init(&c, algo);
+	git_hash_update(&c, hdr, hdrlen);
+	git_hash_update(&c, buf, len);
+	git_hash_final_oid(oid, &c);
 }
 
 struct transaction_packfile {

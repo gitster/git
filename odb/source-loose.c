@@ -584,19 +584,21 @@ static int odb_source_loose_freshen_object(struct odb_source *source,
 
 static int odb_source_loose_write_object(struct odb_source *source,
 					 const void *buf, size_t len,
-					 enum object_type type, struct object_id *oid,
+					 enum object_type type,
+					 const struct object_id *oid,
 					 const struct object_id *compat_oid,
 					 enum odb_write_object_flags flags)
 {
 	struct odb_source_loose *loose = odb_source_loose_downcast(source);
-	const struct git_hash_algo *algo = source->odb->repo->hash_algo;
 	char hdr[MAX_HEADER_LEN];
-	size_t hdrlen = sizeof(hdr);
+	int hdrlen;
 
-	/* Normally if we have it in the pack then we do not bother writing
+	hdrlen = format_object_header(hdr, sizeof(hdr), type, len);
+
+	/*
+	 * Normally if we have it in the pack then we do not bother writing
 	 * it out into .git/objects/??/?{38} file.
 	 */
-	write_object_file_prepare(algo, buf, len, type, oid, hdr, &hdrlen);
 	if (odb_freshen_object(source->odb, oid))
 		return 0;
 	if (write_loose_object(loose, oid, hdr, hdrlen, buf, len, 0, flags))

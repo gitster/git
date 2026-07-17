@@ -230,14 +230,12 @@ static int odb_source_inmemory_count_objects(struct odb_source *source,
 static int odb_source_inmemory_write_object(struct odb_source *source,
 					    const void *buf, size_t len,
 					    enum object_type type,
-					    struct object_id *oid,
+					    const struct object_id *oid,
 					    const struct object_id *compat_oid UNUSED,
 					    enum odb_write_object_flags flags UNUSED)
 {
 	struct odb_source_inmemory *inmemory = odb_source_inmemory_downcast(source);
 	struct inmemory_object *object;
-
-	hash_object_file(source->odb->repo->hash_algo, buf, len, type, oid);
 
 	if (!inmemory->objects) {
 		CALLOC_ARRAY(inmemory->objects, 1);
@@ -284,6 +282,8 @@ static int odb_source_inmemory_write_object_stream(struct odb_source *source,
 		ret = error("object stream yielded less bytes than expected");
 		goto out;
 	}
+
+	hash_object_file(source->odb->repo->hash_algo, data, total_read, OBJ_BLOB, oid);
 
 	ret = odb_source_inmemory_write_object(source, data, len, OBJ_BLOB, oid,
 					       NULL, 0);

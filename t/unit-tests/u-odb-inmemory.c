@@ -43,6 +43,7 @@ static void cl_assert_write_object(struct odb_source_inmemory *source,
 				   struct object_id *oid)
 {
 	size_t content_len = strlen(content);
+	hash_object_file(repo.hash_algo, content, content_len, type, oid);
 	cl_must_pass(odb_source_write_object(&source->base, content, content_len,
 					     type, oid, NULL, 0));
 }
