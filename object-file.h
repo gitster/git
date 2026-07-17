@@ -99,7 +99,8 @@ int format_object_header(char *str, size_t size, enum object_type type,
 			 size_t objsize);
 
 int force_object_loose(struct odb_source *source,
-		       const struct object_id *oid, time_t mtime);
+		       const struct object_id *oid,
+		       const time_t *mtime);
 
 /**
  * With in-core object data in "buf", rehash it to make sure the
@@ -137,10 +138,11 @@ void hash_object_file(const struct git_hash_algo *algo, const void *buf,
 int write_loose_object(struct odb_source_loose *loose,
 		       const struct object_id *oid, char *hdr,
 		       int hdrlen, const void *buf, unsigned long len,
-		       time_t mtime, unsigned flags);
+		       const time_t *mtime, unsigned flags);
 
 /* Helper to check and "touch" a file */
-int check_and_freshen_file(const char *fn, int freshen);
+int check_and_freshen_file(const char *fn, int freshen,
+			   const time_t *mtime);
 
 /*
  * Open the loose object at path, check its hash, and return the contents,

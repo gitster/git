@@ -67,9 +67,17 @@ const char *odb_loose_path(struct odb_source_loose *loose,
 }
 
 /* Returns 1 if we have successfully freshened the file, 0 otherwise. */
-static int freshen_file(const char *fn)
+static int freshen_file(const char *fn, const time_t *mtime)
 {
-	return !utime(fn, NULL);
+	struct utimbuf times, *timesp = NULL;
+
+	if (mtime) {
+		times.actime = *mtime;
+		times.modtime = *mtime;
+		timesp = &times;
+	}
+
+	return !utime(fn, timesp);
 }
 
 /*
@@ -79,11 +87,12 @@ static int freshen_file(const char *fn)
  * either does not exist on disk, or has a stale mtime and may be subject to
  * pruning).
  */
-int check_and_freshen_file(const char *fn, int freshen)
+int check_and_freshen_file(const char *fn, int freshen,
+			   const time_t *mtime)
 {
 	if (access(fn, F_OK))
 		return 0;
-	if (freshen && !freshen_file(fn))
+	if (freshen && !freshen_file(fn, mtime))
 		return 0;
 	return 1;
 }
@@ -706,7 +715,7 @@ static int end_loose_object_common(struct odb_source_loose *loose,
 int write_loose_object(struct odb_source_loose *loose,
 		       const struct object_id *oid, char *hdr,
 		       int hdrlen, const void *buf, unsigned long len,
-		       time_t mtime, unsigned flags)
+		       const time_t *mtime, unsigned flags)
 {
 	int fd, ret;
 	unsigned char compressed[4096];
@@ -751,9 +760,11 @@ int write_loose_object(struct odb_source_loose *loose,
 	close_loose_object(loose, fd, tmp_file.buf);
 
 	if (mtime) {
-		struct utimbuf utb;
-		utb.actime = mtime;
-		utb.modtime = mtime;
+		struct utimbuf utb = {
+			.actime = *mtime,
+			.modtime = *mtime,
+		};
+
 		if (utime(tmp_file.buf, &utb) < 0 &&
 		    !(flags & ODB_WRITE_OBJECT_SILENT))
 			warning_errno(_("failed utime() on %s"), tmp_file.buf);
@@ -883,7 +894,7 @@ cleanup:
 }
 
 int force_object_loose(struct odb_source *source,
-		       const struct object_id *oid, time_t mtime)
+		       const struct object_id *oid, const time_t *mtime)
 {
 	struct odb_source_files *files = odb_source_files_downcast(source);
 	const struct git_hash_algo *compat = source->odb->repo->compat_hash_algo;

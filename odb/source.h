@@ -190,7 +190,8 @@ struct odb_source {
 	 * has been freshened.
 	 */
 	int (*freshen_object)(struct odb_source *source,
-			      const struct object_id *oid);
+			      const struct object_id *oid,
+			      const time_t *mtime);
 
 	/*
 	 * This callback is expected to persist the given object into the
@@ -208,6 +209,7 @@ struct odb_source {
 			    enum object_type type,
 			    const struct object_id *oid,
 			    const struct object_id *compat_oid,
+			    const time_t *mtime,
 			    enum odb_write_object_flags flags);
 
 	/*
@@ -403,9 +405,10 @@ static inline int odb_source_find_abbrev_len(struct odb_source *source,
  * not exist.
  */
 static inline int odb_source_freshen_object(struct odb_source *source,
-					    const struct object_id *oid)
+					    const struct object_id *oid,
+					    const time_t *mtime)
 {
-	return source->freshen_object(source, oid);
+	return source->freshen_object(source, oid, mtime);
 }
 
 /*
@@ -418,10 +421,11 @@ static inline int odb_source_write_object(struct odb_source *source,
 					  enum object_type type,
 					  const struct object_id *oid,
 					  const struct object_id *compat_oid,
+					  const time_t *mtime,
 					  enum odb_write_object_flags flags)
 {
 	return source->write_object(source, buf, len, type, oid,
-				    compat_oid, flags);
+				    compat_oid, mtime, flags);
 }
 
 /*

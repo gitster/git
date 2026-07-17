@@ -574,12 +574,13 @@ out:
 }
 
 static int odb_source_loose_freshen_object(struct odb_source *source,
-					   const struct object_id *oid)
+					   const struct object_id *oid,
+					   const time_t *mtime)
 {
 	struct odb_source_loose *loose = odb_source_loose_downcast(source);
 	static struct strbuf path = STRBUF_INIT;
 	odb_loose_path(loose, &path, oid);
-	return !!check_and_freshen_file(path.buf, 1);
+	return !!check_and_freshen_file(path.buf, 1, mtime);
 }
 
 static int odb_source_loose_write_object(struct odb_source *source,
@@ -587,6 +588,7 @@ static int odb_source_loose_write_object(struct odb_source *source,
 					 enum object_type type,
 					 const struct object_id *oid,
 					 const struct object_id *compat_oid,
+					 const time_t *mtime,
 					 enum odb_write_object_flags flags)
 {
 	struct odb_source_loose *loose = odb_source_loose_downcast(source);
@@ -595,7 +597,7 @@ static int odb_source_loose_write_object(struct odb_source *source,
 
 	hdrlen = format_object_header(hdr, sizeof(hdr), type, len);
 
-	if (write_loose_object(loose, oid, hdr, hdrlen, buf, len, 0, flags))
+	if (write_loose_object(loose, oid, hdr, hdrlen, buf, len, mtime, flags))
 		return -1;
 
 	if (compat_oid)

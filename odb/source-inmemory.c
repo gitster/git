@@ -232,6 +232,7 @@ static int odb_source_inmemory_write_object(struct odb_source *source,
 					    enum object_type type,
 					    const struct object_id *oid,
 					    const struct object_id *compat_oid UNUSED,
+					    const time_t *mtime UNUSED,
 					    enum odb_write_object_flags flags UNUSED)
 {
 	struct odb_source_inmemory *inmemory = odb_source_inmemory_downcast(source);
@@ -286,7 +287,7 @@ static int odb_source_inmemory_write_object_stream(struct odb_source *source,
 	hash_object_file(source->odb->repo->hash_algo, data, total_read, OBJ_BLOB, oid);
 
 	ret = odb_source_inmemory_write_object(source, data, len, OBJ_BLOB, oid,
-					       NULL, 0);
+					       NULL, NULL, 0);
 	if (ret < 0)
 		goto out;
 
@@ -296,7 +297,8 @@ out:
 }
 
 static int odb_source_inmemory_freshen_object(struct odb_source *source,
-					      const struct object_id *oid)
+					      const struct object_id *oid,
+					      const time_t *mtime UNUSED)
 {
 	struct odb_source_inmemory *inmemory = odb_source_inmemory_downcast(source);
 	if (find_cached_object(inmemory, oid))
