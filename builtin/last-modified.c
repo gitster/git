@@ -272,6 +272,9 @@ static bool maybe_changed_path(struct last_modified *lm,
 	if (!filter)
 		return true;
 
+	if (revs_maybe_changed_in_bloom(&lm->rev, filter) == 0)
+		return false;
+
 	hashmap_for_each_entry(&lm->paths, &iter, ent, hashent) {
 		if (active && !bitmap_get(active, ent->diff_idx))
 			continue;
