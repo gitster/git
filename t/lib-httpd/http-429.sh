@@ -26,14 +26,24 @@ repo_path="${remaining#*/}"  # Get rest (repo path)
 # The repo name is the first component before any "/"
 repo_name="${repo_path%%/*}"
 
-# Use current directory (HTTPD_ROOT_PATH) for state file
-# Create a safe filename from test_context, retry_after and repo_name
-# This ensures all requests for the same test context share the same state file
+# Use current directory (HTTPD_ROOT_PATH) for state.
+# Create a safe name from test_context, retry_after and repo_name so that all
+# requests for the same test context share the same state.
 safe_name=$(echo "${test_context}-${retry_after}-${repo_name}" | tr '/' '_' | tr -cd 'a-zA-Z0-9_-')
-state_file="http-429-state-${safe_name}"
+state="http-429-state-${safe_name}"
 
-# Check if this is the first call (no state file exists)
-if test -f "$state_file"
+# This endpoint returns 429 to the first request and forwards later ones to
+# git-http-backend, so the retry succeeds. Apache can run this CGI for several
+# requests at once, so a single atomic "mkdir" elects that first request: the
+# one whose mkdir succeeds returns 429 and leaves the directory behind as the
+# "already rate-limited" marker; every later request finds the directory (mkdir
+# fails) and is forwarded.
+#
+# "permanent" is the exception: it must return 429 to every request and never
+# succeed, so it skips the mkdir and records no state. A leftover directory
+# would make its own later requests find the marker and be forwarded, which is
+# exactly what "permanent" must not do.
+if test "$retry_after" != permanent && ! mkdir "$state" 2>/dev/null
 then
 	# Already returned 429 once, forward to git-http-backend
 	# Set PATH_INFO to just the repo path (without retry-after value)
@@ -52,9 +62,6 @@ then
 	exec "$GIT_EXEC_PATH/git-http-backend"
 fi
 
-# Mark that we've returned 429
-touch "$state_file"
-
 # Output HTTP 429 response
 printf "Status: 429 Too Many Requests\r\n"
 
@@ -67,8 +74,7 @@ case "$retry_after" in
 		printf "Retry-After: invalid-format-123abc\r\n"
 		;;
 	permanent)
-		# Always return 429, don't set state file for success
-		rm -f "$state_file"
+		# Always return 429
 		printf "Retry-After: 1\r\n"
 		printf "Content-Type: text/plain\r\n"
 		printf "\r\n"
