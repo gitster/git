@@ -224,6 +224,7 @@ struct http_pack_request {
 
 	FILE *packfile;
 	struct strbuf tmpfile;
+	struct tempfile *tempfile;
 	struct active_request_slot *slot;
 	struct curl_slist *headers;
 };

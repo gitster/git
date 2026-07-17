@@ -293,6 +293,74 @@ test_expect_success 'http-fetch --packfile' '
 	git -C packfileclient cat-file -e "$HASH"
 '
 
+test_expect_success PIPE 'concurrent http-fetch --packfile' '
+	git init packfileclient-concurrent &&
+	HASH=$(git -C "$HTTPD_DOCUMENT_ROOT_PATH"/repo_pack.git rev-parse HEAD) &&
+	p=$(cd "$HTTPD_DOCUMENT_ROOT_PATH"/repo_pack.git &&
+		ls objects/pack/pack-*.pack) &&
+	packhash=$(basename "$p" .pack) &&
+	packhash=${packhash#pack-} &&
+
+	mkfifo first-ready first-continue &&
+	exec 8<>first-ready &&
+	exec 9<>first-continue &&
+	write_script git-wait-index-pack <<-\EOF &&
+	echo ready >"$GIT_TEST_WAIT_READY" &&
+	read continue <"$GIT_TEST_WAIT_CONTINUE" &&
+	exec git index-pack "$@"
+	EOF
+
+	# Hold the first download before it is indexed, so that the second
+	# download installs the pack first.
+	{
+		(
+			if ! PATH="$TRASH_DIRECTORY:$PATH" \
+			GIT_TEST_WAIT_READY="$TRASH_DIRECTORY/first-ready" \
+			GIT_TEST_WAIT_CONTINUE="$TRASH_DIRECTORY/first-continue" \
+			git -C packfileclient-concurrent http-fetch \
+				--packfile="$packhash" \
+				--index-pack-arg=wait-index-pack \
+				--index-pack-arg=--stdin \
+				--index-pack-arg=--keep \
+				"$HTTPD_URL/dumb/repo_pack.git/$p" >first.out
+			then
+				echo failed >"$TRASH_DIRECTORY/first-ready" &&
+				exit 1
+			fi
+		) &
+		first_pid=$!
+	} &&
+	test_when_finished "
+		echo continue >&9
+		wait $first_pid 2>/dev/null || :
+		exec 8>&-
+		exec 9>&-
+		rm -f first-ready first-continue git-wait-index-pack
+	" &&
+
+	read ready <&8 &&
+	test "$ready" = ready &&
+	git -C packfileclient-concurrent http-fetch \
+		--packfile="$packhash" \
+		--index-pack-arg=index-pack \
+		--index-pack-arg=--stdin \
+		--index-pack-arg=--keep \
+		"$HTTPD_URL/dumb/repo_pack.git/$p" >second.out &&
+	echo continue >&9 &&
+	wait "$first_pid" &&
+
+	printf "pack\t%s\n" "$packhash" >expect &&
+	test_cmp expect first.out &&
+	printf "keep\t%s\n" "$packhash" >expect &&
+	test_cmp expect second.out &&
+	test_path_is_missing \
+		"packfileclient-concurrent/.git/objects/pack/pack-$packhash.pack.temp" &&
+	find packfileclient-concurrent/.git/objects/pack \
+		-name "tmp_pack_*" -print >tmpfiles &&
+	test_must_be_empty tmpfiles &&
+	git -C packfileclient-concurrent cat-file -e "$HASH"
+'
+
 test_expect_success 'fetch notices corrupt pack' '
 	cp -R "$HTTPD_DOCUMENT_ROOT_PATH"/repo_pack.git "$HTTPD_DOCUMENT_ROOT_PATH"/repo_bad1.git &&
 	(cd "$HTTPD_DOCUMENT_ROOT_PATH"/repo_bad1.git &&
@@ -313,7 +381,9 @@ test_expect_success 'http-fetch --packfile with corrupt pack' '
 	git init packfileclient &&
 	p=$(cd "$HTTPD_DOCUMENT_ROOT_PATH"/repo_bad1.git && ls objects/pack/pack-*.pack) &&
 	test_must_fail git -C packfileclient http-fetch --packfile \
-		"$HTTPD_URL"/dumb/repo_bad1.git/$p
+		"$HTTPD_URL"/dumb/repo_bad1.git/$p &&
+	find packfileclient/.git/objects/pack -name "tmp_pack_*" -print >tmpfiles &&
+	test_must_be_empty tmpfiles
 '
 
 test_expect_success 'fetch notices corrupt idx' '
