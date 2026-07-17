@@ -169,3 +169,49 @@ Fixes since v2.55
    when running tests with the 'GIT_TEST_COMMIT_GRAPH_CHANGED_PATHS=1'
    environment variable have been plugged.
    (merge 459088ec2e jk/bloom-leak-fixes later to maint).
+
+ * The wincred credential helper has been updated to avoid memory
+   corruption when erasing credentials and to prevent silent
+   credential loss when storing OAuth tokens, by correcting buffer
+   allocations and arguments passed to safe-CRT APIs.
+   (merge f635ab9ab4 js/wincred-fixes later to maint).
+
+ * Various code paths that initialize a cryptographic hash context but
+   bail out or finish without calling 'git_hash_final()' have been taught
+   to call 'git_hash_discard()' to release allocated resources, fixing
+   memory leaks when Git is built with non-default backends like
+   'OpenSSL' or 'libgcrypt'.
+   (merge 600588d2aa jk/hash-algo-leak-fixes later to maint).
+
+ * Various resource leaks, invalid file descriptor closures, and process
+   handle ownership issues flagged by Coverity have been fixed.
+   (merge 9184231173 js/coverity-fixes later to maint).
+
+ * Dockerized CI jobs running in private GitHub repositories have been
+   adjusted to use explicit process and file limits, preventing resource
+   exhaustion errors on private runners.
+   (merge bad766fbac js/ci-dockerized-pid-limit later to maint).
+
+ * Various test scripts have been updated to clean up large temporary
+   files and repositories, reducing peak disk usage during testing.
+   Also, expensive tests have been disabled on platforms that lack
+   sufficient resources (like 32-bit platforms and Windows CI runners),
+   and the long test suite has been enabled in GitLab CI.
+   (merge 84248444ad ps/t-fixes-for-git-test-long later to maint).
+
+ * The UTF-8 precomposition wrapper on macOS has been updated to use a
+   flexible array member to represent the name of a directory entry,
+   preventing fortified libc checks from failing when the name is
+   reallocated to be larger than 'NAME_MAX' bytes.
+   (merge 1eb281159f ih/precompose-flex-array later to maint).
+
+ * The 'git_hash_*()' wrappers have been updated to be used consistently
+   across the codebase instead of direct calls to members of 'struct
+   git_hash_algo', and 'git_hash_discard()' has been made idempotent to
+   simplify cleanups.
+   (merge 9e396aa553 jk/git-hash-cleanups later to maint).
+
+ * The sideband demultiplexer has been updated to recognize ANSI SGR
+   escape sequences that use colon-separated subfields (e.g., for
+   256-color or true-color codes).
+   (merge 3792b2aea4 mm/sideband-ansi-sgr-colon-fix later to maint).
