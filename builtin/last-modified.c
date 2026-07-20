@@ -416,7 +416,7 @@ static int last_modified_run(struct last_modified *lm)
 		 * in the '--not' queue.
 		 */
 		if (repo_parse_commit(lm->rev.repo, c))
-			continue;
+			goto cleanup;
 
 		while ((n = prio_queue_get(&not_queue))) {
 			struct commit_list *np;
