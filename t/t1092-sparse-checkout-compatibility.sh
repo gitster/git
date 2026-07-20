@@ -2119,6 +2119,13 @@ test_expect_success 'sparse index is not expanded: rm' '
 	ensure_not_expanded rm -r deep
 '
 
+test_expect_success 'sparse index is not expanded: prefixed wildcard pathspec' '
+	init_repos &&
+
+	ensure_not_expanded -C deep rm --dry-run -- "a*" &&
+	ensure_not_expanded -C deep reset base -- "a*"
+'
+
 test_expect_success 'grep with and --cached' '
 	init_repos &&
 
