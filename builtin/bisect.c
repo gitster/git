@@ -505,6 +505,7 @@ static int get_terms(struct bisect_terms *terms)
 	terms->term_bad = strbuf_detach(&str, NULL);
 	if (strbuf_getline_lf(&str, fp) == EOF) {
 		res = -1;
+		FREE_AND_NULL(terms->term_bad);
 		goto finish;
 	}
 	terms->term_good = strbuf_detach(&str, NULL);
