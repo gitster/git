@@ -41,7 +41,6 @@
 static int pack_compression_seen;
 static int zlib_compression_seen;
 
-int trust_executable_bit = 1;
 int trust_ctime = 1;
 int check_stat = 1;
 int has_symlinks = 1;
@@ -140,6 +139,13 @@ int is_bare_repository(void)
 {
 	/* if core.bare is not 'false', let's see if there is a work tree */
 	return is_bare_repository_cfg && !repo_get_work_tree(the_repository);
+}
+
+int repo_trust_executable_bit(struct repository *repo)
+{
+	return repo->initialized
+		? repo_config_values(repo)->trust_executable_bit
+		: 1;
 }
 
 int have_git_dir(void)
@@ -305,7 +311,7 @@ int git_default_core_config(const char *var, const char *value,
 
 	/* This needs a better name */
 	if (!strcmp(var, "core.filemode")) {
-		trust_executable_bit = git_config_bool(var, value);
+		cfg->trust_executable_bit = git_config_bool(var, value);
 		return 0;
 	}
 	if (!strcmp(var, "core.trustctime")) {
@@ -720,5 +726,6 @@ void repo_config_values_init(struct repo_config_values *cfg)
 {
 	cfg->attributes_file = NULL;
 	cfg->apply_sparse_checkout = 0;
+	cfg->trust_executable_bit = 1;
 	cfg->branch_track = BRANCH_TRACK_REMOTE;
 }
