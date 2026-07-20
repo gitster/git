@@ -4511,7 +4511,7 @@ static int try_create_file(struct apply_state *state, const char *path,
 		return !!mkdir(path, 0777);
 	}
 
-	if (has_symlinks && S_ISLNK(mode))
+	if (repo_has_symlinks(state->repo) && S_ISLNK(mode))
 		/* Although buf:size is counted string, it also is NUL
 		 * terminated.
 		 */
