@@ -283,4 +283,36 @@ test_expect_success '--reflog handles missing reflog' '
 	test_must_be_empty actual
 '
 
+test_expect_success 'show-branch with 30 branches succeeds' '
+	git checkout initial &&
+	for i in $(test_seq 11 30)
+	do
+		git checkout -b branch$i initial &&
+		test_commit --no-tag branch$i || return 1
+	done &&
+	git show-branch $(git for-each-ref \
+		--sort=version:refname \
+		--format="%(refname:strip=2)" \
+		"refs/heads/branch*") >actual &&
+	test_line_count -ge 30 actual
+'
+
+test_expect_success 'show-branch --independent with 30 branches' '
+	git show-branch --independent $(git for-each-ref \
+		--sort=version:refname \
+		--format="%(refname:strip=2)" \
+		"refs/heads/branch*") >actual &&
+	test_line_count -ge 30 actual
+'
+
+test_expect_success 'show-branch --merge-base with 30 branches' '
+	git rev-parse initial >expect &&
+	git show-branch --merge-base $(git for-each-ref \
+		--sort=version:refname \
+		--format="%(refname:strip=2)" \
+		"refs/heads/branch*") >actual &&
+	test_cmp expect actual
+'
+
+
 test_done
