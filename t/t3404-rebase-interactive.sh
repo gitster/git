@@ -1975,15 +1975,23 @@ test_expect_success '--update-refs ignores non-branch decorations' '
 	) &&
 	grep ^update-ref todo >actual &&
 	test_write_lines "update-ref refs/heads/no-conflict-branch" >expect &&
+	test_grep ! "^# Ref refs/heads/update-refs checked out" todo &&
 	test_cmp expect actual
 '
 
 test_expect_success '--update-refs updates refs correctly' '
+	test_when_finished "
+		test_might_fail git symbolic-ref -d refs/heads/no-conflict-branch-alias &&
+		test_might_fail git symbolic-ref -d refs/heads/second-alias
+	" &&
 	git checkout -B update-refs no-conflict-branch &&
 	git branch -f base HEAD~4 &&
 	git branch -f first HEAD~3 &&
 	git branch -f second HEAD~3 &&
 	git branch -f third HEAD~1 &&
+	git symbolic-ref refs/heads/no-conflict-branch-alias \
+		refs/heads/no-conflict-branch &&
+	git symbolic-ref refs/heads/second-alias refs/heads/second &&
 	test_commit extra2 fileX &&
 	git commit --amend --fixup=L &&
 
@@ -1991,8 +1999,16 @@ test_expect_success '--update-refs updates refs correctly' '
 
 	test_cmp_rev HEAD~3 refs/heads/first &&
 	test_cmp_rev HEAD~3 refs/heads/second &&
+	test_cmp_rev HEAD~3 refs/heads/second-alias &&
 	test_cmp_rev HEAD~1 refs/heads/third &&
 	test_cmp_rev HEAD refs/heads/no-conflict-branch &&
+	test_cmp_rev HEAD refs/heads/no-conflict-branch-alias &&
+	test_write_lines refs/heads/no-conflict-branch >expect &&
+	git symbolic-ref refs/heads/no-conflict-branch-alias >actual &&
+	test_cmp expect actual &&
+	test_write_lines refs/heads/second >expect &&
+	git symbolic-ref refs/heads/second-alias >actual &&
+	test_cmp expect actual &&
 
 	q_to_tab >expect <<-\EOF &&
 	Successfully rebased and updated refs/heads/update-refs.
