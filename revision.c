@@ -1152,12 +1152,18 @@ static int process_parents(struct rev_info *revs, struct commit *commit,
 			if (p)
 				p->object.flags |= UNINTERESTING |
 						   CHILD_VISITED;
-			if (repo_parse_commit_gently(revs->repo, p, 1) < 0)
+			if (repo_parse_commit_gently(revs->repo, p, 1) < 0) {
+				if (revs->exclude_first_parent_only)
+					break;
 				continue;
+			}
 			if (p->parents)
 				mark_parents_uninteresting(revs, p);
-			if (p->object.flags & SEEN)
+			if (p->object.flags & SEEN) {
+				if (revs->exclude_first_parent_only)
+					break;
 				continue;
+			}
 			p->object.flags |= (SEEN | NOT_USER_GIVEN);
 			if (list)
 				commit_list_insert_by_date(p, list);
