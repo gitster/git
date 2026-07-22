@@ -1887,7 +1887,8 @@ const char *branch_get_upstream(struct branch *branch, struct strbuf *err)
 	return branch->merge[0]->dst;
 }
 
-static char *tracking_for_push_dest(struct remote *remote,
+static char *tracking_for_push_dest(struct repository *repo UNUSED,
+				    struct remote *remote,
 				    const char *refname,
 				    struct strbuf *err)
 {
@@ -1925,13 +1926,13 @@ static char *branch_get_push_1(struct repository *repo,
 					 _("push refspecs for '%s' do not include '%s'"),
 					 remote->name, branch->name);
 
-		ret = tracking_for_push_dest(remote, dst, err);
+		ret = tracking_for_push_dest(repo, remote, dst, err);
 		free(dst);
 		return ret;
 	}
 
 	if (remote->mirror)
-		return tracking_for_push_dest(remote, branch->refname, err);
+		return tracking_for_push_dest(repo, remote, branch->refname, err);
 
 	switch (push_default) {
 	case PUSH_DEFAULT_NOTHING:
@@ -1939,7 +1940,7 @@ static char *branch_get_push_1(struct repository *repo,
 
 	case PUSH_DEFAULT_MATCHING:
 	case PUSH_DEFAULT_CURRENT:
-		return tracking_for_push_dest(remote, branch->refname, err);
+		return tracking_for_push_dest(repo, remote, branch->refname, err);
 
 	case PUSH_DEFAULT_UPSTREAM:
 		return xstrdup_or_null(branch_get_upstream(branch, err));
@@ -1953,7 +1954,7 @@ static char *branch_get_push_1(struct repository *repo,
 			up = branch_get_upstream(branch, err);
 			if (!up)
 				return NULL;
-			cur = tracking_for_push_dest(remote, branch->refname, err);
+			cur = tracking_for_push_dest(repo, remote, branch->refname, err);
 			if (!cur)
 				return NULL;
 			if (strcmp(cur, up)) {
