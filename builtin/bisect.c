@@ -562,9 +562,15 @@ static int get_terms(struct bisect_terms *terms)
 	}
 
 	free_terms(terms);
-	strbuf_getline_lf(&str, fp);
+	if (strbuf_getline_lf(&str, fp) == EOF) {
+		res = -1;
+		goto finish;
+	}
 	terms->term_bad = strbuf_detach(&str, NULL);
-	strbuf_getline_lf(&str, fp);
+	if (strbuf_getline_lf(&str, fp) == EOF) {
+		res = -1;
+		goto finish;
+	}
 	terms->term_good = strbuf_detach(&str, NULL);
 
 finish:
@@ -1143,6 +1149,8 @@ static int process_replay_line(struct bisect_terms *terms, struct strbuf *line)
 	*word_end = '\0'; /* NUL-terminate the word */
 
 	get_terms(terms);
+	if (!terms->term_bad || !terms->term_good)
+		return error(_("no terms defined"));
 	if (check_and_set_terms(terms, p))
 		return -1;
 
@@ -1411,6 +1419,11 @@ static int bisect_run(struct bisect_terms *terms, int argc, const char **argv)
 
 		fflush(stdout);
 		saved_stdout = dup(1);
+		if (saved_stdout < 0) {
+			res = error_errno(_("could not duplicate stdout"));
+			close(temporary_stdout_fd);
+			break;
+		}
 		dup2(temporary_stdout_fd, 1);
 
 		res = bisect_state(terms, 1, &new_state, true);
@@ -1492,6 +1505,8 @@ static int cmd_bisect__next(int argc, const char **argv UNUSED, const char *pref
 		return error(_("'%s' requires 0 arguments"),
 			     "git bisect next");
 	get_terms(&terms);
+	if (!terms.term_bad || !terms.term_good)
+		return error(_("no terms defined"));
 	res = bisect_next(&terms, prefix, false);
 	free_terms(&terms);
 	return res;
@@ -1526,6 +1541,8 @@ static int cmd_bisect__skip(int argc, const char **argv, const char *prefix UNUS
 
 	set_terms(&terms, "bad", "good");
 	get_terms(&terms);
+	if (!terms.term_bad || !terms.term_good)
+		return error(_("no terms defined"));
 	res = bisect_skip(&terms, argc, argv);
 	free_terms(&terms);
 	return res;
@@ -1538,6 +1555,8 @@ static int cmd_bisect__visualize(int argc, const char **argv, const char *prefix
 	struct bisect_terms terms = { 0 };
 
 	get_terms(&terms);
+	if (!terms.term_bad || !terms.term_good)
+		return error(_("no terms defined"));
 	res = bisect_visualize(&terms, argc, argv);
 	free_terms(&terms);
 	return res;
@@ -1552,6 +1571,8 @@ static int cmd_bisect__run(int argc, const char **argv, const char *prefix UNUSE
 	if (!argc)
 		return error(_("'%s' failed: no command provided."), "git bisect run");
 	get_terms(&terms);
+	if (!terms.term_bad || !terms.term_good)
+		return error(_("no terms defined"));
 	res = bisect_run(&terms, argc, argv);
 	free_terms(&terms);
 	return res;
@@ -1591,6 +1612,8 @@ int cmd_bisect(int argc,
 
 		set_terms(&terms, "bad", "good");
 		get_terms(&terms);
+		if (!terms.term_bad || !terms.term_good)
+			return error(_("no terms defined"));
 		if (check_and_set_terms(&terms, argv[0]) ||
 		    !one_of(argv[0], terms.term_good, terms.term_bad, NULL))
 			usage_msg_optf(_("unknown command: '%s'"), git_bisect_usage,
