@@ -272,6 +272,9 @@ static bool maybe_changed_path(struct last_modified *lm,
 	if (!filter)
 		return true;
 
+	if (revs_maybe_changed_in_bloom(&lm->rev, filter) == 0)
+		return false;
+
 	hashmap_for_each_entry(&lm->paths, &iter, ent, hashent) {
 		if (active && !bitmap_get(active, ent->diff_idx))
 			continue;
@@ -357,6 +360,14 @@ static int last_modified_run(struct last_modified *lm)
 	lm->rev.no_walk = 1;
 
 	prepare_revision_walk(&lm->rev);
+
+	/*
+	 * prepare_revision_walk() clears bloom_filter_settings for pathspecs
+	 * without a Bloom key. Restore it so the per-path check keeps working.
+	 */
+	if (!lm->rev.bloom_filter_settings)
+		lm->rev.bloom_filter_settings =
+			get_bloom_filter_settings(lm->rev.repo);
 
 	max_count = lm->rev.max_count;
 
