@@ -190,7 +190,8 @@ static inline void oe_set_delta_size(struct packing_data *pack,
 
 static const char *const pack_usage[] = {
 	N_("git pack-objects [-q | --progress | --all-progress] [--all-progress-implied]\n"
-	   "                 [--no-reuse-delta] [--delta-base-offset] [--non-empty]\n"
+	   "                 [--no-reuse-delta] [--delta-base-offset] [--no-ref-delta]\n"
+	   "                 [--non-empty]\n"
 	   "                 [--local] [--incremental] [--window=<n>] [--depth=<n>]\n"
 	   "                 [--revs [--unpacked | --all]] [--keep-pack=<pack-name>]\n"
 	   "                 [--cruft] [--cruft-expiration=<time>]\n"
@@ -222,6 +223,7 @@ static int ignore_packed_keep_in_core_open;
 static const char *stdin_packs_refs_snapshot;
 static int ignore_packed_keep_in_core_has_cruft;
 static int allow_ofs_delta;
+static int allow_ref_delta = 1;
 static struct pack_idx_option pack_idx_opts;
 static const char *base_name;
 static int progress = 1;
@@ -2207,6 +2209,13 @@ static int can_reuse_delta(const struct object_id *base_oid,
 	 */
 	base = packlist_find(&to_pack, base_oid);
 	if (base) {
+		/*
+		 * A preferred base is omitted from the resulting pack, so it
+		 * can only be referenced by object ID.
+		 */
+		if (base->preferred_base && !allow_ref_delta)
+			return 0;
+
 		if (!in_same_island(&delta->idx.oid, &base->idx.oid))
 			return 0;
 		*base_out = base;
@@ -2218,7 +2227,8 @@ static int can_reuse_delta(const struct object_id *base_oid,
 	 * even if it was buried too deep in history to make it into the
 	 * packing list.
 	 */
-	if (thin && bitmap_has_oid_in_uninteresting(bitmap_git, base_oid)) {
+	if (allow_ref_delta && thin &&
+	    bitmap_has_oid_in_uninteresting(bitmap_git, base_oid)) {
 		if (use_delta_islands) {
 			if (!in_same_island(&delta->idx.oid, base_oid))
 				return 0;
@@ -3408,6 +3418,9 @@ static int should_attempt_deltas(struct object_entry *entry)
 	if (entry->no_try_delta)
 		return 0;
 
+	if (entry->preferred_base && !allow_ref_delta)
+		return 0;
+
 	if (!entry->preferred_base) {
 		if (oe_type(entry) < 0)
 			die(_("unable to get type of object %s"),
@@ -3650,7 +3663,8 @@ static void prepare_pack(int window, int depth)
 	if (!pack_to_stdout)
 		do_check_packed_object_crc = 1;
 
-	if (!to_pack.nr_objects || !window || !depth)
+	if (!to_pack.nr_objects || !window || !depth ||
+	    (!allow_ref_delta && !allow_ofs_delta))
 		return;
 
 	if (path_walk)
@@ -4872,7 +4886,7 @@ static int pack_options_allow_reuse(void)
 	       !ignore_packed_keep_on_disk &&
 	       !ignore_packed_keep_in_core &&
 	       (!local || !have_non_local_packs) &&
-	       !incremental;
+	       !incremental && (allow_ref_delta || allow_ofs_delta);
 }
 
 static int get_object_list_from_bitmap(struct rev_info *revs)
@@ -4894,7 +4908,8 @@ static int get_object_list_from_bitmap(struct rev_info *revs)
 						   &reuse_packfiles,
 						   &reuse_packfiles_nr,
 						   &reuse_packfile_bitmap,
-						   allow_pack_reuse == MULTI_PACK_REUSE);
+						   allow_pack_reuse == MULTI_PACK_REUSE,
+						   allow_ref_delta);
 
 	if (reuse_packfiles) {
 		reuse_packfile_objects = bitmap_popcount(reuse_packfile_bitmap);
@@ -5327,6 +5342,8 @@ int cmd_pack_objects(int argc,
 			 N_("reuse existing objects")),
 		OPT_BOOL(0, "delta-base-offset", &allow_ofs_delta,
 			 N_("use OFS_DELTA objects")),
+		OPT_BOOL(0, "ref-delta", &allow_ref_delta,
+			 N_("use REF_DELTA objects")),
 		OPT_INTEGER(0, "threads", &delta_search_threads,
 			    N_("use threads when searching for best delta matches")),
 		OPT_BOOL(0, "non-empty", &non_empty,
@@ -5527,7 +5544,7 @@ int cmd_pack_objects(int argc,
 	if (unpack_unreachable || keep_unreachable || pack_loose_unreachable)
 		use_internal_rev_list = 1;
 
-	if (!reuse_object)
+	if (!reuse_object || (!allow_ref_delta && !allow_ofs_delta))
 		reuse_delta = 0;
 	if (cfg->pack_compression_level == -1)
 		cfg->pack_compression_level = Z_DEFAULT_COMPRESSION;

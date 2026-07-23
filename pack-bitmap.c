@@ -2286,7 +2286,8 @@ static int try_partial_reuse(struct bitmap_index *bitmap_git,
 			     uint32_t pack_pos,
 			     off_t offset,
 			     struct bitmap *reuse,
-			     struct pack_window **w_curs)
+			     struct pack_window **w_curs,
+			     int allow_ref_delta)
 {
 	off_t delta_obj_offset;
 	enum object_type type;
@@ -2304,6 +2305,9 @@ static int try_partial_reuse(struct bitmap_index *bitmap_git,
 		off_t base_offset;
 		uint32_t base_pos;
 		uint32_t base_bitmap_pos;
+
+		if (type == OBJ_REF_DELTA && !allow_ref_delta)
+			return 0;
 
 		/*
 		 * Find the position of the base object so we can look it up
@@ -2377,20 +2381,19 @@ static int try_partial_reuse(struct bitmap_index *bitmap_git,
 
 static void reuse_partial_packfile_from_bitmap_1(struct bitmap_index *bitmap_git,
 						 struct bitmapped_pack *pack,
-						 struct bitmap *reuse)
+						 struct bitmap *reuse,
+						 int allow_ref_delta)
 {
 	struct bitmap *result = bitmap_git->result;
 	struct pack_window *w_curs = NULL;
 	size_t pos = pack->bitmap_pos / BITS_IN_EWORD;
 
-	if (!pack->bitmap_pos) {
+	if (allow_ref_delta && !pack->bitmap_pos) {
 		/*
 		 * If we're processing the first (in the case of a MIDX, the
 		 * preferred pack) or the only (in the case of single-pack
-		 * bitmaps) pack, then we can reuse whole words at a time.
-		 *
-		 * This is because we know that any deltas in this range *must*
-		 * have their bases chosen from the same pack, since:
+		 * bitmaps) pack, then any delta in this range must have its
+		 * base chosen from the same pack:
 		 *
 		 * - In the single pack case, there is no other pack to choose
 		 *   them from.
@@ -2399,6 +2402,10 @@ static void reuse_partial_packfile_from_bitmap_1(struct bitmap_index *bitmap_git
 		 *   all ties are broken in favor of that pack (i.e. the one
 		 *   we're currently processing). So any duplicate bases will be
 		 *   resolved in favor of the pack we're processing.
+		 *
+		 * When REF_DELTAs are allowed, we can therefore reuse whole
+		 * words at a time without inspecting object headers. Otherwise,
+		 * inspect each object below to avoid reusing a REF_DELTA entry.
 		 */
 		while (pos < result->word_alloc &&
 		       pos < pack->bitmap_nr / BITS_IN_EWORD &&
@@ -2448,7 +2455,8 @@ static void reuse_partial_packfile_from_bitmap_1(struct bitmap_index *bitmap_git
 			}
 
 			if (try_partial_reuse(bitmap_git, pack, bit_pos,
-					      pack_pos, ofs, reuse, &w_curs) < 0) {
+					      pack_pos, ofs, reuse, &w_curs,
+					      allow_ref_delta) < 0) {
 				/*
 				 * try_partial_reuse indicated we couldn't reuse
 				 * any bits, so there is no point in trying more
@@ -2483,7 +2491,8 @@ void reuse_partial_packfile_from_bitmap(struct bitmap_index *bitmap_git,
 					struct bitmapped_pack **packs_out,
 					size_t *packs_nr_out,
 					struct bitmap **reuse_out,
-					int multi_pack_reuse)
+					int multi_pack_reuse,
+					int allow_ref_delta)
 {
 	struct repository *r = bitmap_repo(bitmap_git);
 	struct bitmapped_pack *packs = NULL;
@@ -2578,7 +2587,8 @@ void reuse_partial_packfile_from_bitmap(struct bitmap_index *bitmap_git,
 	reuse = bitmap_word_alloc(word_alloc);
 
 	for (i = 0; i < packs_nr; i++)
-		reuse_partial_packfile_from_bitmap_1(bitmap_git, &packs[i], reuse);
+		reuse_partial_packfile_from_bitmap_1(bitmap_git, &packs[i], reuse,
+						     allow_ref_delta);
 
 	if (bitmap_is_empty(reuse)) {
 		free(packs);

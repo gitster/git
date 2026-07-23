@@ -10,7 +10,8 @@ SYNOPSIS
 --------
 [verse]
 'git pack-objects' [-q | --progress | --all-progress] [--all-progress-implied]
-		   [--no-reuse-delta] [--delta-base-offset] [--non-empty]
+		   [--no-reuse-delta] [--delta-base-offset] [--no-ref-delta]
+		   [--non-empty]
 		   [--local] [--incremental] [--window=<n>] [--depth=<n>]
 		   [--revs [--unpacked | --all]] [--keep-pack=<pack-name>]
 		   [--cruft] [--cruft-expiration=<time>]
@@ -321,6 +322,11 @@ Note: Porcelain commands such as `git gc` (see linkgit:git-gc[1]),
 `git repack` (see linkgit:git-repack[1]) pass this option by default
 in modern Git when they put objects in your repository into pack files.
 So does `git bundle` (see linkgit:git-bundle[1]) when it creates a bundle.
+
+--no-ref-delta::
+	Do not emit deltas which represent their base by their literal
+	object ID. This is independent of `--delta-base-offset`;
+	without that option, no deltas are emitted.
 
 --threads=<n>::
 	Specifies the number of threads to spawn when searching for best
