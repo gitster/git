@@ -1840,4 +1840,54 @@ test_expect_success 'stash show --include-untracked includes untracked files' '
 	test_grep "untracked" actual
 '
 
+test_expect_success !REFTABLE 'stash reword' '
+	git reset --hard &&
+	test_when_finished "git stash clear" &&
+	echo change >file &&
+	git stash push -m "original stash message" &&
+	git stash reword stash@{0} -m "reworded stash message" &&
+	echo "stash@{0}: reworded stash message" >expect &&
+	git stash list | head -n 1 >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success !REFTABLE 'stash reword interactive' '
+	git reset --hard &&
+	test_when_finished "git stash clear" &&
+	echo change >file &&
+	git stash push -m "original stash message" &&
+	write_script fake_editor <<-\EOF &&
+	grep "original stash message" "$1" &&
+	echo "interactive reworded message" >"$1"
+	EOF
+	GIT_EDITOR=./fake_editor git stash reword stash@{0} &&
+	echo "stash@{0}: interactive reworded message" >expect &&
+	git stash list | head -n 1 >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success !REFTABLE 'stash reword edge cases' '
+	git reset --hard &&
+	test_when_finished "git stash clear" &&
+	test_must_fail git stash reword stash@{0} -m "foo" &&
+
+	echo change >file &&
+	git stash push -m "original stash message" &&
+
+	test_must_fail git stash reword stash@{1} -m "foo" &&
+	test_must_fail git stash reword master -m "foo" &&
+	test_must_fail git stash reword stash@{foo} -m "foo"
+'
+
+test_expect_success !REFTABLE 'stash reword multi-line message gets normalized' '
+	git reset --hard &&
+	test_when_finished "git stash clear" &&
+	echo change >file &&
+	git stash push -m "original stash message" &&
+	git stash reword stash@{0} -m "$(printf "first line\nsecond line")" &&
+	echo "stash@{0}: first line second line" >expect &&
+	git stash list | head -n 1 >actual &&
+	test_cmp expect actual
+'
+
 test_done

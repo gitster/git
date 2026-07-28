@@ -3519,7 +3519,261 @@ static int expire_reflog_ent(const char *refname UNUSED,
 	return 0;
 }
 
+struct parsed_reflog_line {
+	struct object_id ooid;
+	struct object_id noid;
+	const char *committer;
+	timestamp_t timestamp;
+	int tz;
+	const char *msg;
+};
+
+static int parse_reflog_line_buf(struct repository *repo,
+				 char *buf, size_t len,
+				 struct parsed_reflog_line *out)
+{
+	char *p = buf;
+	char *email_end, *message;
+
+	if (!len || buf[len - 1] != '\n')
+		return -1;
+	buf[len - 1] = '\0';
+
+	if (parse_oid_hex_algop(p, &out->ooid, &p, repo->hash_algo) || *p++ != ' ' ||
+	    parse_oid_hex_algop(p, &out->noid, &p, repo->hash_algo) || *p++ != ' ' ||
+	    !(email_end = strchr(p, '>')) ||
+	    email_end[1] != ' ') {
+		buf[len - 1] = '\n';
+		return -1;
+	}
+
+	out->timestamp = parse_timestamp(email_end + 2, &message, 10);
+	if (!message || message == email_end + 2 || message[0] != ' ' ||
+	    (message[1] != '+' && message[1] != '-') ||
+	    !isdigit((unsigned char)message[2]) || !isdigit((unsigned char)message[3]) ||
+	    !isdigit((unsigned char)message[4]) || !isdigit((unsigned char)message[5])) {
+		buf[len - 1] = '\n';
+		return -1;
+	}
+
+	email_end[1] = '\0';
+	out->committer = p;
+	out->tz = strtol(message + 1, NULL, 10);
+	if (message[6] != '\t')
+		out->msg = message + 6;
+	else
+		out->msg = message + 7;
+
+	return 0;
+}
+
+struct reflog_line {
+	const char *start;
+	size_t len;
+};
+
+static int reflog_edit_compare_desc(const void *a, const void *b)
+{
+	const struct reflog_edit *ea = a;
+	const struct reflog_edit *eb = b;
+	if (ea->idx > eb->idx)
+		return -1;
+	if (ea->idx < eb->idx)
+		return 1;
+	return 0;
+}
+
+static int files_reflog_edit_in_bulk(struct ref_store *ref_store,
+				     const char *refname,
+				     size_t num_edits,
+				     const struct reflog_edit *edits)
+{
+	struct files_ref_store *refs =
+		files_downcast(ref_store, REF_STORE_WRITE, "reflog_edit_in_bulk");
+	struct lock_file reflog_lock = LOCK_INIT;
+	struct ref_lock *lock;
+	struct strbuf log_file_sb = STRBUF_INIT;
+	struct strbuf content = STRBUF_INIT;
+	struct reflog_edit *sorted_edits = NULL;
+	char *log_file = NULL;
+	FILE *newlog = NULL;
+	int status = 0;
+	struct strbuf err = STRBUF_INIT;
+	int total_entries = 0;
+	size_t curr_edit_idx = 0;
+	size_t i;
+	struct reflog_line *lines = NULL;
+	size_t line_count = 0;
+	size_t line_alloc = 0;
+	const char *p, *end;
+
+	if (num_edits) {
+		DUP_ARRAY(sorted_edits, edits, num_edits);
+		QSORT(sorted_edits, num_edits, reflog_edit_compare_desc);
+		for (i = 1; i < num_edits; i++) {
+			if (sorted_edits[i].idx == sorted_edits[i - 1].idx) {
+				uintmax_t duplicate_idx = (uintmax_t)sorted_edits[i].idx;
+				status = error(_("duplicate reflog edit for index %"PRIuMAX), duplicate_idx);
+				free(sorted_edits);
+				return status;
+			}
+		}
+	}
+
+	lock = lock_ref_oid_basic(refs, refname, &err);
+	if (!lock) {
+		error("cannot lock ref '%s': %s", refname, err.buf);
+		strbuf_release(&err);
+		free(sorted_edits);
+		return -1;
+	}
+
+	if (!refs_reflog_exists(ref_store, refname)) {
+		error("reflog for '%s' does not exist", refname);
+		unlock_ref(lock);
+		free(sorted_edits);
+		return -1;
+	}
+
+	files_reflog_path(refs, &log_file_sb, refname);
+	log_file = strbuf_detach(&log_file_sb, NULL);
+
+	if (hold_lock_file_for_update(&reflog_lock, log_file, 0) < 0) {
+		unable_to_lock_message(log_file, errno, &err);
+		error("%s", err.buf);
+		strbuf_release(&err);
+		status = -1;
+		goto cleanup;
+	}
+
+	if (strbuf_read_file(&content, log_file, 0) < 0) {
+		if (errno != ENOENT) {
+			error_errno("cannot read '%s'", log_file);
+			rollback_lock_file(&reflog_lock);
+			status = -1;
+			goto cleanup;
+		}
+	}
+
+	p = content.buf;
+	end = content.buf + content.len;
+	while (p < end) {
+		const char *nl = memchr(p, '\n', end - p);
+		size_t len = nl ? (size_t)(nl - p + 1) : (size_t)(end - p);
+		ALLOC_GROW(lines, line_count + 1, line_alloc);
+		lines[line_count].start = p;
+		lines[line_count].len = len;
+		line_count++;
+		p += len;
+	}
+	total_entries = line_count;
+
+	if (curr_edit_idx < num_edits && sorted_edits[curr_edit_idx].idx >= total_entries) {
+		status = error(_("reflog edit index %"PRIuMAX" out of bounds (reflog has %d entries)"),
+			       (uintmax_t)sorted_edits[curr_edit_idx].idx, total_entries);
+		rollback_lock_file(&reflog_lock);
+		goto cleanup;
+	}
+
+	newlog = fdopen_lock_file(&reflog_lock, "w");
+	if (!newlog) {
+		error("cannot fdopen %s (%s)",
+		      get_lock_file_path(&reflog_lock), strerror(errno));
+		rollback_lock_file(&reflog_lock);
+		status = -1;
+		goto cleanup;
+	}
+
+	for (i = 0; i < line_count; i++) {
+		size_t reflog_idx = total_entries - 1 - i;
+		const struct reflog_edit *edit = NULL;
+
+		if (curr_edit_idx < num_edits && sorted_edits[curr_edit_idx].idx > reflog_idx) {
+			status = error("BUG: reflog edit index %"PRIuMAX" is greater than current index %"PRIuMAX,
+				       (uintmax_t)sorted_edits[curr_edit_idx].idx, (uintmax_t)reflog_idx);
+			rollback_lock_file(&reflog_lock);
+			goto cleanup;
+		}
+
+		if (curr_edit_idx < num_edits && sorted_edits[curr_edit_idx].idx == reflog_idx) {
+			edit = &sorted_edits[curr_edit_idx++];
+		}
+
+		if (!edit) {
+			fwrite(lines[i].start, 1, lines[i].len, newlog);
+		} else {
+			if (edit->op == REFLOG_EDIT_DELETE) {
+				/* Skip writing this line */
+			} else if (edit->op == REFLOG_EDIT_REPLACE) {
+				struct strbuf line_copy = STRBUF_INIT;
+				struct parsed_reflog_line parsed;
+				struct object_id out_ooid, out_noid;
+				const char *out_committer;
+				timestamp_t out_timestamp;
+				int out_tz;
+				const char *out_msg;
+
+				strbuf_add(&line_copy, lines[i].start, lines[i].len);
+				if (parse_reflog_line_buf(refs->base.repo, line_copy.buf, line_copy.len, &parsed) < 0) {
+					strbuf_release(&line_copy);
+					status = error(_("cannot parse reflog entry at index %"PRIuMAX), (uintmax_t)reflog_idx);
+					rollback_lock_file(&reflog_lock);
+					goto cleanup;
+				}
+
+				out_ooid = is_null_oid(&edit->data.old_oid) ? parsed.ooid : edit->data.old_oid;
+				out_noid = is_null_oid(&edit->data.new_oid) ? parsed.noid : edit->data.new_oid;
+				out_committer = edit->data.committer ? edit->data.committer : parsed.committer;
+				if (edit->data.timestamp) {
+					out_timestamp = edit->data.timestamp;
+					out_tz = edit->data.tz;
+				} else {
+					out_timestamp = parsed.timestamp;
+					out_tz = parsed.tz;
+				}
+				out_msg = edit->data.msg ? edit->data.msg : parsed.msg;
+
+				fprintf(newlog, "%s %s %s %"PRItime" %+05d\t%s\n",
+					oid_to_hex(&out_ooid), oid_to_hex(&out_noid),
+					out_committer, out_timestamp, out_tz, out_msg);
+				strbuf_release(&line_copy);
+			} else if (edit->op == REFLOG_EDIT_INSERT) {
+				fwrite(lines[i].start, 1, lines[i].len, newlog);
+				fprintf(newlog, "%s %s %s %"PRItime" %+05d\t%s\n",
+					oid_to_hex(&edit->data.old_oid),
+					oid_to_hex(&edit->data.new_oid),
+					edit->data.committer ? edit->data.committer : git_committer_info(0),
+					edit->data.timestamp,
+					edit->data.tz,
+					edit->data.msg ? edit->data.msg : "");
+			}
+		}
+	}
+
+	if (curr_edit_idx < num_edits) {
+		status = error("BUG: reflog edits remaining after stream");
+		rollback_lock_file(&reflog_lock);
+		goto cleanup;
+	}
+
+	if (close_lock_file_gently(&reflog_lock)) {
+		status = error("couldn't write %s: %s", log_file, strerror(errno));
+		rollback_lock_file(&reflog_lock);
+	} else if (commit_lock_file(&reflog_lock)) {
+		status = error("unable to write reflog '%s' (%s)", log_file, strerror(errno));
+	}
+
+cleanup:
+	strbuf_release(&content);
+	free(lines);
+	free(sorted_edits);
+	free(log_file);
+	unlock_ref(lock);
+	return status;
+}
+
 static int files_reflog_expire(struct ref_store *ref_store,
+
 			       const char *refname,
 			       unsigned int expire_flags,
 			       reflog_expiry_prepare_fn prepare_fn,
@@ -4108,6 +4362,7 @@ struct ref_storage_be refs_be_files = {
 	.create_reflog = files_create_reflog,
 	.delete_reflog = files_delete_reflog,
 	.reflog_expire = files_reflog_expire,
+	.reflog_edit_in_bulk = files_reflog_edit_in_bulk,
 
 	.fsck = files_fsck,
 };
