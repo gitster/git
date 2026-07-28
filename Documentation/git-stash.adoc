@@ -25,6 +25,7 @@ git stash create [<message>]
 git stash store [(-m | --message) <message>] [-q | --quiet] <commit>
 git stash export (--print | --to-ref <ref>) [<stash>...]
 git stash import <commit>
+git stash reword [(-m | --message) <message>] [<stash>]
 
 DESCRIPTION
 -----------
@@ -162,6 +163,10 @@ with no conflicts.
 	Import the specified stashes from the specified commit, which must have been
 	created by `export`, and add them to the list of stashes.  To replace the
 	existing stashes, use `clear` first.
+
+`reword [(-m | --message) <message>] [<stash>]`::
+	Change the description of the stash entry. If no `<message>` is
+	provided, launch the editor to write a new message.
 
 OPTIONS
 -------

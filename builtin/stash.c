@@ -17,6 +17,7 @@
 #include "strvec.h"
 #include "run-command.h"
 #include "dir.h"
+#include "editor.h"
 #include "entry.h"
 #include "preload-index.h"
 #include "read-cache.h"
@@ -61,6 +62,8 @@
 	N_("git stash create [<message>]")
 #define BUILTIN_STASH_EXPORT_USAGE \
 	N_("git stash export (--print | --to-ref <ref>) [<stash>...]")
+#define BUILTIN_STASH_REWORD_USAGE \
+	N_("git stash reword [<stash>] [-m <message>]")
 #define BUILTIN_STASH_IMPORT_USAGE \
 	N_("git stash import <commit>")
 #define BUILTIN_STASH_CLEAR_USAGE \
@@ -79,6 +82,7 @@ static const char * const git_stash_usage[] = {
 	BUILTIN_STASH_CREATE_USAGE,
 	BUILTIN_STASH_STORE_USAGE,
 	BUILTIN_STASH_EXPORT_USAGE,
+	BUILTIN_STASH_REWORD_USAGE,
 	BUILTIN_STASH_IMPORT_USAGE,
 	NULL
 };
@@ -2497,6 +2501,76 @@ static int export_stash(int argc,
 	return do_export_stash(repo, ref, argc, argv);
 }
 
+static const char * const git_stash_reword_usage[] = {
+	N_("git stash reword [(-m | --message) <message>] [<stash>]"),
+	NULL
+};
+
+static int do_reword_stash(const char *ref_stash, int idx, const char *message)
+{
+	struct reflog_ent_data new_data = {
+		.msg = message,
+	};
+	return refs_reflog_replace(get_main_ref_store(the_repository),
+				   ref_stash, idx, &new_data);
+}
+
+static int reword_stash(int argc, const char **argv, const char *prefix,
+			 struct repository *repo UNUSED)
+{
+	int ret = -1;
+	struct stash_info info = STASH_INFO_INIT;
+	const char *message = NULL;
+	struct strbuf msg_buf = STRBUF_INIT;
+	struct option options[] = {
+		OPT_STRING('m', "message", &message, N_("message"),
+			   N_("stash message")),
+		OPT_END()
+	};
+
+	argc = parse_options(argc, argv, prefix, options,
+			     git_stash_reword_usage, 0);
+
+	if (get_stash_info_assert(&info, argc, argv))
+		goto cleanup;
+
+	if (message) {
+		strbuf_addstr(&msg_buf, message);
+	} else {
+		char *old_msg = NULL;
+		struct object_id dummy_oid;
+		timestamp_t dummy_time;
+		int dummy_tz, dummy_cnt;
+
+		if (read_ref_at(get_main_ref_store(the_repository), ref_stash,
+				0, 0, info.stash_idx, &dummy_oid, &old_msg,
+				&dummy_time, &dummy_tz, &dummy_cnt)) {
+			free(old_msg);
+			ret = error(_("cannot find stash@{%d}"),
+				    info.stash_idx);
+			goto cleanup;
+		}
+
+		strbuf_addstr(&msg_buf, old_msg);
+		free(old_msg);
+
+		if (strbuf_edit_interactively(the_repository, &msg_buf,
+					      "STASH_REWORD_MSG", NULL) < 0) {
+			ret = -1;
+			goto cleanup;
+		}
+	}
+
+	strbuf_rtrim(&msg_buf);
+
+	ret = do_reword_stash(ref_stash, info.stash_idx, msg_buf.buf);
+
+cleanup:
+	strbuf_release(&msg_buf);
+	free_stash_info(&info);
+	return ret;
+}
+
 int cmd_stash(int argc,
 	      const char **argv,
 	      const char *prefix,
@@ -2517,6 +2591,7 @@ int cmd_stash(int argc,
 		OPT_SUBCOMMAND("store", &fn, store_stash),
 		OPT_SUBCOMMAND("create", &fn, create_stash),
 		OPT_SUBCOMMAND("push", &fn, push_stash_unassumed),
+		OPT_SUBCOMMAND("reword", &fn, reword_stash),
 		OPT_SUBCOMMAND("export", &fn, export_stash),
 		OPT_SUBCOMMAND("import", &fn, import_stash),
 		OPT_SUBCOMMAND_F("save", &fn, save_stash, PARSE_OPT_NOCOMPLETE),
