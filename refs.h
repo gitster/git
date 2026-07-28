@@ -634,6 +634,38 @@ int refs_delete_refs(struct ref_store *refs, const char *msg,
 /** Delete a reflog */
 int refs_delete_reflog(struct ref_store *refs, const char *refname);
 
+struct reflog_ent_data {
+	struct object_id old_oid;
+	struct object_id new_oid;
+	const char *committer;
+	timestamp_t timestamp;
+	int tz;
+	const char *msg;
+};
+
+enum reflog_edit_op {
+	REFLOG_EDIT_REPLACE = 0,
+	REFLOG_EDIT_DELETE,
+	REFLOG_EDIT_INSERT,
+};
+
+struct reflog_edit {
+	size_t idx;
+	enum reflog_edit_op op;
+	struct reflog_ent_data data;
+};
+
+int refs_reflog_edit_in_bulk(struct ref_store *refs,
+			     const char *refname,
+			     size_t num_edits,
+			     const struct reflog_edit *edits);
+
+int refs_reflog_replace(struct ref_store *refs,
+			const char *refname,
+			size_t idx,
+			const struct reflog_ent_data *reflog_data);
+
+
 /*
  * Callback to process a reflog entry found by the iteration functions (see
  * below).

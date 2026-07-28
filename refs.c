@@ -3033,6 +3033,59 @@ int refs_reflog_expire(struct ref_store *refs,
 				       cleanup_fn, policy_cb_data);
 }
 
+
+int refs_reflog_edit_in_bulk(struct ref_store *refs,
+			     const char *refname,
+			     size_t num_edits,
+			     const struct reflog_edit *edits)
+{
+	struct reflog_edit *prepared_edits;
+	char **normalized_msgs = NULL;
+	int ret;
+	size_t i;
+
+	if (!num_edits)
+		return 0;
+
+	if (!refs->be->reflog_edit_in_bulk)
+		return error(_("reflog edit not supported by backend"));
+
+	DUP_ARRAY(prepared_edits, edits, num_edits);
+	CALLOC_ARRAY(normalized_msgs, num_edits);
+
+	for (i = 0; i < num_edits; i++) {
+		if (edits[i].data.msg) {
+			normalized_msgs[i] = normalize_reflog_message(edits[i].data.msg);
+			prepared_edits[i].data.msg = normalized_msgs[i];
+		}
+	}
+
+	ret = refs->be->reflog_edit_in_bulk(refs, refname, num_edits,
+					    prepared_edits);
+
+	free(prepared_edits);
+	if (normalized_msgs) {
+		for (i = 0; i < num_edits; i++)
+			free(normalized_msgs[i]);
+		free(normalized_msgs);
+	}
+	return ret;
+}
+
+int refs_reflog_replace(struct ref_store *refs,
+			const char *refname,
+			size_t idx,
+			const struct reflog_ent_data *reflog_data)
+{
+	struct reflog_edit edit = {
+		.idx = idx,
+		.op = REFLOG_EDIT_REPLACE,
+		.data = *reflog_data,
+	};
+	return refs_reflog_edit_in_bulk(refs, refname, 1, &edit);
+}
+
+
 void ref_transaction_for_each_queued_update(struct ref_transaction *transaction,
 					    ref_transaction_for_each_queued_update_fn cb,
 					    void *cb_data)

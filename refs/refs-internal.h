@@ -498,6 +498,10 @@ typedef int reflog_expire_fn(struct ref_store *ref_store,
 			     reflog_expiry_should_prune_fn should_prune_fn,
 			     reflog_expiry_cleanup_fn cleanup_fn,
 			     void *policy_cb_data);
+typedef int reflog_edit_in_bulk_fn(struct ref_store *ref_store,
+				   const char *refname,
+				   size_t num_edits,
+				   const struct reflog_edit *edits);
 
 /*
  * Read a reference from the specified reference store, non-recursively.
@@ -596,6 +600,7 @@ struct ref_storage_be {
 	create_reflog_fn *create_reflog;
 	delete_reflog_fn *delete_reflog;
 	reflog_expire_fn *reflog_expire;
+	reflog_edit_in_bulk_fn *reflog_edit_in_bulk;
 
 	fsck_fn *fsck;
 };
