@@ -1840,7 +1840,7 @@ test_expect_success 'stash show --include-untracked includes untracked files' '
 	test_grep "untracked" actual
 '
 
-test_expect_success !REFTABLE 'stash reword' '
+test_expect_success 'stash reword' '
 	git reset --hard &&
 	test_when_finished "git stash clear" &&
 	echo change >file &&
@@ -1851,7 +1851,7 @@ test_expect_success !REFTABLE 'stash reword' '
 	test_cmp expect actual
 '
 
-test_expect_success !REFTABLE 'stash reword interactive' '
+test_expect_success 'stash reword interactive' '
 	git reset --hard &&
 	test_when_finished "git stash clear" &&
 	echo change >file &&
@@ -1866,7 +1866,7 @@ test_expect_success !REFTABLE 'stash reword interactive' '
 	test_cmp expect actual
 '
 
-test_expect_success !REFTABLE 'stash reword edge cases' '
+test_expect_success 'stash reword edge cases' '
 	git reset --hard &&
 	test_when_finished "git stash clear" &&
 	test_must_fail git stash reword stash@{0} -m "foo" &&
@@ -1879,7 +1879,7 @@ test_expect_success !REFTABLE 'stash reword edge cases' '
 	test_must_fail git stash reword stash@{foo} -m "foo"
 '
 
-test_expect_success !REFTABLE 'stash reword multi-line message gets normalized' '
+test_expect_success 'stash reword multi-line message gets normalized' '
 	git reset --hard &&
 	test_when_finished "git stash clear" &&
 	echo change >file &&

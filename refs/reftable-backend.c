@@ -2578,7 +2578,261 @@ static int write_reflog_expiry_table(struct reftable_writer *writer, void *cb_da
 	return 0;
 }
 
+static int reflog_edit_compare_asc(const void *a, const void *b)
+{
+	const struct reflog_edit *ea = a;
+	const struct reflog_edit *eb = b;
+	if (ea->idx < eb->idx)
+		return -1;
+	if (ea->idx > eb->idx)
+		return 1;
+	return 0;
+}
+
+static int reftable_be_reflog_edit_in_bulk(struct ref_store *ref_store,
+					   const char *refname,
+					   size_t num_edits,
+					   const struct reflog_edit *edits)
+{
+	struct reftable_ref_store *refs =
+		reftable_be_downcast(ref_store, REF_STORE_WRITE, "reflog_edit_in_bulk");
+	struct reftable_log_record *logs = NULL;
+	struct reftable_log_record *rewritten = NULL;
+	struct reftable_iterator it = {0};
+	struct reftable_addition *add = NULL;
+	struct reflog_expiry_arg arg = {0};
+	struct reflog_edit *sorted_edits = NULL;
+	struct reftable_backend *be;
+	size_t logs_nr = 0, logs_alloc = 0, i;
+	int ret;
+	size_t curr_edit_idx = 0;
+	size_t curr_idx = 0;
+	size_t rewritten_alloc = 0, rewritten_nr = 0;
+
+	if (num_edits) {
+		DUP_ARRAY(sorted_edits, edits, num_edits);
+		QSORT(sorted_edits, num_edits, reflog_edit_compare_asc);
+		for (i = 1; i < num_edits; i++) {
+			if (sorted_edits[i].idx == sorted_edits[i - 1].idx) {
+				uintmax_t duplicate_idx = (uintmax_t)sorted_edits[i].idx;
+				ret = error(_("duplicate reflog edit for index %"PRIuMAX), duplicate_idx);
+				free(sorted_edits);
+				return ret;
+			}
+		}
+	}
+
+	if (refs->err < 0) {
+		free(sorted_edits);
+		return refs->err;
+	}
+
+	ret = backend_for(&be, refs, refname, &refname, 1);
+	if (ret < 0)
+		goto done;
+
+	ret = reftable_stack_new_addition(&add, be->stack,
+					  &reftable_be_write_options(refs)->opts,
+					  REFTABLE_STACK_NEW_ADDITION_RELOAD);
+	if (ret < 0)
+		goto done;
+
+	ret = reftable_stack_init_log_iterator(be->stack, &it);
+	if (ret < 0)
+		goto done;
+
+	ret = reftable_iterator_seek_log(&it, refname);
+	if (ret < 0)
+		goto done;
+
+	while (1) {
+		struct reftable_log_record log = {0};
+		struct object_id old_oid, new_oid;
+
+		ret = reftable_iterator_next_log(&it, &log);
+		if (ret < 0)
+			goto done;
+		if (ret > 0 || strcmp(log.refname, refname)) {
+			reftable_log_record_release(&log);
+			break;
+		}
+		if (reftable_log_record_is_deletion(&log)) {
+			reftable_log_record_release(&log);
+			continue;
+		}
+
+		oidread(&old_oid, log.value.update.old_hash,
+			ref_store->repo->hash_algo);
+		oidread(&new_oid, log.value.update.new_hash,
+			ref_store->repo->hash_algo);
+
+		if (is_null_oid(&old_oid) && is_null_oid(&new_oid)) {
+			reftable_log_record_release(&log);
+			continue;
+		}
+
+		ALLOC_GROW(logs, logs_nr + 1, logs_alloc);
+		logs[logs_nr++] = log;
+	}
+
+	for (i = 0; i < logs_nr; i++) {
+		struct reftable_log_record *orig_log = &logs[i];
+		const struct reflog_edit *edit = NULL;
+
+		if (curr_edit_idx < num_edits && sorted_edits[curr_edit_idx].idx < curr_idx) {
+			ret = error("BUG: reflog edit index %"PRIuMAX" "
+				    "is less than current index %"PRIuMAX,
+				    (uintmax_t)sorted_edits[curr_edit_idx].idx,
+				    (uintmax_t)curr_idx);
+			goto done;
+		}
+
+		if (curr_edit_idx < num_edits && sorted_edits[curr_edit_idx].idx == curr_idx) {
+			edit = &sorted_edits[curr_edit_idx++];
+		}
+
+		if (edit && edit->op == REFLOG_EDIT_INSERT) {
+			ret = error("REFLOG_EDIT_INSERT not supported by reftable backend yet");
+			goto done;
+		}
+
+		curr_idx++;
+
+		if (edit) {
+			switch (edit->op) {
+			case REFLOG_EDIT_REPLACE: {
+				struct reftable_log_record repl = {0};
+				repl.refname = xstrdup(refname);
+				repl.value_type = REFTABLE_LOG_UPDATE;
+				repl.update_index = orig_log->update_index;
+
+				memcpy(repl.value.update.old_hash,
+				       orig_log->value.update.old_hash,
+				       GIT_MAX_RAWSZ);
+				memcpy(repl.value.update.new_hash,
+				       orig_log->value.update.new_hash,
+				       GIT_MAX_RAWSZ);
+				repl.value.update.name = xstrdup_or_null(orig_log->value.update.name);
+				repl.value.update.email = xstrdup_or_null(orig_log->value.update.email);
+				repl.value.update.time = orig_log->value.update.time;
+				repl.value.update.tz_offset = orig_log->value.update.tz_offset;
+				repl.value.update.message = xstrdup_or_null(orig_log->value.update.message);
+
+				if (!is_null_oid(&edit->data.old_oid))
+					memcpy(repl.value.update.old_hash,
+					       edit->data.old_oid.hash,
+					       GIT_MAX_RAWSZ);
+				if (!is_null_oid(&edit->data.new_oid))
+					memcpy(repl.value.update.new_hash,
+					       edit->data.new_oid.hash,
+					       GIT_MAX_RAWSZ);
+				if (edit->data.committer) {
+					struct ident_split committer_ident = {0};
+					if (split_ident_line(&committer_ident,
+							     edit->data.committer,
+							     strlen(edit->data.committer)) < 0) {
+						reftable_log_record_release(&repl);
+						ret = error("invalid committer '%s'", edit->data.committer);
+						goto done;
+					}
+					free(repl.value.update.name);
+					free(repl.value.update.email);
+					repl.value.update.name = xstrndup(
+						committer_ident.name_begin,
+						committer_ident.name_end -
+						committer_ident.name_begin);
+					repl.value.update.email = xstrndup(
+						committer_ident.mail_begin,
+						committer_ident.mail_end -
+						committer_ident.mail_begin);
+				}
+				if (edit->data.timestamp) {
+					repl.value.update.time = edit->data.timestamp;
+					repl.value.update.tz_offset = edit->data.tz;
+				}
+				if (edit->data.msg) {
+					free(repl.value.update.message);
+					repl.value.update.message = xstrdup(edit->data.msg);
+				}
+
+				ALLOC_GROW(rewritten, rewritten_nr + 1, rewritten_alloc);
+				rewritten[rewritten_nr++] = repl;
+				break;
+			}
+			case REFLOG_EDIT_DELETE: {
+				struct reftable_log_record tomb = {0};
+				tomb.refname = xstrdup(refname);
+				tomb.value_type = REFTABLE_LOG_DELETION;
+				tomb.update_index = orig_log->update_index;
+				ALLOC_GROW(rewritten, rewritten_nr + 1, rewritten_alloc);
+				rewritten[rewritten_nr++] = tomb;
+				break;
+			}
+			case REFLOG_EDIT_INSERT:
+				BUG("INSERT should have been handled above");
+			}
+		} else {
+			struct reftable_log_record keep = {0};
+			keep.refname = xstrdup(refname);
+			keep.value_type = REFTABLE_LOG_UPDATE;
+			keep.update_index = orig_log->update_index;
+			memcpy(keep.value.update.old_hash,
+			       orig_log->value.update.old_hash,
+			       GIT_MAX_RAWSZ);
+			memcpy(keep.value.update.new_hash,
+			       orig_log->value.update.new_hash,
+			       GIT_MAX_RAWSZ);
+			keep.value.update.name = xstrdup_or_null(orig_log->value.update.name);
+			keep.value.update.email = xstrdup_or_null(orig_log->value.update.email);
+			keep.value.update.time = orig_log->value.update.time;
+			keep.value.update.tz_offset = orig_log->value.update.tz_offset;
+			keep.value.update.message = xstrdup_or_null(orig_log->value.update.message);
+
+			ALLOC_GROW(rewritten, rewritten_nr + 1, rewritten_alloc);
+			rewritten[rewritten_nr++] = keep;
+		}
+	}
+
+	while (curr_edit_idx < num_edits) {
+		const struct reflog_edit *edit = &sorted_edits[curr_edit_idx++];
+		if (edit->op == REFLOG_EDIT_INSERT && edit->idx == curr_idx) {
+			ret = error("REFLOG_EDIT_INSERT not supported by reftable backend yet");
+			goto done;
+		} else {
+			ret = error("reflog edit index %"PRIuMAX" out of bounds "
+				    "(reflog has %"PRIuMAX" entries)",
+				    (uintmax_t)edit->idx, (uintmax_t)curr_idx);
+			goto done;
+		}
+	}
+
+	arg.refs = refs;
+	arg.records = rewritten;
+	arg.len = rewritten_nr;
+	arg.stack = be->stack;
+	arg.refname = refname;
+
+	ret = reftable_addition_add(add, &write_reflog_expiry_table, &arg);
+	if (ret < 0)
+		goto done;
+
+	ret = reftable_addition_commit(add);
+
+done:
+	reftable_iterator_destroy(&it);
+	reftable_addition_destroy(add);
+	for (i = 0; i < logs_nr; i++)
+		reftable_log_record_release(&logs[i]);
+	free(logs);
+	for (i = 0; i < rewritten_nr; i++)
+		reftable_log_record_release(&rewritten[i]);
+	free(rewritten);
+	free(sorted_edits);
+	return ret;
+}
+
 static int reftable_be_reflog_expire(struct ref_store *ref_store,
+
 				     const char *refname,
 				     unsigned int flags,
 				     reflog_expiry_prepare_fn prepare_fn,
@@ -2893,6 +3147,7 @@ struct ref_storage_be refs_be_reftable = {
 	.create_reflog = reftable_be_create_reflog,
 	.delete_reflog = reftable_be_delete_reflog,
 	.reflog_expire = reftable_be_reflog_expire,
+	.reflog_edit_in_bulk = reftable_be_reflog_edit_in_bulk,
 
 	.fsck = reftable_be_fsck,
 };

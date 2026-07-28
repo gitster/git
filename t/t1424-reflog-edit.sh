@@ -4,7 +4,7 @@ test_description='test refs_reflog_edit_in_bulk via test-tool reflog-edit'
 
 . ./test-lib.sh
 
-test_expect_success !REFTABLE 'reflog-edit replace message' '
+test_expect_success 'reflog-edit replace message' '
 	git init repo &&
 	(
 		cd repo &&
@@ -19,7 +19,7 @@ test_expect_success !REFTABLE 'reflog-edit replace message' '
 	)
 '
 
-test_expect_success !REFTABLE 'reflog-edit delete entry' '
+test_expect_success 'reflog-edit delete entry' '
 	git init repo-del &&
 	(
 		cd repo-del &&
@@ -34,7 +34,7 @@ test_expect_success !REFTABLE 'reflog-edit delete entry' '
 	)
 '
 
-test_expect_success !REFTABLE 'reflog-edit multi-edit (replace and delete)' '
+test_expect_success 'reflog-edit multi-edit (replace and delete)' '
 	git init repo-multi &&
 	(
 		cd repo-multi &&
@@ -51,7 +51,7 @@ test_expect_success !REFTABLE 'reflog-edit multi-edit (replace and delete)' '
 	)
 '
 
-test_expect_success !REFTABLE 'reflog-edit multi-line message gets normalized' '
+test_expect_success 'reflog-edit multi-line message gets normalized' '
 	git init repo-norm &&
 	(
 		cd repo-norm &&
@@ -64,7 +64,7 @@ test_expect_success !REFTABLE 'reflog-edit multi-line message gets normalized' '
 	)
 '
 
-test_expect_success !REFTABLE 'reflog-edit out of bounds' '
+test_expect_success 'reflog-edit out of bounds' '
 	git init repo-oob &&
 	(
 		cd repo-oob &&
@@ -75,7 +75,7 @@ test_expect_success !REFTABLE 'reflog-edit out of bounds' '
 	)
 '
 
-test_expect_success !REFTABLE 'reflog-edit duplicate index' '
+test_expect_success 'reflog-edit duplicate index' '
 	git init repo-dup &&
 	(
 		cd repo-dup &&
