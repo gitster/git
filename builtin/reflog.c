@@ -300,6 +300,51 @@ static int cmd_reflog_expire(int argc, const char **argv, const char *prefix,
 	return status;
 }
 
+static int reflog_delete_one(const char *arg, unsigned int flags, int verbose)
+{
+	const char *spec = strstr(arg, "@{");
+	char *ref = NULL;
+	char *ep;
+	unsigned long pos;
+	int status = 0;
+
+	if (!spec)
+		return error(_("not a reflog: %s"), arg);
+
+	if (!repo_dwim_log(the_repository, arg, spec - arg, NULL, &ref))
+		return error(_("no reflog for '%s'"), arg);
+
+	pos = strtoul(spec + 2, &ep, 10);
+	if (ep > spec + 2 && *ep == '}' && pos < 100000000) {
+		status |= reflog_delete(ref, (size_t)pos, flags, verbose);
+	} else {
+		timestamp_t at_time = 0;
+		int cutoff_tz = 0;
+		int cutoff_cnt = -1;
+		struct object_id oid;
+		int errors = 0;
+		int offset = 0;
+		size_t len = strlen(spec + 2);
+		if (len > 0 && spec[2 + len - 1] == '}')
+			len--;
+		char *date_str = xstrndup(spec + 2, len);
+		if (parse_date_basic(date_str, &at_time, &offset))
+			at_time = approxidate_careful(date_str, &errors);
+		free(date_str);
+
+		if (!errors &&
+		    !read_ref_at(get_main_ref_store(the_repository), ref, 0,
+				 at_time, -1, &oid, NULL, NULL, &cutoff_tz, &cutoff_cnt) &&
+		    cutoff_cnt >= 0) {
+			status |= reflog_delete(ref, (size_t)cutoff_cnt, flags, verbose);
+		} else {
+			status |= error(_("'%s' is not a valid reflog entry"), arg);
+		}
+	}
+	free(ref);
+	return status;
+}
+
 static int cmd_reflog_delete(int argc, const char **argv, const char *prefix,
 			     struct repository *repo UNUSED)
 {
@@ -326,7 +371,7 @@ static int cmd_reflog_delete(int argc, const char **argv, const char *prefix,
 		return error(_("no reflog specified to delete"));
 
 	for (i = 0; i < argc; i++)
-		status |= reflog_delete(argv[i], flags, verbose);
+		status |= reflog_delete_one(argv[i], flags, verbose);
 
 	return status;
 }

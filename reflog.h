@@ -57,7 +57,7 @@ struct expire_reflog_policy_cb {
 	unsigned int dry_run:1;
 };
 
-int reflog_delete(const char *rev, enum expire_reflog_flags flags,
+int reflog_delete(const char *refname, size_t pos, enum expire_reflog_flags flags,
 		  int verbose);
 void reflog_expiry_cleanup(void *cb_data);
 void reflog_expiry_prepare(const char *refname, const struct object_id *oid,

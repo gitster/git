@@ -517,14 +517,10 @@ int count_reflog_ent(const char *refname UNUSED,
 	return 0;
 }
 
-int reflog_delete(const char *rev, enum expire_reflog_flags flags, int verbose)
+int reflog_delete(const char *refname, size_t pos, enum expire_reflog_flags flags, int verbose)
 {
 	struct reflog_expire_options opts = { 0 };
-	int status = 0;
 	reflog_expiry_should_prune_fn *should_prune_fn = should_expire_reflog_ent;
-	const char *spec = strstr(rev, "@{");
-	char *ep, *ref;
-	int recno;
 	struct expire_reflog_policy_cb cb = {
 		.dry_run = !!(flags & EXPIRE_REFLOGS_DRY_RUN),
 	};
@@ -532,35 +528,19 @@ int reflog_delete(const char *rev, enum expire_reflog_flags flags, int verbose)
 	if (verbose)
 		should_prune_fn = should_expire_reflog_ent_verbose;
 
-	if (!spec)
-		return error(_("not a reflog: %s"), rev);
+	opts.explicit_expiry = REFLOG_EXPIRE_TOTAL | REFLOG_EXPIRE_UNREACH;
+	opts.expire_total = 0;
+	opts.expire_unreachable = 0;
+	opts.recno = -(int)pos;
 
-	if (!repo_dwim_log(the_repository, rev, spec - rev, NULL, &ref)) {
-		status |= error(_("no reflog for '%s'"), rev);
-		goto cleanup;
-	}
-
-	recno = strtoul(spec + 2, &ep, 10);
-	if (*ep == '}') {
-		opts.recno = -recno;
-		refs_for_each_reflog_ent(get_main_ref_store(the_repository),
-					 ref, count_reflog_ent, &opts);
-	} else {
-		opts.expire_total = approxidate(spec + 2);
-		refs_for_each_reflog_ent(get_main_ref_store(the_repository),
-					 ref, count_reflog_ent, &opts);
-		opts.expire_total = 0;
-	}
+	refs_for_each_reflog_ent(get_main_ref_store(the_repository),
+				 refname, count_reflog_ent, &opts);
 
 	cb.opts = opts;
-	status |= refs_reflog_expire(get_main_ref_store(the_repository), ref,
-				     flags,
-				     reflog_expiry_prepare,
-				     should_prune_fn,
-				     reflog_expiry_cleanup,
-				     &cb);
-
- cleanup:
-	free(ref);
-	return status;
+	return refs_reflog_expire(get_main_ref_store(the_repository), refname,
+				  flags,
+				  reflog_expiry_prepare,
+				  should_prune_fn,
+				  reflog_expiry_cleanup,
+				  &cb);
 }

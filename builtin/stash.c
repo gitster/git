@@ -863,7 +863,10 @@ static int reflog_is_empty(const char *refname)
 
 static int do_drop_stash(struct stash_info *info, int quiet)
 {
-	if (!reflog_delete(info->revision.buf,
+	if (info->stash_idx < 0)
+		return error(_("'%s' is not a valid stash index"), info->revision.buf);
+
+	if (!reflog_delete(ref_stash, info->stash_idx,
 			   EXPIRE_REFLOGS_REWRITE | EXPIRE_REFLOGS_UPDATE_REF,
 			   0)) {
 		if (!quiet)
