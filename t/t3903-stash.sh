@@ -808,6 +808,15 @@ test_expect_success 'pop: fail early if specified stash is not a stash ref' '
 	git reset --hard HEAD
 '
 
+test_expect_success 'drop, pop, and branch accept time-based reflog selectors' '
+	git stash clear &&
+	test_when_finished "git reset --hard HEAD && git stash clear" &&
+	git reset --hard &&
+	echo foo >file &&
+	git stash &&
+	git stash drop "stash@{0.seconds.ago}"
+'
+
 test_expect_success 'ref with non-existent reflog' '
 	git stash clear &&
 	echo bar5 >file &&

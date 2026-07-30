@@ -175,6 +175,8 @@ struct stash_info {
 	struct strbuf revision;
 	int is_stash_ref;
 	int has_u;
+	int stash_idx;
+	int is_by_date;
 };
 
 #define STASH_INFO_INIT { \
@@ -300,6 +302,45 @@ static int get_stash_info(struct stash_info *info, int argc, const char **argv)
 	}
 
 	free(expanded_ref);
+
+	at = strstr(revision, "@{");
+	if (at) {
+		char *ep;
+		unsigned long u = strtoul(at + 2, &ep, 10);
+		if (ep > at + 2 && *ep == '}' && u < 100000000) {
+			info->stash_idx = (int)u;
+			info->is_by_date = 0;
+		} else {
+			timestamp_t at_time = 0;
+			int cutoff_tz = 0;
+			int cutoff_cnt = -1;
+			struct object_id oid;
+			int errors = 0;
+			int offset = 0;
+			size_t len = strlen(at + 2);
+			if (len > 0 && at[2 + len - 1] == '}')
+				len--;
+			char *date_str = xstrndup(at + 2, len);
+			if (parse_date_basic(date_str, &at_time, &offset))
+				at_time = approxidate_careful(date_str, &errors);
+			free(date_str);
+
+			if (!errors &&
+			    !read_ref_at(get_main_ref_store(the_repository), ref_stash, 0,
+					 at_time, -1, &oid, NULL, NULL, &cutoff_tz, &cutoff_cnt) &&
+			    cutoff_cnt >= 0) {
+				info->stash_idx = cutoff_cnt;
+				info->is_by_date = 1;
+			} else {
+				info->stash_idx = -1;
+				info->is_by_date = 1;
+			}
+		}
+	} else {
+		info->stash_idx = 0;
+		info->is_by_date = 0;
+	}
+
 	return !(ret == 0 || ret == 1);
 }
 
@@ -850,6 +891,9 @@ static int get_stash_info_assert(struct stash_info *info, int argc,
 	if (!info->is_stash_ref)
 		return error(_("'%s' is not a stash reference"), info->revision.buf);
 
+	if (info->stash_idx < 0)
+		return error(_("'%s' is not a valid stash index"), info->revision.buf);
+
 	return 0;
 }
 
@@ -929,7 +973,7 @@ static int branch_stash(int argc, const char **argv, const char *prefix,
 
 	branch = argv[0];
 
-	if (get_stash_info(&info, argc - 1, argv + 1))
+	if (get_stash_info_assert(&info, argc - 1, argv + 1))
 		goto cleanup;
 
 	cp.git_cmd = 1;
