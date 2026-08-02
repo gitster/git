@@ -635,8 +635,13 @@ static ssize_t find_separator(const char *line, const char *separators)
 	int whitespace_found = 0;
 	const char *c;
 	for (c = line; *c; c++) {
-		if (strchr(separators, *c))
+		if (strchr(separators, *c)) {
+			/* avoid accidental URL matches (://) */
+			if (*c == ':' && c[1] == '/' && c[2] == '/' &&
+			    !whitespace_found)
+				return -1;
 			return c - line;
+		}
 		if (!whitespace_found && (isalnum(*c) || *c == '-'))
 			continue;
 		if (c != line && (*c == ' ' || *c == '\t')) {
