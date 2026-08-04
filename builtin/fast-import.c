@@ -3945,31 +3945,11 @@ static const char *const fast_import_usage[] = {
 
 static void parse_argv(struct fast_import_state *state)
 {
-	unsigned int i;
+	int argc = parse_options(state->argc, state->argv, state->prefix,
+				 state->option, fast_import_usage,
+				 PARSE_OPT_KEEP_ARGV0);
 
-	for (i = 1; i < state->argc; i++) {
-		const char *a = state->argv[i];
-
-		if (*a != '-' || !strcmp(a, "--"))
-			break;
-
-		if (!skip_prefix(a, "--", &a))
-			die(_("unknown option %s"), a);
-
-		if (parse_one_option(state, a))
-			continue;
-
-		if (parse_one_feature(state, a, 0))
-			continue;
-
-		if (skip_prefix(a, "cat-blob-fd=", &a)) {
-			option_cat_blob_fd(state, a);
-			continue;
-		}
-
-		die(_("unknown option --%s"), a);
-	}
-	if (i != state->argc)
+	if (argc > 1)
 		usage_with_options(fast_import_usage, state->option);
 
 	state->seen_data_command = 1;
@@ -4105,11 +4085,6 @@ int cmd_fast_import(int argc,
 {
 	struct fast_import_state state;
 
-	/*
-	 * NEEDSWORK: For now this is used only to render
-	 * `-h`/`--help-all` usage messages. The actual parsing is
-	 * done by parse_one_option()/parse_one_feature().
-	 */
 	struct option fast_import_options[] = {
 		OPT_GROUP(N_("Common")),
 		OPT_CALLBACK_F(0, "date-format", NULL, N_("fmt"),
