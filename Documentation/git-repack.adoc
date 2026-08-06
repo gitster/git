@@ -12,7 +12,7 @@ SYNOPSIS
 'git repack' [-a] [-A] [-d] [-f] [-F] [-l] [-n] [-q] [-b] [-m]
 	[--window=<n>] [--depth=<n>] [--threads=<n>] [--keep-pack=<pack-name>]
 	[--write-midx[=<mode>]] [--name-hash-version=<n>] [--path-walk]
-	[--filter=<filter-spec>] [--drop-filtered [--dry-run]]]
+	[--filter=<filter-spec>] [--drop-filtered [--dry-run]]
 
 DESCRIPTION
 -----------

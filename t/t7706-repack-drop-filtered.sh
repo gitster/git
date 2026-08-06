@@ -142,8 +142,8 @@ test_expect_success '--drop-filtered removes the promisor blob locally' '
 		repack --drop-filtered --filter=blob:limit=1k -a &&
 
 	git -C repo cat-file --batch-all-objects --batch-check="%(objectname)" >present &&
-	! grep -q "$BIG" present &&
-	grep -q "$SMALL" present
+	test_grep ! "$BIG" present &&
+	test_grep "$SMALL" present
 '
 
 test_expect_success '--drop-filtered refuses when a merge is in progress' '
