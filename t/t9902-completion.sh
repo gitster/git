@@ -3173,6 +3173,7 @@ test_expect_success 'git history subcommands' '
 	fixup Z
 	reword Z
 	split Z
+	squash Z
 	EOF
 '
 
