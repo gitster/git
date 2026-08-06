@@ -34,9 +34,9 @@ were sent.  Server MUST NOT ignore capabilities that client requested
 and server advertised.  As a consequence of these rules, server MUST
 NOT advertise capabilities it does not understand.
 
-The 'atomic', 'report-status', 'report-status-v2', 'delete-refs', 'quiet',
-and 'push-cert' capabilities are sent and recognized by the receive-pack
-(push to server) process.
+The 'atomic', 'report-status', 'report-status-v2', 'delete-refs',
+'no-ref-delta', 'quiet', and 'push-cert' capabilities are sent and
+recognized by the receive-pack (push to server) process.
 
 The 'ofs-delta' and 'side-band-64k' capabilities are sent and recognized
 by both upload-pack and receive-pack protocols.  The 'agent' and 'session-id'
@@ -173,6 +173,17 @@ ofs-delta
 The server can send, and the client can understand, PACKv2 with delta referring to
 its base by position in pack rather than by an obj-id.  That is, they can
 send/read OBJ_OFS_DELTA (aka type 6) in a packfile.
+
+no-ref-delta
+------------
+
+The receive-pack server can request, and the client can send, PACKv2
+without deltas referring to their bases by an obj-id. That is, the
+client MUST NOT send OBJ_REF_DELTA (aka type 7) in a packfile when the
+server advertises this capability.
+
+This does not imply that the server understands OBJ_OFS_DELTA entries;
+that is negotiated separately with the 'ofs-delta' capability.
 
 agent
 -----

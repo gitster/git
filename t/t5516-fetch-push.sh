@@ -1548,6 +1548,20 @@ EOF
 	git push --no-thin --receive-pack="$rcvpck" no-thin/.git refs/heads/main:refs/heads/foo
 '
 
+test_expect_success 'push honors no-ref-delta capability' '
+	test_commit no-ref-delta &&
+
+	rcvpck="git receive-pack --advertise-no-ref-delta-for-testing" &&
+
+	GIT_TRACE2_EVENT="$PWD/no-ref-delta" \
+	git push --receive-pack="$rcvpck" no-thin/.git \
+		refs/heads/main:refs/heads/bar &&
+
+	test_subcommand git pack-objects --all-progress-implied --revs \
+		--stdout --thin --delta-base-offset --no-ref-delta -q \
+		<no-ref-delta
+'
+
 test_expect_success 'pushing a tag pushes the tagged object' '
 	blob=$(echo unreferenced | git hash-object -w --stdin) &&
 	git tag -m foo tag-of-blob $blob &&

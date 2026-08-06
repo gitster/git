@@ -111,6 +111,22 @@ test_expect_success 'reuse all objects from all packs' '
 	test_pack_objects_reused_all 9 3
 '
 
+test_expect_success '--no-ref-delta reuses REF_DELTA-free bitmapped packs' '
+	# Whole-word reuse is unavailable under --no-ref-delta, so reusing
+	# every object below exercises the per-object bitmap path.
+	: >trace2.txt &&
+	GIT_TRACE2_EVENT="$PWD/trace2.txt" \
+		git pack-objects --stdout --revs --all --delta-base-offset \
+		--no-ref-delta >got.pack &&
+
+	test_pack_reused 9 <trace2.txt &&
+	test_packs_reused 3 <trace2.txt &&
+
+	git index-pack --strict -o got.idx got.pack &&
+	test-tool pack-deltas --list-deltas got.idx >deltas &&
+	test_grep ! " REF_DELTA " deltas
+'
+
 test_expect_success 'reuse objects from first pack with middle gap' '
 	for i in D E F
 	do
