@@ -34,8 +34,8 @@ test_expect_success 'absorb the git dir' '
 	git submodule absorbgitdirs 2>actual &&
 	test_cmp expect actual &&
 	git fsck &&
-	test -f sub1/.git &&
-	test -d .git/modules/sub1 &&
+	test_path_is_file sub1/.git &&
+	test_path_is_dir .git/modules/sub1 &&
 	git status >actual.1 &&
 	git -C sub1 rev-parse HEAD >actual.2 &&
 	test_cmp expect.1 actual.1 &&
@@ -47,9 +47,9 @@ test_expect_success 'absorbing does not fail for deinitialized submodules' '
 	git submodule deinit --all &&
 	git submodule absorbgitdirs 2>err &&
 	test_must_be_empty err &&
-	test -d .git/modules/sub1 &&
-	test -d sub1 &&
-	! test -e sub1/.git
+	test_path_is_dir .git/modules/sub1 &&
+	test_path_is_dir sub1 &&
+	test_path_is_missing sub1/.git
 '
 
 test_expect_success 'setup nested submodule' '
@@ -72,8 +72,8 @@ test_expect_success 'absorb the git dir in a nested submodule' '
 	EOF
 	git submodule absorbgitdirs 2>actual &&
 	test_cmp expect actual &&
-	test -f sub1/nested/.git &&
-	test -d .git/modules/sub1/modules/nested &&
+	test_path_is_file sub1/nested/.git &&
+	test_path_is_dir .git/modules/sub1/modules/nested &&
 	git status >actual.1 &&
 	git -C sub1/nested rev-parse HEAD >actual.2 &&
 	test_cmp expect.1 actual.1 &&
@@ -109,9 +109,9 @@ test_expect_success 'absorb the git dir in a nested submodule' '
 	EOF
 	git submodule absorbgitdirs 2>actual &&
 	test_cmp expect actual &&
-	test -f sub1/.git &&
-	test -f sub1/nested/.git &&
-	test -d .git/modules/sub1/modules/nested &&
+	test_path_is_file sub1/.git &&
+	test_path_is_file sub1/nested/.git &&
+	test_path_is_dir .git/modules/sub1/modules/nested &&
 	git status >actual.1 &&
 	git -C sub1/nested rev-parse HEAD >actual.2 &&
 	test_cmp expect.1 actual.1 &&
@@ -155,7 +155,7 @@ test_expect_success 'absorbing the git dir fails for incomplete submodules' '
 	test_must_fail git submodule absorbgitdirs 2>actual &&
 	test_cmp expect actual &&
 	git -C sub2 fsck &&
-	test -d sub2/.git &&
+	test_path_is_dir sub2/.git &&
 	git status >actual &&
 	git -C sub2 rev-parse HEAD >actual.2 &&
 	test_cmp expect.1 actual.1 &&
