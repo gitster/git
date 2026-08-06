@@ -493,6 +493,10 @@ void fsm_listen__stop_async(struct fsmonitor_daemon_state *state)
 		state->listen_data->shutdown = SHUTDOWN_STOP;
 }
 
+void fsm_listen__flush_async(struct fsmonitor_daemon_state *state UNUSED)
+{
+}
+
 /*
  * Process a single inotify event and queue for publication.
  */

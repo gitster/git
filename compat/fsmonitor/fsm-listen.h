@@ -39,6 +39,12 @@ void fsm_listen__dtor(struct fsmonitor_daemon_state *state);
 void fsm_listen__loop(struct fsmonitor_daemon_state *state);
 
 /*
+ * Prompt the listener to deliver queued filesystem events, if supported.
+ * This does not wait for the events to be processed.
+ */
+void fsm_listen__flush_async(struct fsmonitor_daemon_state *state);
+
+/*
  * Gently request that the fsmonitor listener thread shutdown.
  * It does not wait for it to stop.  The caller should do a JOIN
  * to wait for it.

@@ -290,6 +290,10 @@ void fsm_listen__stop_async(struct fsmonitor_daemon_state *state)
 	SetEvent(state->listen_data->hListener[LISTENER_SHUTDOWN]);
 }
 
+void fsm_listen__flush_async(struct fsmonitor_daemon_state *state UNUSED)
+{
+}
+
 static struct one_watch *create_watch(const char *path)
 {
 	struct one_watch *watch = NULL;
