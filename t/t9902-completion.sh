@@ -3129,7 +3129,11 @@ test_expect_success 'git history subcommand options' '
 	test_completion "git history reword main -- --d" "" &&
 	test_completion "git history fixup --empty=ke" "keep " &&
 	test_completion "git history drop --empty ab" "abort " &&
-	test_completion "git history reword --empty=ke" ""
+	test_completion "git history reword --empty=ke" "" &&
+	test_completion "git history fixup --update-refs=he" "head " &&
+	test_completion "git history split --update-refs he" "head " &&
+	test_completion "git history reword main -- --update-refs=he" "" &&
+	test_completion "git history reword main -- --update-refs he" ""
 '
 
 test_expect_success 'git history revisions' '
