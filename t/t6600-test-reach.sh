@@ -381,7 +381,7 @@ test_expect_success 'get_merge_bases_many:infinity-both-sides' '
 		git rev-parse pi-B
 	} >expect &&
 	test_all_modes get_merge_bases_many &&
-	test_paint_down_steps 5 4 5 5
+	test_paint_down_steps 5 4 5 4
 '
 
 test_expect_success 'setup mixed finite/INFINITY topology' '
@@ -414,31 +414,26 @@ test_expect_success 'merge-base --all commit-walk steps' '
 	>input &&
 	git rev-parse commit-9-1 >expect &&
 	run_all_modes git merge-base --all commit-9-9 commit-9-1 &&
-	test_paint_down_steps 81 9 57 81
+	test_paint_down_steps 81 9 57 37
 '
 
 test_expect_success 'merge-base --all with clock skew (side-exhaustion)' '
-	# Verify correct merge base under clock skew.  se-D (the
-	# merge base) has a higher date than its child se-C.
-	# Generation ordering ensures se-C is visited before se-D,
-	# so P1 paint propagates correctly and se-D is found.
+	# Verify that the merge base is computed correctly even
+	# when commits have non-monotonic commit dates.
 	>input &&
 	git rev-parse se-D >expect &&
 	run_all_modes git merge-base --all se-A se-B &&
-	test_paint_down_steps 6 4 6 6
+	test_paint_down_steps 6 4 6 4
 '
 
 test_expect_success 'merge-base --all with clock skew and redundant ancestor (side-exhaustion)' '
-	# Verify correct merge base when clock skew could cause a
-	# too-deep result.  MB1 is the correct merge base; MB2 is
-	# its ancestor.  A reaches MB2 via E (high date) and MB1
-	# via C (low date).  Generation ordering ensures C is
-	# visited before side-exhaustion fires, so MB1 is found
-	# and remove_redundant correctly discards MB2.
+	# Verify that the correct merge base is found even when
+	# non-monotonic commit dates could cause a redundant
+	# ancestor to be visited first.
 	>input &&
 	git rev-parse se2-MB1 >expect &&
 	run_all_modes git merge-base --all se2-A se2-B &&
-	test_paint_down_steps 8 6 8 8
+	test_paint_down_steps 8 6 8 6
 '
 
 test_expect_success 'reduce_heads' '
