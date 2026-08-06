@@ -2388,7 +2388,8 @@ static void reuse_partial_packfile_from_bitmap_1(struct bitmap_index *bitmap_git
 	struct pack_window *w_curs = NULL;
 	size_t pos = pack->bitmap_pos / BITS_IN_EWORD;
 
-	if (allow_ref_delta && !pack->bitmap_pos) {
+	if (allow_ref_delta && !pack->bitmap_pos &&
+	    pack->bitmap_nr == pack->p->num_objects) {
 		/*
 		 * If we're processing the first (in the case of a MIDX, the
 		 * preferred pack) or the only (in the case of single-pack
@@ -2406,6 +2407,9 @@ static void reuse_partial_packfile_from_bitmap_1(struct bitmap_index *bitmap_git
 		 * When REF_DELTAs are allowed, we can therefore reuse whole
 		 * words at a time without inspecting object headers. Otherwise,
 		 * inspect each object below to avoid reusing a REF_DELTA entry.
+		 *
+		 * The range must also contain every physical pack entry so that
+		 * bitmap and pack positions correspond.
 		 */
 		while (pos < result->word_alloc &&
 		       pos < pack->bitmap_nr / BITS_IN_EWORD &&
@@ -2536,13 +2540,25 @@ void reuse_partial_packfile_from_bitmap(struct bitmap_index *bitmap_git,
 	} else {
 		struct packed_git *pack;
 		uint32_t pack_int_id;
+		uint32_t bitmap_nr;
 
 		if (bitmap_is_midx(bitmap_git)) {
+			struct bitmapped_pack bitmapped_pack;
 			struct multi_pack_index *m = bitmap_git->midx;
 			uint32_t preferred_pack_pos;
 
 			while (m->base_midx)
 				m = m->base_midx;
+
+			if (!m->chunk_bitmapped_packs) {
+				/*
+				 * Without BTMP, determining the preferred
+				 * pack's range requires scanning the pseudo-pack.
+				 * Skip reuse and leave the bitmap result for
+				 * normal packing.
+				 */
+				return;
+			}
 
 			if (midx_preferred_pack(m, &preferred_pack_pos) < 0) {
 				warning(_("unable to compute preferred pack, disabling pack-reuse"));
@@ -2551,6 +2567,12 @@ void reuse_partial_packfile_from_bitmap(struct bitmap_index *bitmap_git,
 
 			pack = nth_midxed_pack(m, preferred_pack_pos);
 			pack_int_id = preferred_pack_pos;
+
+			if (nth_bitmapped_pack(m, &bitmapped_pack,
+					       pack_int_id) < 0)
+				return;
+			pack = bitmapped_pack.p;
+			bitmap_nr = bitmapped_pack.bitmap_nr;
 		} else {
 			pack = bitmap_git->pack;
 			/*
@@ -2563,13 +2585,14 @@ void reuse_partial_packfile_from_bitmap(struct bitmap_index *bitmap_git,
 			 * that we do not expect to read this field.
 			 */
 			pack_int_id = -1;
+			bitmap_nr = pack->num_objects;
 		}
 
 		if (is_pack_valid(pack)) {
 			ALLOC_GROW(packs, packs_nr + 1, packs_alloc);
 			packs[packs_nr].p = pack;
 			packs[packs_nr].pack_int_id = pack_int_id;
-			packs[packs_nr].bitmap_nr = pack->num_objects;
+			packs[packs_nr].bitmap_nr = bitmap_nr;
 			packs[packs_nr].bitmap_pos = 0;
 			packs[packs_nr].from_midx = bitmap_git->midx;
 			packs_nr++;
