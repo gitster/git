@@ -120,6 +120,7 @@ int enumerate_promisor_blobs(struct repository *repo,
 
 	/*
 	 * Apply the filter to find which blobs exceed the threshold.
+	 * The caller has to_drop and is responsible for clearing it.
 	 */
 	ret = list_objects_filter__filter_oidset(repo,
 		(struct list_objects_filter_options *)filter,
