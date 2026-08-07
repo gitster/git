@@ -496,6 +496,11 @@ void fsm_listen__stop_async(struct fsmonitor_daemon_state *state)
 	pthread_mutex_unlock(&data->dq_lock);
 }
 
+void fsm_listen__flush_async(struct fsmonitor_daemon_state *state)
+{
+	FSEventStreamFlushAsync(state->listen_data->stream);
+}
+
 void fsm_listen__loop(struct fsmonitor_daemon_state *state)
 {
 	struct fsm_listen_data *data;

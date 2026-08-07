@@ -206,6 +206,9 @@ static enum fsmonitor_cookie_item_result with_lock__wait_for_cookie(
 	close(fd);
 	unlink(cookie_pathname.buf);
 
+	/* The listener callback takes main_lock, so this must not block. */
+	fsm_listen__flush_async(state);
+
 	/*
 	 * Wait for the listener thread to observe the cookie file.
 	 * Time out after a short interval so that the client
