@@ -2712,6 +2712,45 @@ test_expect_success 'git -C <path> checkout uses the right repo' '
 	EOF
 '
 
+test_expect_success 'git diff completes tracked paths when no refs match' '
+	# file1 and file2 are tracked but file3 is not
+	test_completion "git diff f" <<-\EOF
+	file1
+	file2
+	EOF
+'
+
+test_expect_success 'git diff -- completes tracked paths' '
+	# file1 and file2 are tracked but file3 is not
+	test_completion "git diff -- f" <<-\EOF
+	file1
+	file2
+	EOF
+'
+
+test_expect_success 'git -C <path> diff completes tracked paths in specified repo' '
+	test_when_finished "rm -rf repo-for-diff" &&
+	git init repo-for-diff &&
+	echo content >repo-for-diff/otherfile &&
+	git -C repo-for-diff add otherfile &&
+	echo untracked >repo-for-diff/oops &&
+	git -C repo-for-diff commit -m otherfile &&
+	test_completion "git -C repo-for-diff diff o" <<-\EOF
+	otherfile
+	EOF
+'
+
+test_expect_success 'git -C <path> diff -- completes pathspecs in specified repo' '
+	test_when_finished "rm -rf repo-for-diff" &&
+	git init repo-for-diff &&
+	echo content >repo-for-diff/otherfile &&
+	git -C repo-for-diff add otherfile &&
+	git -C repo-for-diff commit -m otherfile &&
+	test_completion "git -C repo-for-diff diff -- o" <<-\EOF
+	otherfile
+	EOF
+'
+
 test_expect_success 'show completes all refs' '
 	test_completion "git show m" <<-\EOF
 	main Z
