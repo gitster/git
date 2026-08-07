@@ -353,15 +353,16 @@ static int ce_match_stat_basic(const struct cache_entry *ce, struct stat *st)
 static int is_racy_stat(const struct index_state *istate,
 			const struct stat_data *sd)
 {
+	int use_nsec = 0;
+	repo_config_get_bool(the_repository, "core.useNanosec", &use_nsec);
+
 	return (istate->timestamp.sec &&
-#ifdef USE_NSEC
-		 /* nanosecond timestamped files can also be racy! */
-		(istate->timestamp.sec < sd->sd_mtime.sec ||
-		 (istate->timestamp.sec == sd->sd_mtime.sec &&
-		  istate->timestamp.nsec <= sd->sd_mtime.nsec))
-#else
-		istate->timestamp.sec <= sd->sd_mtime.sec
-#endif
+		/* nanosecond timestamped files can also be racy! */
+		use_nsec
+		? (istate->timestamp.sec < sd->sd_mtime.sec ||
+		   (istate->timestamp.sec == sd->sd_mtime.sec &&
+		    istate->timestamp.nsec <= sd->sd_mtime.nsec))
+		: istate->timestamp.sec <= sd->sd_mtime.sec
 		);
 }
 
