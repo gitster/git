@@ -854,6 +854,38 @@ from the test harness library.  At the end of the script, call
 'test_done'.
 
 
+Writing concurrency-safe helpers
+--------------------------------
+
+Some test code runs concurrently: a test may background work with '&',
+and the helper scripts installed for the web server (in t/lib-httpd) are
+run once per request, so the same script can execute for several
+requests at once.  Such code cannot assume it has exclusive access to a
+file.
+
+When exactly one of several concurrent processes needs to "win" a
+decision, a single atomic filesystem operation can make it, rather than
+a check followed by a separate action.  A "test -f X" then "touch X"
+(or "rm X") races: two processes can both pass the check before either
+acts.  Two atomic operations avoid this:
+
+ - "mkdir dir", which fails if the directory already exists, so that
+   exactly one caller wins, electing a first or only request (see
+   t/lib-httpd/http-429.sh).
+
+ - "mv src dst" (rename), which fails if the source is gone, so that
+   exactly one caller consumes it, claiming a planted one-shot marker
+   (see t/lib-httpd/apply-one-time-script.sh).
+
+A "$$" suffix on per-request scratch files keeps concurrent invocations
+from clobbering each other's fixed-name files.
+
+This is a standard shell locking idiom, and the same reasoning behind
+Git's own lockfile machinery, which creates its lock with O_CREAT|O_EXCL,
+and make_symlink() in t/test-lib.sh, which uses an mkdir lock: an atomic
+operation whose failure indicates that another process got there first.
+
+
 Test harness library
 --------------------
 

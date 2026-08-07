@@ -159,6 +159,9 @@ prepare_httpd() {
 	mkdir -p "$HTTPD_DOCUMENT_ROOT_PATH"
 	cp "$TEST_PATH"/passwd "$HTTPD_ROOT_PATH"
 	cp "$TEST_PATH"/proxy-passwd "$HTTPD_ROOT_PATH"
+	# The web server can run any of these CGI scripts for two requests at
+	# once; a helper that keeps state between requests must do so with an
+	# atomic operation. See "Writing concurrency-safe helpers" in t/README.
 	install_script incomplete-length-upload-pack-v2-http.sh
 	install_script incomplete-body-upload-pack-v2-http.sh
 	install_script error-no-report.sh
