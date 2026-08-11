@@ -3,6 +3,7 @@
 
 #include "object.h"
 #include "csum-file.h"
+#include "odb/source.h"
 
 struct packed_git;
 struct pack_window;
@@ -105,7 +106,8 @@ off_t write_pack_header(struct hashfile *f, uint32_t);
 void fixup_pack_header_footer(const struct git_hash_algo *, int,
 			      unsigned char *, const char *, uint32_t,
 			      unsigned char *, off_t);
-char *index_pack_lockfile(struct repository *r, int fd, int *is_well_formed);
+char *index_pack_lockfile(struct odb_source *source, int fd,
+			  int *is_well_formed);
 
 struct ref;
 
