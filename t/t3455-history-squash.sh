@@ -309,7 +309,7 @@ test_expect_success '--no-edit uses last "amend!" message without an editor' '
 	test_commit WIP &&
 
 	cat >msg <<-EOF &&
-	amend! $(git rev-parse HEAD^ | tr a-f A-F)
+	amend! $(git rev-parse --short HEAD^)
 
 	The third reword
 
