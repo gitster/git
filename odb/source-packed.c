@@ -58,7 +58,7 @@ static int find_pack_entry(struct odb_source_packed *store,
 				if (prepare_midx_pack(m, i))
 					continue;
 				p = nth_midxed_pack(m, i);
-				if (p && packfile_fill_entry(p, oid, e))
+				if (p && packfile_fill_entry(p, oid, e, bad_pack))
 					return 1;
 			}
 		}
