@@ -1668,6 +1668,98 @@ static void do_check_stateless_delimiter(int stateless_rpc,
 				  _("git fetch-pack: expected response end packet"));
 }
 
+struct fetch_packfile_uri_result {
+	struct oidset gitmodules_found;
+	char packhash[GIT_MAX_HEXSZ + 1];
+	bool created_keep;
+};
+
+static void fetch_packfile_uri(const char *uri_with_hash,
+			       const struct strvec *index_pack_args,
+			       struct fetch_packfile_uri_result *result)
+{
+	struct child_process cmd = CHILD_PROCESS_INIT;
+	const char *uri = uri_with_hash +
+		the_hash_algo->hexsz + 1;
+
+	strvec_push(&cmd.args, "http-fetch");
+	strvec_pushf(&cmd.args, "--packfile=%.*s",
+		     (int) the_hash_algo->hexsz, uri_with_hash);
+	for (size_t j = 0; j < index_pack_args->nr; j++)
+		strvec_pushf(&cmd.args, "--index-pack-arg=%s",
+			     index_pack_args->v[j]);
+	strvec_push(&cmd.args, uri);
+	cmd.git_cmd = 1;
+	cmd.no_stdin = 1;
+	cmd.out = -1;
+	if (start_command(&cmd))
+		die("fetch-pack: unable to spawn http-fetch");
+
+	if (read_in_full(cmd.out, result->packhash, 5) != 5 ||
+	    (memcmp(result->packhash, "keep\t", 5) &&
+	     memcmp(result->packhash, "pack\t", 5)))
+		die("fetch-pack: expected pack or keep then TAB at start of http-fetch output");
+	result->created_keep = !memcmp(result->packhash, "keep\t", 5);
+
+	if (read_in_full(cmd.out, result->packhash,
+			 the_hash_algo->hexsz + 1) != the_hash_algo->hexsz + 1 ||
+	    result->packhash[the_hash_algo->hexsz] != '\n')
+		die("fetch-pack: expected hash then LF in http-fetch output");
+	result->packhash[the_hash_algo->hexsz] = '\0';
+
+	parse_gitmodules_oids(cmd.out, &result->gitmodules_found);
+
+	close(cmd.out);
+
+	if (finish_command(&cmd))
+		die("fetch-pack: unable to finish http-fetch");
+
+	if (memcmp(uri_with_hash, result->packhash, the_hash_algo->hexsz))
+		die("fetch-pack: pack downloaded from %s does not match expected hash %.*s",
+		    uri, (int) the_hash_algo->hexsz,
+		    uri_with_hash);
+}
+
+static void fetch_packfile_uris(const struct string_list *packfile_uris,
+				const struct strvec *index_pack_args,
+				struct oidset *gitmodules_found,
+				struct string_list *pack_lockfiles)
+{
+	struct fetch_packfile_uri_result *results;
+
+	/* Initialize the data. */
+	CALLOC_ARRAY(results, packfile_uris->nr);
+	for (size_t i = 0; i < packfile_uris->nr; i++)
+		oidset_init(&results[i].gitmodules_found, 0);
+
+	/* Perform the fetches. */
+	for (size_t i = 0; i < packfile_uris->nr; i++)
+		fetch_packfile_uri(packfile_uris->items[i].string,
+				   index_pack_args, &results[i]);
+
+	/* Aggregate results. */
+	for (size_t i = 0; i < packfile_uris->nr; i++) {
+		struct fetch_packfile_uri_result *result = &results[i];
+		const struct object_id *oid;
+		struct oidset_iter iter;
+
+		if (result->created_keep) {
+			char *lockfile = xstrfmt("%s/pack/pack-%s.keep",
+						 repo_get_object_directory(the_repository),
+						 result->packhash);
+			string_list_append_nodup(pack_lockfiles, lockfile);
+		}
+
+		oidset_iter_init(&result->gitmodules_found, &iter);
+		while ((oid = oidset_iter_next(&iter)))
+			oidset_insert(gitmodules_found, oid);
+
+		oidset_clear(&result->gitmodules_found);
+	}
+
+	free(results);
+}
+
 static struct ref *do_fetch_pack_v2(struct fetch_pack_args *args,
 				    int fd[2],
 				    const struct ref *orig_ref,
@@ -1692,7 +1784,6 @@ static struct ref *do_fetch_pack_v2(struct fetch_pack_args *args,
 	struct object_id common_oid;
 	int received_ready = 0;
 	struct string_list packfile_uris = STRING_LIST_INIT_DUP;
-	int i;
 	struct strvec index_pack_args = STRVEC_INIT;
 	const char *promisor_remote_config;
 
@@ -1853,59 +1944,8 @@ static struct ref *do_fetch_pack_v2(struct fetch_pack_args *args,
 		}
 	}
 
-	for (i = 0; i < packfile_uris.nr; i++) {
-		bool created_keep;
-		int j;
-		struct child_process cmd = CHILD_PROCESS_INIT;
-		char packhash[GIT_MAX_HEXSZ + 1];
-		const char *uri = packfile_uris.items[i].string +
-			the_hash_algo->hexsz + 1;
-
-		strvec_push(&cmd.args, "http-fetch");
-		strvec_pushf(&cmd.args, "--packfile=%.*s",
-			     (int) the_hash_algo->hexsz,
-			     packfile_uris.items[i].string);
-		for (j = 0; j < index_pack_args.nr; j++)
-			strvec_pushf(&cmd.args, "--index-pack-arg=%s",
-				     index_pack_args.v[j]);
-		strvec_push(&cmd.args, uri);
-		cmd.git_cmd = 1;
-		cmd.no_stdin = 1;
-		cmd.out = -1;
-		if (start_command(&cmd))
-			die("fetch-pack: unable to spawn http-fetch");
-
-		if (read_in_full(cmd.out, packhash, 5) != 5 ||
-		    (memcmp(packhash, "keep\t", 5) &&
-		     memcmp(packhash, "pack\t", 5)))
-			die("fetch-pack: expected pack or keep then TAB at start of http-fetch output");
-		created_keep = !memcmp(packhash, "keep\t", 5);
-
-		if (read_in_full(cmd.out, packhash,
-				 the_hash_algo->hexsz + 1) != the_hash_algo->hexsz + 1 ||
-		    packhash[the_hash_algo->hexsz] != '\n')
-			die("fetch-pack: expected hash then LF in http-fetch output");
-		packhash[the_hash_algo->hexsz] = '\0';
-
-		parse_gitmodules_oids(cmd.out, &fsck_options.gitmodules_found);
-
-		close(cmd.out);
-
-		if (finish_command(&cmd))
-			die("fetch-pack: unable to finish http-fetch");
-
-		if (memcmp(packfile_uris.items[i].string, packhash,
-			   the_hash_algo->hexsz))
-			die("fetch-pack: pack downloaded from %s does not match expected hash %.*s",
-			    uri, (int) the_hash_algo->hexsz,
-			    packfile_uris.items[i].string);
-
-		if (created_keep)
-			string_list_append_nodup(pack_lockfiles,
-						 xstrfmt("%s/pack/pack-%s.keep",
-							 repo_get_object_directory(the_repository),
-							 packhash));
-	}
+	fetch_packfile_uris(&packfile_uris, &index_pack_args,
+			    &fsck_options.gitmodules_found, pack_lockfiles);
 	string_list_clear(&packfile_uris, 0);
 	strvec_clear(&index_pack_args);
 
