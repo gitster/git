@@ -94,6 +94,15 @@ A value of 0 will give some reasonable default. If unset, it defaults to 1.
 For submodules, this setting can be overridden using the `submodule.fetchJobs`
 config setting.
 
+`fetch.packfileURIThreads`::
+	Specifies the number of threads used to download packfiles
+	advertised by the server via the `packfile-uris` capability in
+	parallel. Each packfile is downloaded via a separate
+	linkgit:git-http-fetch[1] process.
++
+A value of 0 will use a reasonable default based on the number of available
+CPUs. If unset, it defaults to 1, downloading packfiles sequentially.
+
 `fetch.writeCommitGraph`::
 	Set to true to write a commit-graph after every `git fetch` command
 	that downloads a pack-file from a remote. Using the `--split` option,

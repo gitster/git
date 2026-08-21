@@ -37,6 +37,7 @@
 #include "mergesort.h"
 #include "prio-queue.h"
 #include "promisor-remote.h"
+#include "thread-utils.h"
 
 static int transfer_unpack_limit = -1;
 static int fetch_unpack_limit = -1;
@@ -53,6 +54,7 @@ static struct shallow_lock shallow_lock;
 static const char *alternate_shallow_file;
 static struct strbuf fsck_msg_types = STRBUF_INIT;
 static struct string_list uri_protocols = STRING_LIST_INIT_DUP;
+static unsigned int packfile_uri_threads = 1;
 
 /* Remember to update object flag allocation in object.h */
 #define COMPLETE	(1U << 0)
@@ -1692,6 +1694,13 @@ static void fetch_packfile_uri(const char *uri_with_hash,
 	cmd.git_cmd = 1;
 	cmd.no_stdin = 1;
 	cmd.out = -1;
+
+	/*
+	 * Multiple threads may spawn and reap children concurrently in here.
+	 * This is safe because the child-cleanup bookkeeping in run-command.c,
+	 * which is not thread-safe, is only ever used when `clean_on_exit` is
+	 * set.
+	 */
 	if (start_command(&cmd))
 		die("fetch-pack: unable to spawn http-fetch");
 
@@ -1720,12 +1729,51 @@ static void fetch_packfile_uri(const char *uri_with_hash,
 		    uri_with_hash);
 }
 
+struct fetch_packfile_uris_state {
+	const struct string_list *packfile_uris;
+	const struct strvec *index_pack_args;
+	struct fetch_packfile_uri_result *results;
+	size_t next;
+	pthread_mutex_t lock;
+};
+
+static void *fetch_packfile_uris_thread(void *data)
+{
+	struct fetch_packfile_uris_state *state = data;
+
+	trace2_thread_start("fetch_packfile_uri");
+
+	for (;;) {
+		size_t i;
+
+		pthread_mutex_lock(&state->lock);
+		i = state->next++;
+		pthread_mutex_unlock(&state->lock);
+		if (i >= state->packfile_uris->nr)
+			break;
+
+		fetch_packfile_uri(state->packfile_uris->items[i].string,
+				   state->index_pack_args,
+				   &state->results[i]);
+	}
+
+	trace2_thread_exit();
+
+	return NULL;
+}
+
 static void fetch_packfile_uris(const struct string_list *packfile_uris,
 				const struct strvec *index_pack_args,
 				struct oidset *gitmodules_found,
 				struct string_list *pack_lockfiles)
 {
+	unsigned int nr_threads = packfile_uri_threads;
 	struct fetch_packfile_uri_result *results;
+
+	if (!nr_threads)
+		nr_threads = online_cpus();
+	if (nr_threads > packfile_uris->nr)
+		nr_threads = packfile_uris->nr;
 
 	/* Initialize the data. */
 	CALLOC_ARRAY(results, packfile_uris->nr);
@@ -1733,9 +1781,32 @@ static void fetch_packfile_uris(const struct string_list *packfile_uris,
 		oidset_init(&results[i].gitmodules_found, 0);
 
 	/* Perform the fetches. */
-	for (size_t i = 0; i < packfile_uris->nr; i++)
-		fetch_packfile_uri(packfile_uris->items[i].string,
-				   index_pack_args, &results[i]);
+	if (nr_threads > 1) {
+		struct fetch_packfile_uris_state state = {
+			.packfile_uris = packfile_uris,
+			.index_pack_args = index_pack_args,
+			.results = results,
+		};
+		pthread_t *threads;
+
+		pthread_mutex_init(&state.lock, NULL);
+		ALLOC_ARRAY(threads, nr_threads);
+
+		for (size_t i = 0; i < nr_threads; i++)
+			if (pthread_create(&threads[i], NULL,
+					   fetch_packfile_uris_thread, &state))
+				die(_("failed to create thread"));
+		for (size_t i = 0; i < nr_threads; i++)
+			if (pthread_join(threads[i], NULL))
+				die(_("failed to join thread"));
+
+		pthread_mutex_destroy(&state.lock);
+		free(threads);
+	} else {
+		for (size_t i = 0; i < packfile_uris->nr; i++)
+			fetch_packfile_uri(packfile_uris->items[i].string,
+					   index_pack_args, &results[i]);
+	}
 
 	/* Aggregate results. */
 	for (size_t i = 0; i < packfile_uris->nr; i++) {
@@ -2015,6 +2086,15 @@ static void fetch_pack_config(void)
 		if (!repo_config_get_string(the_repository, "fetch.uriprotocols", &str) && str) {
 			string_list_split(&uri_protocols, str, ",", -1);
 			free(str);
+		}
+	}
+
+	if (!repo_config_get_uint(the_repository, "fetch.packfileurithreads",
+				  &packfile_uri_threads)) {
+		if (!HAVE_THREADS && packfile_uri_threads != 1) {
+			warning(_("no threads support, ignoring %s"),
+				"fetch.packfileURIThreads");
+			packfile_uri_threads = 1;
 		}
 	}
 

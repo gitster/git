@@ -1270,6 +1270,50 @@ test_expect_success 'part of packfile response provided as URI' '
 	test_line_count = 6 filelist
 '
 
+test_expect_success 'packfile URIs are downloaded in parallel' '
+	P="$HTTPD_DOCUMENT_ROOT_PATH/http_parent" &&
+	rm -rf "$P" http_child log trace2.txt &&
+
+	git init "$P" &&
+	git -C "$P" config "uploadpack.allowsidebandall" "true" &&
+
+	for i in one two three
+	do
+		echo blob-$i >"$P"/blob-$i &&
+		git -C "$P" add blob-$i &&
+		configure_exclusion "$P" blob-$i >h-$i || return 1
+	done &&
+	git -C "$P" commit -m message &&
+
+	GIT_TRACE2_EVENT="$(pwd)/trace2.txt" GIT_TEST_SIDEBAND_ALL=1 git \
+		-c protocol.version=2 \
+		-c fetch.uriprotocols=http,https \
+		-c fetch.packfileurithreads=2 \
+		clone --quiet "$HTTPD_URL/smart/http_parent" http_child 2>err &&
+
+	# Ensure that all objects were found.
+	for i in one two three
+	do
+		git -C http_child cat-file -e "$(cat h-$i)" || return 1
+	done &&
+
+	# Ensure that there are exactly 4 packfiles with associated .idx.
+	ls http_child/.git/objects/pack/*.pack \
+	    http_child/.git/objects/pack/*.idx >filelist &&
+	test_line_count = 8 filelist &&
+
+	if test_have_prereq PTHREADS
+	then
+		# Ensure that exactly two worker threads were spawned.
+		git grep --no-index --only-matching "\"thread\":\"th[0-9]*:fetch_packfile_uri\"" trace2.txt >threads &&
+		sort -u <threads >threads.unique &&
+		test_line_count = 2 threads.unique &&
+		test_grep ! "warning: no threads support, ignoring fetch.packfileURIThreads" err
+	else
+		test_grep "warning: no threads support, ignoring fetch.packfileURIThreads" err
+	fi
+'
+
 test_expect_success 'packfile URIs with fetch instead of clone' '
 	P="$HTTPD_DOCUMENT_ROOT_PATH/http_parent" &&
 	rm -rf "$P" http_child log &&
