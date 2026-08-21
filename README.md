@@ -66,6 +66,8 @@ and the name as (depending on your mood):
    works for you. Angels sing, and a light suddenly fills the room.
  - "goddamn idiotic truckload of sh*t": when it breaks
 
+
+
 [INSTALL]: INSTALL
 [Documentation/gittutorial.adoc]: Documentation/gittutorial.adoc
 [Documentation/giteveryday.adoc]: Documentation/giteveryday.adoc
