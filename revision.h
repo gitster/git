@@ -351,6 +351,11 @@ struct rev_info {
 	/* range-diff */
 	const char *rdiff1;
 	const char *rdiff2;
+	/*
+	 * whether to use 'rdiff_notes_arg' or inherited
+	 * notes behavior
+	 */
+	bool rdiff_override_notes;
 	struct strvec rdiff_notes_arg;
 	int creation_factor;
 	const char *rdiff_title;

@@ -2625,6 +2625,19 @@ static int handle_revision_opt(struct rev_info *revs, int argc, const char **arg
 		revs->notes_opt.use_default_notes = 1;
 	} else if (!strcmp(arg, "--no-standard-notes")) {
 		revs->notes_opt.use_default_notes = 0;
+	} else if (!strcmp(arg, "--no-range-diff-notes")) {
+		strvec_clear(&revs->rdiff_notes_arg);
+		revs->rdiff_override_notes = 1;
+	} else if (!strcmp(arg, "--range-diff-notes")) {
+		/*
+		 * Allow the user to use '--no-range-diff-notes
+		 * --range-diff-notes' in order to go back to
+		 * using the 'format-patch' notes behavior
+		 */
+		revs->rdiff_override_notes = revs->rdiff_notes_arg.nr;
+	} else if (skip_prefix(arg, "--range-diff-notes=", &optarg)) {
+		strvec_pushf(&revs->rdiff_notes_arg, "--notes=%s", optarg);
+		revs->rdiff_override_notes = 1;
 	} else if (!strcmp(arg, "--oneline")) {
 		revs->verbose_header = 1;
 		get_commit_format("oneline", revs);

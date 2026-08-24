@@ -845,6 +845,111 @@ test_expect_success 'format-patch --range-diff with multiple notes' '
 	test_cmp expect actual
 '
 
+test_expect_success 'format-patch --range-diff --notes=custom --no-range-diff-notes' '
+	test_when_finished "git notes --ref=custom remove topic unmodified || :" &&
+	git notes --ref=custom add -m "topic note1" topic &&
+	git notes --ref=custom add -m "unmodified note1" unmodified &&
+	test_when_finished "rm -f 000?-*" &&
+	git format-patch --range-diff=$prev --notes=custom \
+		--no-range-diff-notes --cover-letter \
+		main..unmodified >actual &&
+	test_grep "^Notes (custom):" 0004-* &&
+	test_grep "^Range-diff:" 0000-cover-letter* &&
+	test_grep ! "## Notes (custom) ##" 0000-cover-letter*
+'
+
+test_expect_success 'format-patch --range-diff --range-diff-notes uses --notes behavior' '
+	test_when_finished "git notes --ref=custom remove topic unmodified || :" &&
+	git notes --ref=custom add -m "topic note1" topic &&
+	git notes --ref=custom add -m "unmodified note1" unmodified &&
+	test_when_finished "rm -f 000?-*" &&
+	git format-patch --range-diff=$prev --notes=custom \
+		--range-diff-notes --cover-letter \
+		main..unmodified >actual &&
+	test_grep "^Notes (custom):" 0004-* &&
+	test_grep "^Range-diff:" 0000-cover-letter* &&
+	test_grep "## Notes (custom) ##" 0000-cover-letter*
+'
+
+test_expect_success 'format-patch --range-diff --notes=patch --range-diff-notes=rdiff' '
+	test_when_finished "git notes --ref=patch remove topic unmodified || :" &&
+	git notes --ref=patch add -m "only for patch 1" topic &&
+	git notes --ref=patch add -m "only for patch 2" unmodified &&
+	test_when_finished "git notes --ref=rdiff remove topic unmodified || :" &&
+	git notes --ref=rdiff add -m "only for range diff 1" topic &&
+	git notes --ref=rdiff add -m "only for range diff 2" unmodified &&
+	test_when_finished "rm -f 000?-*" &&
+	git format-patch --range-diff=$prev --notes=patch \
+		--range-diff-notes=rdiff --cover-letter \
+		main..unmodified >actual &&
+	test_grep "^Notes (patch):" 0004-* &&
+	test_grep ! "^Notes (rdiff):" 0004-* &&
+	test_grep "^Range-diff:" 0000-cover-letter* &&
+	test_grep "## Notes (rdiff) ##" 0000-cover-letter* &&
+	test_grep ! "## Notes (patch) ##" 0000-cover-letter*
+'
+
+test_expect_success 'format-patch --range-diff --no-range-diff-notes --range-diff-notes uses --notes behavior' '
+	test_when_finished "git notes --ref=custom remove topic unmodified || :" &&
+	git notes --ref=custom add -m "topic note1" topic &&
+	git notes --ref=custom add -m "unmodified note1" unmodified &&
+	test_when_finished "rm -f 000?-*" &&
+	git format-patch --range-diff=$prev --notes=custom \
+		--no-range-diff-notes --range-diff-notes --cover-letter \
+		main..unmodified >actual &&
+	test_grep "^Notes (custom):" 0004-* &&
+	test_grep "^Range-diff:" 0000-cover-letter* &&
+	test_grep "## Notes (custom) ##" 0000-cover-letter*
+'
+
+test_expect_success 'format-patch --range-diff --range-diff-notes uses --notes behavior' '
+	test_when_finished "git notes --ref=custom remove topic unmodified || :" &&
+	git notes --ref=custom add -m "topic note1" topic &&
+	git notes --ref=custom add -m "unmodified note1" unmodified &&
+	test_when_finished "rm -f 000?-*" &&
+	git format-patch --range-diff=$prev --notes=custom \
+		--range-diff-notes --cover-letter \
+		main..unmodified >actual &&
+	test_grep "^Notes (custom):" 0004-* &&
+	test_grep "^Range-diff:" 0000-cover-letter* &&
+	test_grep "## Notes (custom) ##" 0000-cover-letter*
+'
+
+test_expect_success 'format-patch --range-diff --no-range-diff-notes does not use default notes' '
+	test_when_finished "git notes remove topic unmodified || :" &&
+	git notes add -m "topic note1" topic &&
+	git notes add -m "unmodified note1" unmodified &&
+	test_when_finished "rm -f 000?-*" &&
+	git format-patch --range-diff=$prev \
+		--no-range-diff-notes --cover-letter \
+		main..unmodified >actual &&
+	test_grep ! "^Notes:" 0004-* &&
+	test_grep "^Range-diff:" 0000-cover-letter* &&
+	test_grep ! "## Notes ##" 0000-cover-letter*
+'
+
+test_expect_success 'format-patch --range-diff --no-range-diff-notes on single patch' '
+	test_when_finished "git notes --ref=custom remove HEAD unmodified || :" &&
+	git notes --ref=custom add -m "topic note (custom)" HEAD &&
+	git notes --ref=custom add -m "unmodified note (custom)" unmodified &&
+	git format-patch --notes=custom --range-diff=$prev \
+		--no-range-diff-notes -1 --stdout >actual &&
+	test_grep "Notes (custom):" actual &&
+	test_grep "^Range-diff:" actual &&
+	test_grep ! "## Notes (custom) ##" actual
+'
+
+test_expect_success 'format-patch --range-diff --range-diff-notes=custom on single patch' '
+	test_when_finished "git notes --ref=custom remove HEAD unmodified || :" &&
+	git notes --ref=custom add -m "topic note (custom)" HEAD &&
+	git notes --ref=custom add -m "unmodified note (custom)" unmodified &&
+	git format-patch --no-notes --range-diff=$prev \
+		--range-diff-notes=custom -1 --stdout >actual &&
+	test_grep ! "Notes (custom):" actual &&
+	test_grep "^Range-diff:" actual &&
+	test_grep "## Notes (custom) ##" actual
+'
+
 test_expect_success '--left-only/--right-only' '
 	git switch --orphan left-right &&
 	test_commit first &&

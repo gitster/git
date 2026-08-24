@@ -1335,7 +1335,10 @@ static int get_notes_refs(struct string_list_item *item, void *arg)
 
 static void get_notes_args(struct rev_info *rev)
 {
-	if (!rev->show_notes) {
+	if (rev->rdiff_override_notes) {
+		if (!rev->rdiff_notes_arg.nr)
+			strvec_push(&rev->rdiff_notes_arg, "--no-notes");
+	} else if (!rev->show_notes) {
 		strvec_push(&rev->rdiff_notes_arg, "--no-notes");
 	} else if (rev->notes_opt.use_default_notes > 0 ||
 		   (rev->notes_opt.use_default_notes == -1 &&
