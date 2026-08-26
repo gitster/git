@@ -1338,14 +1338,14 @@ static int parse_and_validate_options(int argc, const char *argv[],
 	}
 	if (fixup_message && squash_message)
 		die(_("options '%s' and '%s' cannot be used together"), "--squash", "--fixup");
-	die_for_incompatible_opt4(!!use_message, "-C",
-				  !!edit_message, "-c",
-				  !!logfile, "-F",
-				  !!fixup_message, "--fixup");
-	die_for_incompatible_opt4(have_option_m, "-m",
-				  !!edit_message, "-c",
-				  !!use_message, "-C",
-				  !!logfile, "-F");
+	die_for_incompatible_opt4("-C", !!use_message,
+				  "-c", !!edit_message,
+				  "-F", !!logfile,
+				  "--fixup", !!fixup_message);
+	die_for_incompatible_opt4("-m", have_option_m,
+				  "-c", !!edit_message,
+				  "-C", !!use_message,
+				  "-F", !!logfile);
 	if (use_message || edit_message || logfile ||fixup_message || have_option_m)
 		FREE_AND_NULL(template_file);
 	if (edit_message)
@@ -1371,10 +1371,10 @@ static int parse_and_validate_options(int argc, const char *argv[],
 	if (patch_interactive)
 		interactive = 1;
 
-	die_for_incompatible_opt4(also, "-i/--include",
-				  only, "-o/--only",
-				  all, "-a/--all",
-				  interactive, "--interactive/-p/--patch");
+	die_for_incompatible_opt4("-i/--include", also,
+				  "-o/--only", only,
+				  "-a/--all", all,
+				  "--interactive/-p/--patch", interactive);
 	if (fixup_message) {
 		/*
 		 * We limit --fixup's suboptions to only alpha characters.

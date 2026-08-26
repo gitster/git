@@ -600,10 +600,10 @@ int cmd_merge_tree(int argc,
 	if (quiet && o.show_messages == -1)
 		o.show_messages = 0;
 	o.merge_options.mergeability_only = quiet;
-	die_for_incompatible_opt2(quiet, "--quiet", o.show_messages, "--messages");
-	die_for_incompatible_opt2(quiet, "--quiet", o.name_only, "--name-only");
-	die_for_incompatible_opt2(quiet, "--quiet", o.use_stdin, "--stdin");
-	die_for_incompatible_opt2(quiet, "--quiet", !line_termination, "-z");
+	die_for_incompatible_opt2("--quiet", quiet, "--messages", o.show_messages);
+	die_for_incompatible_opt2("--quiet", quiet, "--name-only", o.name_only);
+	die_for_incompatible_opt2("--quiet", quiet, "--stdin", o.use_stdin);
+	die_for_incompatible_opt2("--quiet", quiet, "-z", !line_termination);
 
 	if (xopts.nr && o.mode == MODE_TRIVIAL)
 		die(_("--trivial-merge is incompatible with all other options"));

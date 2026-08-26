@@ -441,29 +441,28 @@ void NORETURN usage_msg_optf(const char *fmt,
 			     const char * const *usagestr,
 			     const struct option *options, ...);
 
-void die_for_incompatible_opt4(int opt1, const char *opt1_name,
-			       int opt2, const char *opt2_name,
-			       int opt3, const char *opt3_name,
-			       int opt4, const char *opt4_name);
+void die_for_incompatible_opt4(const char *opt1_name, int opt1,
+			       const char *opt2_name, int opt2,
+			       const char *opt3_name, int opt3,
+			       const char *opt4_name, int opt4);
 
 
-static inline void die_for_incompatible_opt3(int opt1, const char *opt1_name,
-					     int opt2, const char *opt2_name,
-					     int opt3, const char *opt3_name)
+static inline void die_for_incompatible_opt3(const char *opt1_name, int opt1,
+					     const char *opt2_name, int opt2,
+					     const char *opt3_name, int opt3)
 {
-	die_for_incompatible_opt4(opt1, opt1_name,
-				  opt2, opt2_name,
-				  opt3, opt3_name,
-				  0, "");
+	die_for_incompatible_opt4(opt1_name, opt1,
+				  opt2_name, opt2,
+				  opt3_name, opt3,
+				  "", 0);
 }
 
-static inline void die_for_incompatible_opt2(int opt1, const char *opt1_name,
-					     int opt2, const char *opt2_name)
+static inline void die_for_incompatible_opt2(const char *opt1_name, int opt1,
+					     const char *opt2_name, int opt2)
 {
-	die_for_incompatible_opt4(opt1, opt1_name,
-				  opt2, opt2_name,
-				  0, "",
-				  0, "");
+	die_for_incompatible_opt4(opt1_name, opt1,
+				  opt2_name, opt2,
+				  "", 0, "", 0);
 }
 
 /*

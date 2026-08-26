@@ -773,9 +773,9 @@ int cmd_difftool(int argc,
 	} else if (dir_diff)
 		die(_("options '%s' and '%s' cannot be used together"), "--dir-diff", "--no-index");
 
-	die_for_incompatible_opt3(use_gui_tool == 1, "--gui",
-				  !!difftool_cmd, "--tool",
-				  !!extcmd, "--extcmd");
+	die_for_incompatible_opt3("--gui", use_gui_tool == 1,
+				  "--tool", !!difftool_cmd,
+				  "--extcmd", !!extcmd);
 
 	/*
 	 * Explicitly specified GUI option is forwarded to git-mergetool--lib.sh;

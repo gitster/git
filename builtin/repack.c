@@ -282,8 +282,8 @@ int cmd_repack(int argc,
 	po_args.depth = xstrdup_or_null(opt_depth);
 	po_args.threads = xstrdup_or_null(opt_threads);
 
-	die_for_incompatible_opt2(drop_filtered, "--drop-filtered",
-		!!filter_to, "--filter-to");
+	die_for_incompatible_opt2("--drop-filtered", drop_filtered,
+				  "--filter-to", !!filter_to);
 
 	if (dry_run && !drop_filtered)
 		die(_("--dry-run only takes effect with --drop-filtered"));
@@ -397,9 +397,11 @@ int cmd_repack(int argc,
 	if (delete_redundant && repo->repository_format_precious_objects)
 		die(_("cannot delete packs in a precious-objects repo"));
 
-	die_for_incompatible_opt3(unpack_unreachable || (pack_everything & LOOSEN_UNREACHABLE), "-A",
-				  keep_unreachable, "-k/--keep-unreachable",
-				  pack_everything & PACK_CRUFT, "--cruft");
+	die_for_incompatible_opt3("-A",
+				  unpack_unreachable ||
+				  (pack_everything & LOOSEN_UNREACHABLE),
+				  "-k/--keep-unreachable", keep_unreachable,
+				  "--cruft", pack_everything & PACK_CRUFT);
 
 	if (pack_everything & PACK_CRUFT)
 		pack_everything |= ALL_INTO_ONE;

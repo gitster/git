@@ -1686,10 +1686,10 @@ static int maintenance_run(int argc, const char **argv, const char *prefix,
 			     builtin_maintenance_run_usage,
 			     PARSE_OPT_STOP_AT_NON_OPTION);
 
-	die_for_incompatible_opt2(opts.auto_flag, "--auto",
-				  opts.schedule, "--schedule=");
-	die_for_incompatible_opt2(selected_tasks.nr, "--task=",
-				  opts.schedule, "--schedule=");
+	die_for_incompatible_opt2("--auto", opts.auto_flag,
+				  "--schedule=", opts.schedule);
+	die_for_incompatible_opt2("--task=", selected_tasks.nr,
+				  "--schedule=", opts.schedule);
 
 	gc_config(&cfg);
 	initialize_task_config(&opts, &selected_tasks);

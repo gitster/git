@@ -1535,10 +1535,10 @@ void NORETURN usage_msg_optf(const char * const fmt,
 	usage_msg_opt(msg.buf, usagestr, options);
 }
 
-void die_for_incompatible_opt4(int opt1, const char *opt1_name,
-			       int opt2, const char *opt2_name,
-			       int opt3, const char *opt3_name,
-			       int opt4, const char *opt4_name)
+void die_for_incompatible_opt4(const char *opt1_name, int opt1,
+			       const char *opt2_name, int opt2,
+			       const char *opt3_name, int opt3,
+			       const char *opt4_name, int opt4)
 {
 	int count = 0;
 	const char *options[4];

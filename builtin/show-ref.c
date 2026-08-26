@@ -337,9 +337,10 @@ struct repository *repo UNUSED)
 	argc = parse_options(argc, argv, prefix, show_ref_options,
 			     show_ref_usage, 0);
 
-	die_for_incompatible_opt3(exclude_existing_opts.enabled, "--exclude-existing",
-				  verify, "--verify",
-				  exists, "--exists");
+	die_for_incompatible_opt3("--exclude-existing",
+				  exclude_existing_opts.enabled,
+				  "--verify", verify,
+				  "--exists", exists);
 
 	if (exclude_existing_opts.enabled)
 		return cmd_show_ref__exclude_existing(&exclude_existing_opts);

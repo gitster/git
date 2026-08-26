@@ -511,9 +511,9 @@ int cmd_add(int argc,
 	else if (take_worktree_changes && ADDREMOVE_DEFAULT)
 		addremove = 0; /* "-u" was given but not "-A" */
 
-	die_for_incompatible_opt3(take_worktree_changes, "-u/--update",
-				  0 < addremove_explicit, "-A/--all",
-				  add_resolved, "--resolved");
+	die_for_incompatible_opt3("-u/--update", take_worktree_changes,
+				  "-A/--all", 0 < addremove_explicit,
+				  "--resolved", add_resolved);
 
 	if (!show_only && ignore_missing)
 		die(_("the option '%s' requires '%s'"), "--ignore-missing", "--dry-run");

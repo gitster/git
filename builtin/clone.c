@@ -1361,10 +1361,10 @@ int cmd_clone(int argc,
 
 	transport_set_option(transport, TRANS_OPT_KEEP, "yes");
 
-	die_for_incompatible_opt2(!!option_rev, "--revision",
-				  !!option_branch, "--branch");
-	die_for_incompatible_opt2(!!option_rev, "--revision",
-				  option_mirror, "--mirror");
+	die_for_incompatible_opt2("--revision", !!option_rev,
+				  "--branch", !!option_branch);
+	die_for_incompatible_opt2("--revision", !!option_rev,
+				  "--mirror", option_mirror);
 
 	if (reject_shallow)
 		transport_set_option(transport, TRANS_OPT_REJECT_SHALLOW, "1");

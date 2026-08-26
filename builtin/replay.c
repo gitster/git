@@ -123,15 +123,15 @@ int cmd_replay(int argc,
 		usage_with_options(replay_usage, replay_options);
 	}
 
-	die_for_incompatible_opt3(!!opts.onto, "--onto",
-				  !!opts.advance, "--advance",
-				  !!opts.revert, "--revert");
-	die_for_incompatible_opt2(!!opts.advance, "--advance",
-				  opts.contained, "--contained");
-	die_for_incompatible_opt2(!!opts.revert, "--revert",
-				  opts.contained, "--contained");
-	die_for_incompatible_opt2(!!opts.ref, "--ref",
-				  !!opts.contained, "--contained");
+	die_for_incompatible_opt3("--onto", !!opts.onto,
+				  "--advance", !!opts.advance,
+				  "--revert", !!opts.revert);
+	die_for_incompatible_opt2("--advance", !!opts.advance,
+				  "--contained", opts.contained);
+	die_for_incompatible_opt2("--revert", !!opts.revert,
+				  "--contained", opts.contained);
+	die_for_incompatible_opt2("--ref", !!opts.ref,
+				  "--contained", !!opts.contained);
 
 	/* Parse ref action mode from command line or config */
 	ref_mode = get_ref_action_mode(repo, ref_action);

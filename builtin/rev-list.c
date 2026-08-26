@@ -755,9 +755,9 @@ int cmd_rev_list(int argc,
 		}
 	}
 
-	die_for_incompatible_opt2(revs.exclude_promisor_objects,
-				  "--exclude_promisor_objects",
-				  arg_missing_action, "--missing");
+	die_for_incompatible_opt2("--exclude_promisor_objects",
+				  revs.exclude_promisor_objects,
+				  "--missing", arg_missing_action);
 
 	if (arg_missing_action)
 		revs.do_not_die_on_missing_objects = 1;

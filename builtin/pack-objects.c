@@ -5340,10 +5340,10 @@ int cmd_pack_objects(int argc,
 		strvec_push(&rp, "--unpacked");
 	}
 
-	die_for_incompatible_opt2(exclude_promisor_objects,
-				  "--exclude-promisor-objects",
-				  exclude_promisor_objects_best_effort,
-				  "--exclude-promisor-objects-best-effort");
+	die_for_incompatible_opt2("--exclude-promisor-objects",
+				  exclude_promisor_objects,
+				  "--exclude-promisor-objects-best-effort",
+				  exclude_promisor_objects_best_effort);
 	if (exclude_promisor_objects) {
 		fetch_if_missing = 0;
 
@@ -5385,14 +5385,13 @@ int cmd_pack_objects(int argc,
 	if (!pack_to_stdout && thin)
 		die(_("--thin cannot be used to build an indexable pack"));
 
-	die_for_incompatible_opt2(keep_unreachable, "--keep-unreachable",
-				  unpack_unreachable, "--unpack-unreachable");
+	die_for_incompatible_opt2("--keep-unreachable", keep_unreachable,
+				  "--unpack-unreachable", unpack_unreachable);
 	if (!rev_list_all || !rev_list_reflog || !rev_list_index)
 		unpack_unreachable_expiration = 0;
 
-	die_for_incompatible_opt2(stdin_packs, "--stdin-packs",
-				  filter_options.choice, "--filter");
-
+	die_for_incompatible_opt2("--stdin-packs", stdin_packs,
+				  "--filter", filter_options.choice);
 
 	if (stdin_packs && use_internal_rev_list)
 		die(_("cannot use internal rev list with --stdin-packs"));
@@ -5400,8 +5399,8 @@ int cmd_pack_objects(int argc,
 	if (cruft) {
 		if (use_internal_rev_list)
 			die(_("cannot use internal rev list with --cruft"));
-		die_for_incompatible_opt2(stdin_packs, "--stdin-packs",
-					  cruft, "--cruft");
+		die_for_incompatible_opt2("--stdin-packs", stdin_packs,
+					  "--cruft", cruft);
 	}
 
 	/*

@@ -2352,27 +2352,27 @@ static int handle_revision_opt(struct rev_info *revs, int argc, const char **arg
 
 	if ((argcount = parse_long_opt("max-count", argv, &optarg))) {
 		if (revs->max_count_type == 1)
-			die_for_incompatible_opt2(1, "--max-count", 1,
-						  "--max-count-oldest");
+			die_for_incompatible_opt2("--max-count", 1,
+						  "--max-count-oldest", 1);
 		revs->max_count = parse_count(optarg);
 		revs->no_walk = 0;
 		revs->max_count_type = 0;
 		return argcount;
 	} else if ((argcount = parse_long_opt("max-count-oldest", argv, &optarg))) {
 		if (revs->max_count_type == 0 && revs->max_count != -1)
-			die_for_incompatible_opt2(1, "--max-count", 1,
-						  "--max-count-oldest");
+			die_for_incompatible_opt2("--max-count", 1,
+						  "--max-count-oldest", 1);
 		if (revs->skip_count > 0)
-			die_for_incompatible_opt2(1, "--skip", 1,
-						  "--max-count-oldest");
+			die_for_incompatible_opt2("--skip", 1,
+						  "--max-count-oldest", 1);
 		revs->max_count = parse_count(optarg);
 		revs->no_walk = 0;
 		revs->max_count_type = 1;
 		revs->max_count_stage = 0;
 	} else if ((argcount = parse_long_opt("skip", argv, &optarg))) {
 		if (revs->max_count_type == 1)
-			die_for_incompatible_opt2(1, "--skip", 1,
-						  "--max-count-oldest");
+			die_for_incompatible_opt2("--skip", 1,
+						  "--max-count-oldest", 1);
 		revs->skip_count = parse_count(optarg);
 		return argcount;
 	} else if ((*arg == '-') && isdigit(arg[1])) {
@@ -3205,12 +3205,12 @@ int setup_revisions(int argc, const char **argv, struct rev_info *revs, struct s
 	/*
 	 * Limitations on the graph functionality
 	 */
-	die_for_incompatible_opt3(!!revs->graph, "--graph",
-				  !!revs->reverse, "--reverse",
-				  !!revs->reflog_info, "--walk-reflogs");
+	die_for_incompatible_opt3("--graph", !!revs->graph,
+				  "--reverse", !!revs->reverse,
+				  "--walk-reflogs", !!revs->reflog_info);
 
-	die_for_incompatible_opt2(!!revs->boundary, "--boundary",
-				  !!revs->maximal_only, "--maximal-only");
+	die_for_incompatible_opt2("--boundary", !!revs->boundary,
+				  "--maximal-only", !!revs->maximal_only);
 
 	if (revs->no_walk && revs->graph)
 		die(_("options '%s' and '%s' cannot be used together"), "--no-walk", "--graph");

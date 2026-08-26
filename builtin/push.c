@@ -753,10 +753,10 @@ int cmd_push(int argc,
 
 	refspec_init_push(&rs, the_hash_algo);
 
-	die_for_incompatible_opt4(deleterefs, "--delete",
-				  tags, "--tags",
-				  flags & TRANSPORT_PUSH_ALL, "--all/--branches",
-				  flags & TRANSPORT_PUSH_MIRROR, "--mirror");
+	die_for_incompatible_opt4("--delete", deleterefs,
+				  "--tags", tags,
+				  "--all/--branches", flags & TRANSPORT_PUSH_ALL,
+				  "--mirror", flags & TRANSPORT_PUSH_MIRROR);
 	if (deleterefs && argc < 2)
 		die(_("--delete doesn't make sense without any refs"));
 

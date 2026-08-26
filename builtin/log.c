@@ -2247,9 +2247,9 @@ int cmd_format_patch(int argc,
 	if (rev.show_notes)
 		load_display_notes(&rev.notes_opt);
 
-	die_for_incompatible_opt3(use_stdout, "--stdout",
-				  rev.diffopt.close_file, "--output",
-				  !!output_directory, "--output-directory");
+	die_for_incompatible_opt3("--stdout", use_stdout,
+				  "--output", rev.diffopt.close_file,
+				  "--output-directory", !!output_directory);
 
 	if (use_stdout && stdout_mboxrd)
 		rev.commit_format = CMIT_FMT_MBOXRD;
