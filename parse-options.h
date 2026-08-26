@@ -441,11 +441,18 @@ void NORETURN usage_msg_optf(const char *fmt,
 			     const char * const *usagestr,
 			     const struct option *options, ...);
 
-void die_for_incompatible_opt4(const char *opt1_name, int opt1,
-			       const char *opt2_name, int opt2,
-			       const char *opt3_name, int opt3,
-			       const char *opt4_name, int opt4);
+void die_for_incompatible_opts(const char *opt1_name, int opt1, ...);
 
+static inline void die_for_incompatible_opt4(const char *opt1_name, int opt1,
+					     const char *opt2_name, int opt2,
+					     const char *opt3_name, int opt3,
+					     const char *opt4_name, int opt4)
+{
+	die_for_incompatible_opts(opt1_name, opt1,
+				  opt2_name, opt2,
+				  opt3_name, opt3,
+				  opt4_name, opt4, NULL);
+}
 
 static inline void die_for_incompatible_opt3(const char *opt1_name, int opt1,
 					     const char *opt2_name, int opt2,
