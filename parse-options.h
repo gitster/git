@@ -441,29 +441,43 @@ void NORETURN usage_msg_optf(const char *fmt,
 			     const char * const *usagestr,
 			     const struct option *options, ...);
 
-void die_for_incompatible_opt4(int opt1, const char *opt1_name,
-			       int opt2, const char *opt2_name,
-			       int opt3, const char *opt3_name,
-			       int opt4, const char *opt4_name);
+/*
+ * Take N pairs of <bool optN, const char *opt_nameN> as parameters,
+ * followed by EOF.  The caller declares "The options opt_name1 through
+ * opt_nameN exist and the command line has options whose optN is set."
+ * and asks that an error be raised if two or more of these options are
+ * set at the same time.
+ */
+void die_for_incompatible_opts(bool opt1, const char *opt1_name, ...);
 
+static inline void die_for_incompatible_opt4(int opt1, const char *opt1_name,
+					     int opt2, const char *opt2_name,
+					     int opt3, const char *opt3_name,
+					     int opt4, const char *opt4_name)
+{
+	die_for_incompatible_opts(!!opt1, opt1_name,
+				  !!opt2, opt2_name,
+				  !!opt3, opt3_name,
+				  !!opt4, opt4_name,
+				  EOF);
+}
 
 static inline void die_for_incompatible_opt3(int opt1, const char *opt1_name,
 					     int opt2, const char *opt2_name,
 					     int opt3, const char *opt3_name)
 {
-	die_for_incompatible_opt4(opt1, opt1_name,
-				  opt2, opt2_name,
-				  opt3, opt3_name,
-				  0, "");
+	die_for_incompatible_opts(!!opt1, opt1_name,
+				  !!opt2, opt2_name,
+				  !!opt3, opt3_name,
+				  EOF);
 }
 
 static inline void die_for_incompatible_opt2(int opt1, const char *opt1_name,
 					     int opt2, const char *opt2_name)
 {
-	die_for_incompatible_opt4(opt1, opt1_name,
-				  opt2, opt2_name,
-				  0, "",
-				  0, "");
+	die_for_incompatible_opts(!!opt1, opt1_name,
+				  !!opt2, opt2_name,
+				  EOF);
 }
 
 /*

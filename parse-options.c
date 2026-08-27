@@ -1535,26 +1535,31 @@ void NORETURN usage_msg_optf(const char * const fmt,
 	usage_msg_opt(msg.buf, usagestr, options);
 }
 
-void die_for_incompatible_opt4(int opt1, const char *opt1_name,
-			       int opt2, const char *opt2_name,
-			       int opt3, const char *opt3_name,
-			       int opt4, const char *opt4_name)
+void die_for_incompatible_opts(bool opt1, const char *opt1_name, ...)
 {
-	int count = 0;
+	unsigned count = 0;
 	const char *options[4];
+	va_list ap;
 
 	if (opt1)
 		options[count++] = opt1_name;
-	if (opt2)
-		options[count++] = opt2_name;
-	if (opt3)
-		options[count++] = opt3_name;
-	if (opt4)
-		options[count++] = opt4_name;
+	va_start(ap, opt1_name);
+	while (count < ARRAY_SIZE(options)) {
+		int opt_set = va_arg(ap, int);
+		const char *opt_name;
+
+		if (opt_set == EOF)
+			break;
+		opt_name = va_arg(ap, const char *);
+		if (opt_set)
+			options[count++] = opt_name;
+	}
+	va_end(ap);
+
 	switch (count) {
 	case 4:
 		die(_("options '%s', '%s', '%s', and '%s' cannot be used together"),
-		    opt1_name, opt2_name, opt3_name, opt4_name);
+		    options[0], options[1], options[2], options[3]);
 		break;
 	case 3:
 		die(_("options '%s', '%s', and '%s' cannot be used together"),
