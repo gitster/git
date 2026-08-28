@@ -1,6 +1,9 @@
 #define USE_THE_REPOSITORY_VARIABLE
 
 #include "git-compat-util.h"
+#include "commit.h"
+#include "hex.h"
+#include "hook.h"
 #include "object-name.h"
 #include "remote.h"
 #include "refspec.h"
@@ -8,6 +11,7 @@
 #include "checkout.h"
 #include "config.h"
 #include "strbuf.h"
+#include "strvec.h"
 
 struct tracking_name_data {
 	/* const */ char *src_ref;
@@ -72,4 +76,22 @@ char *unique_tracking_name(const char *name, struct object_id *oid,
 		return cb_data.default_dst_ref;
 	}
 	return NULL;
+}
+
+int post_checkout_hook(struct commit *old_commit, struct commit *new_commit,
+		       int changed)
+{
+	struct run_hooks_opt opt = RUN_HOOKS_OPT_INIT_FORCE_SERIAL;
+
+	/*
+	 * "new_commit" can be NULL when checking out from the index before
+	 * a commit exists.
+	 */
+	strvec_pushl(&opt.args,
+		     oid_to_hex(old_commit ? &old_commit->object.oid : null_oid(the_hash_algo)),
+		     oid_to_hex(new_commit ? &new_commit->object.oid : null_oid(the_hash_algo)),
+		     changed ? "1" : "0",
+		     NULL);
+
+	return run_hooks_opt(the_repository, "post-checkout", &opt);
 }

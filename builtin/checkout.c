@@ -124,24 +124,6 @@ static void branch_info_release(struct branch_info *info)
 	free(info->checkout);
 }
 
-static int post_checkout_hook(struct commit *old_commit, struct commit *new_commit,
-			      int changed)
-{
-	struct run_hooks_opt opt = RUN_HOOKS_OPT_INIT_FORCE_SERIAL;
-
-	/*
-	 * "new_commit" can be NULL when checking out from the index before
-	 * a commit exists.
-	 */
-	strvec_pushl(&opt.args,
-		     oid_to_hex(old_commit ? &old_commit->object.oid : null_oid(the_hash_algo)),
-		     oid_to_hex(new_commit ? &new_commit->object.oid : null_oid(the_hash_algo)),
-		     changed ? "1" : "0",
-		     NULL);
-
-	return run_hooks_opt(the_repository, "post-checkout", &opt);
-}
-
 /*
  * Handle a tree object and determine if we need to recurse into the
  * tree (READ_TREE_RECURSIVE) or skip it (0).
