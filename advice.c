@@ -40,10 +40,12 @@ enum advice_level {
 	ADVICE_LEVEL_ENABLED,
 };
 
-static struct {
+struct advice_setting {
 	const char *key;
 	enum advice_level level;
-} advice_setting[] = {
+};
+
+static struct advice_setting advice_setting[] = {
 	[ADVICE_ADD_EMBEDDED_REPO]			= { "addEmbeddedRepo" },
 	[ADVICE_ADD_EMPTY_PATHSPEC]			= { "addEmptyPathspec" },
 	[ADVICE_ADD_IGNORED_FILE]			= { "addIgnoredFile" },
@@ -98,16 +100,17 @@ static const char turn_off_instructions[] =
 N_("\n"
    "Disable this message with \"git config set advice.%s false\"");
 
-static void vadvise(const char *advice, int display_instructions,
-		    const char *key, va_list params)
+static void vadvise(const char *advice,
+	const struct advice_setting *setting, va_list params)
 {
 	struct strbuf buf = STRBUF_INIT;
 	const char *cp, *np;
 
 	strbuf_vaddf(&buf, advice, params);
 
-	if (display_instructions)
-		strbuf_addf(&buf, turn_off_instructions, key);
+	if (setting && setting->level == ADVICE_LEVEL_NONE) {
+		strbuf_addf(&buf, turn_off_instructions,
+					setting->key);
 
 	for (cp = buf.buf; *cp; cp = np) {
 		np = strchrnul(cp, '\n');
@@ -126,7 +129,7 @@ void advise(const char *advice, ...)
 {
 	va_list params;
 	va_start(params, advice);
-	vadvise(advice, 0, "", params);
+	vadvise(advice, NULL, params);
 	va_end(params);
 }
 
@@ -155,8 +158,7 @@ void advise_if_enabled(enum advice_type type, const char *advice, ...)
 		return;
 
 	va_start(params, advice);
-	vadvise(advice, !advice_setting[type].level, advice_setting[type].key,
-		params);
+	vadvise(advice, &advice_setting[type], params);
 	va_end(params);
 }
 
