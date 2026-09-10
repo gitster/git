@@ -128,6 +128,10 @@ static void vadvise(const char *advice,
 		case CONFIG_SCOPE_SYSTEM:
 			scope = " --system";
 			break;
+		default:
+			BUG("advice setting at a wrong config scope %d",
+			    setting->scope_hint);
+			break;
 		}
 		strbuf_addf(&buf, turn_off_instructions,
 				scope, setting->key);
