@@ -42,6 +42,7 @@ enum advice_level {
 
 struct advice_setting {
 	const char *key;
+	enum config_scope scope_hint;
 	enum advice_level level;
 };
 
@@ -96,9 +97,16 @@ static struct advice_setting advice_setting[] = {
 	[ADVICE_WORKTREE_ADD_ORPHAN]			= { "worktreeAddOrphan" },
 };
 
+/*
+ * TRANSLATORS: This is a command line that the user should run.
+ *              Do not translate the part inside double quotes.
+ *              The first %s is the config scope (e.g. " --global"),
+ *              the second %s is the advice key (e.g. "defaultBranchName").
+ */
+
 static const char turn_off_instructions[] =
 N_("\n"
-   "Disable this message with \"git config set advice.%s false\"");
+   "Disable this message with \"git config set%s advice.%s false\"");
 
 static void vadvise(const char *advice,
 	const struct advice_setting *setting, va_list params)
@@ -109,8 +117,21 @@ static void vadvise(const char *advice,
 	strbuf_vaddf(&buf, advice, params);
 
 	if (setting && setting->level == ADVICE_LEVEL_NONE) {
+		const char *scope = "";
+		switch (setting->scope_hint) {
+		case CONFIG_SCOPE_LOCAL:
+		case CONFIG_SCOPE_UNKNOWN:
+			break;
+		case CONFIG_SCOPE_GLOBAL:
+			scope = " --global";
+			break;
+		case CONFIG_SCOPE_SYSTEM:
+			scope = " --system";
+			break;
+		}
 		strbuf_addf(&buf, turn_off_instructions,
-					setting->key);
+				scope, setting->key);
+	}
 
 	for (cp = buf.buf; *cp; cp = np) {
 		np = strchrnul(cp, '\n');
