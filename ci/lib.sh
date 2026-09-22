@@ -326,6 +326,12 @@ pull_request,*|push,*next*|push,*master*|push,*main*|push,*maint*)
 esac
 
 case "$distro" in
+debian-12)
+	# Debian 12's curl 7.88.1 mishandles early HTTP/2 responses; see
+	# https://github.com/curl/curl/pull/11756. Skip the half-auth
+	# clone and its dependent fetch until Debian has the fix.
+	export GIT_SKIP_TESTS="$GIT_SKIP_TESTS t5559.15 t5559.16"
+	;;
 ubuntu-*)
 	# Python 2 is end of life, and Ubuntu 23.04 and newer don't actually
 	# have it anymore. We thus only test with Python 2 on older LTS
