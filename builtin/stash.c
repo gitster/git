@@ -664,6 +664,8 @@ static enum stash_apply_result do_apply_stash(const char *prefix,
 				repo_get_index_file(the_repository), 0, NULL))
 		return error(_("cannot apply a stash in the middle of a merge"));
 
+	init_ui_merge_options(&o, the_repository);
+
 	if (index) {
 		if (oideq(&info->b_tree, &info->i_tree) ||
 		    oideq(&c_tree, &info->i_tree)) {
@@ -694,8 +696,6 @@ static enum stash_apply_result do_apply_stash(const char *prefix,
 			repo_read_index(the_repository);
 		}
 	}
-
-	init_ui_merge_options(&o, the_repository);
 
 	o.branch1 = label_ours ? label_ours : "Updated upstream";
 	o.branch2 = label_theirs ? label_theirs : "Stashed changes";
