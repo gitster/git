@@ -58,6 +58,122 @@ test_expect_success 'branch deletion rejects a concurrent update' '
 	test_cmp_rev POST refs/heads/delete-race
 '
 
+test_expect_success 'hook gets old values when pruning remote refs' '
+	test_when_finished "rm -rf empty.git prune" &&
+	git init --bare empty.git &&
+	git init prune &&
+	(
+		cd prune &&
+		git remote add origin ../empty.git &&
+		git commit --allow-empty -m one &&
+		one=$(git rev-parse HEAD) &&
+		git commit --allow-empty -m two &&
+		two=$(git rev-parse HEAD) &&
+		git update-ref refs/remotes/origin/remote-prune-z "$one" &&
+		git update-ref refs/remotes/origin/remote-prune-a "$two"
+	) &&
+	test_hook -C prune reference-transaction <<-\EOF &&
+		if test "$1" = committed
+		then
+			# Ignore backend-internal zero-to-zero records.
+			while read -r old new ref
+			do
+				case "$old" in
+				*[!0]*)
+					echo "$old $new $ref"
+					;;
+				esac
+			done >>actual
+		fi
+	EOF
+	(
+		cd prune &&
+		one=$(git rev-parse HEAD^) &&
+		two=$(git rev-parse HEAD) &&
+		git remote prune origin &&
+		git update-ref refs/remotes/origin/fetch-prune "$one" &&
+		git fetch --prune origin &&
+		git update-ref refs/remotes/origin/atomic-prune "$one" &&
+		git fetch --atomic --prune origin &&
+		cat >expect <<-EOF &&
+			$two $ZERO_OID refs/remotes/origin/remote-prune-a
+			$one $ZERO_OID refs/remotes/origin/remote-prune-z
+			$one $ZERO_OID refs/remotes/origin/fetch-prune
+			$one $ZERO_OID refs/remotes/origin/atomic-prune
+		EOF
+		test_cmp expect actual
+	)
+'
+
+test_expect_success 'remote prune reports deletions around a concurrent update' '
+	test_when_finished "rm -rf race-empty.git race-prune" &&
+	git init --bare race-empty.git &&
+	git init race-prune &&
+	(
+		cd race-prune &&
+		git commit --allow-empty -m one &&
+		one=$(git rev-parse HEAD) &&
+		git commit --allow-empty -m two &&
+		two=$(git rev-parse HEAD) &&
+		git remote add origin ../race-empty.git &&
+		git update-ref refs/remotes/origin/race "$one" &&
+		git update-ref refs/remotes/origin/other "$one"
+	) &&
+	test_hook -C race-prune reference-transaction <<-\EOF &&
+		marker=$(git rev-parse --git-path prune-race-once)
+		if test "$1" = preparing && test ! -e "$marker"
+		then
+			>"$marker"
+			git update-ref refs/remotes/origin/race HEAD
+		fi
+		exit 0
+	EOF
+	(
+		cd race-prune &&
+		two=$(git rev-parse HEAD) &&
+		test_must_fail git remote prune origin >out 2>err &&
+		test_cmp_rev "$two" refs/remotes/origin/race &&
+		test_must_fail git rev-parse --verify refs/remotes/origin/other &&
+		test_grep "\[pruned\].*origin/other" out &&
+		test_grep ! "\[pruned\].*origin/race" out &&
+		test_grep "could not delete reference refs/remotes/origin/race" err
+	)
+'
+
+test_expect_success 'fetch prune reports deletions around a concurrent update' '
+	test_when_finished "rm -rf fetch-empty.git fetch-prune" &&
+	git init --bare fetch-empty.git &&
+	git init fetch-prune &&
+	(
+		cd fetch-prune &&
+		git commit --allow-empty -m one &&
+		one=$(git rev-parse HEAD) &&
+		git commit --allow-empty -m two &&
+		git remote add origin ../fetch-empty.git &&
+		git update-ref refs/remotes/origin/race "$one" &&
+		git update-ref refs/remotes/origin/other "$one"
+	) &&
+	test_hook -C fetch-prune reference-transaction <<-\EOF &&
+		marker=$(git rev-parse --git-path prune-race-once)
+		if test "$1" = preparing && test ! -e "$marker"
+		then
+			>"$marker"
+			git update-ref refs/remotes/origin/race HEAD
+		fi
+		exit 0
+	EOF
+	(
+		cd fetch-prune &&
+		two=$(git rev-parse HEAD) &&
+		test_must_fail git fetch --prune origin >out 2>err &&
+		test_cmp_rev "$two" refs/remotes/origin/race &&
+		test_must_fail git rev-parse --verify refs/remotes/origin/other &&
+		test_grep "\[deleted\].*origin/other" err &&
+		test_grep ! "\[deleted\].*origin/race" err &&
+		test_grep "could not delete reference refs/remotes/origin/race" err
+	)
+'
+
 test_expect_success 'hook allows updating ref if successful' '
 	git reset --hard PRE &&
 	test_hook reference-transaction <<-\EOF &&
