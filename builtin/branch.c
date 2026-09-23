@@ -351,7 +351,8 @@ static int delete_branches(int argc, const char **argv, int kinds,
 	}
 
 	if (!(flags & DELETE_BRANCH_DRY_RUN) &&
-	    refs_delete_refs(get_main_ref_store(the_repository), NULL, &refs_to_delete, REF_NO_DEREF))
+	    refs_delete_refs(get_main_ref_store(the_repository), NULL,
+			     &refs_to_delete, NULL, NULL, REF_NO_DEREF))
 		ret = 1;
 
 	for_each_string_list_item(item, &refs_to_delete) {
