@@ -203,7 +203,7 @@ check_shallow_history_advice () {
 	hint: To check, try:
 	hint:
 	hint:   $cmd
-	hint: Disable this message with "git config set advice.shallowHistory false"
+	hint: Disable this message with "git config set --global advice.shallowHistory false"
 	EOF
 	test_cmp expect actual
 }
