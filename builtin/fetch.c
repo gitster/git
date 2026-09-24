@@ -1506,22 +1506,29 @@ static int prune_refs(struct display_state *display_state,
 	struct ref *ref, *stale_refs = get_stale_heads(rs, ref_map);
 	struct strbuf err = STRBUF_INIT;
 	struct string_list refnames = STRING_LIST_INIT_NODUP;
-
-	for (ref = stale_refs; ref; ref = ref->next)
-		string_list_append(&refnames, ref->name);
+	struct string_list deleted_refs = STRING_LIST_INIT_NODUP;
+	struct string_list failed_refs = STRING_LIST_INIT_DUP;
+	struct oid_array old_oids = OID_ARRAY_INIT;
 
 	if (!dry_run) {
 		if (transaction) {
 			for (ref = stale_refs; ref; ref = ref->next) {
-				result = ref_transaction_delete(transaction, ref->name, NULL,
-								NULL, 0, "fetch: prune", &err);
+				result = ref_transaction_delete(transaction, ref->name,
+								&ref->new_oid, NULL, 0,
+								"fetch: prune", &err);
 				if (result)
 					goto cleanup;
 			}
 		} else {
+			for (ref = stale_refs; ref; ref = ref->next) {
+				string_list_append(&refnames, ref->name);
+				oid_array_append(&old_oids, &ref->new_oid);
+			}
 			result = refs_delete_refs(get_main_ref_store(the_repository),
 						  "fetch: prune", &refnames,
-						  0);
+						  &old_oids, &failed_refs, 0);
+			if (result && !failed_refs.nr)
+				goto cleanup;
 		}
 	}
 
@@ -1529,18 +1536,25 @@ static int prune_refs(struct display_state *display_state,
 		int summary_width = transport_summary_width(stale_refs);
 
 		for (ref = stale_refs; ref; ref = ref->next) {
+			if (string_list_has_string(&failed_refs, ref->name))
+				continue;
+
 			display_ref_update(display_state, '-', _("[deleted]"), NULL,
 					   _("(none)"), ref->name,
 					   &ref->new_oid, &ref->old_oid,
 					   summary_width);
+			string_list_append(&deleted_refs, ref->name);
 		}
-		string_list_sort(&refnames);
+		string_list_sort(&deleted_refs);
 		refs_warn_dangling_symrefs(get_main_ref_store(the_repository),
-					   stderr, "   ", dry_run, &refnames);
+					   stderr, "   ", dry_run, &deleted_refs);
 	}
 
 cleanup:
 	string_list_clear(&refnames, 0);
+	string_list_clear(&deleted_refs, 0);
+	string_list_clear(&failed_refs, 0);
+	oid_array_clear(&old_oids);
 	strbuf_release(&err);
 	free_refs(stale_refs);
 	return result;

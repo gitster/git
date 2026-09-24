@@ -105,27 +105,38 @@ static int for_each_tag_name(const char **argv, each_tag_name_fn fn,
 	return had_error;
 }
 
+struct tags_to_delete {
+	struct string_list refs;
+	struct oid_array old_oids;
+};
+
 static int collect_tags(const char *name UNUSED, const char *ref,
 			const struct object_id *oid, void *cb_data)
 {
-	struct string_list *ref_list = cb_data;
+	struct tags_to_delete *data = cb_data;
+	struct string_list_item *item;
 
-	string_list_append(ref_list, ref);
-	ref_list->items[ref_list->nr - 1].util = oiddup(oid);
+	item = string_list_append(&data->refs, ref);
+	item->util = oiddup(oid);
+	oid_array_append(&data->old_oids, oid);
 	return 0;
 }
 
 static int delete_tags(const char **argv)
 {
 	int result;
-	struct string_list refs_to_delete = STRING_LIST_INIT_DUP;
+	struct tags_to_delete data = {
+		.refs = STRING_LIST_INIT_DUP,
+		.old_oids = OID_ARRAY_INIT,
+	};
 	struct string_list_item *item;
 
-	result = for_each_tag_name(argv, collect_tags, (void *)&refs_to_delete);
-	if (refs_delete_refs(get_main_ref_store(the_repository), NULL, &refs_to_delete, REF_NO_DEREF))
+	result = for_each_tag_name(argv, collect_tags, &data);
+	if (refs_delete_refs(get_main_ref_store(the_repository), NULL,
+			     &data.refs, &data.old_oids, NULL, REF_NO_DEREF))
 		result = 1;
 
-	for_each_string_list_item(item, &refs_to_delete) {
+	for_each_string_list_item(item, &data.refs) {
 		const char *name = item->string;
 		struct object_id *oid = item->util;
 		if (!refs_ref_exists(get_main_ref_store(the_repository), name))
@@ -135,7 +146,8 @@ static int delete_tags(const char **argv)
 
 		free(oid);
 	}
-	string_list_clear(&refs_to_delete, 0);
+	string_list_clear(&data.refs, 0);
+	oid_array_clear(&data.old_oids);
 	return result;
 }
 

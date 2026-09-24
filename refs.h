@@ -9,6 +9,7 @@
 struct fsck_options;
 struct object_id;
 struct ref_store;
+struct oid_array;
 struct strbuf;
 struct string_list;
 struct string_list_item;
@@ -627,13 +628,26 @@ int refs_delete_ref(struct ref_store *refs, const char *msg,
 		    unsigned int flags);
 
 /*
- * Delete the specified references. If there are any problems, emit
- * errors but attempt to keep going (i.e., the deletes are not done in
- * an all-or-nothing transaction). msg and flags are passed through to
- * ref_transaction_delete().
+ * Delete the specified references. If old_oids is non-NULL, it must contain
+ * an entry for each refname, in the same order. Each non-null OID is used to
+ * verify the current value of the corresponding reference before deleting
+ * it. A null OID requests an unconditional deletion, which allows callers to
+ * include broken refs whose old value cannot be resolved.
+ *
+ * If failed_refs is non-NULL, it must be initialized with
+ * STRING_LIST_INIT_DUP. The names of individual updates that cannot be queued
+ * or are rejected while processing the best-effort batch are inserted into
+ * it. A transaction-wide failure is returned without populating the list.
+ *
+ * If there are any problems, emit errors but attempt to keep going (i.e.,
+ * the deletes are not done in an all-or-nothing transaction). msg and flags
+ * are passed through to ref_transaction_delete().
  */
 int refs_delete_refs(struct ref_store *refs, const char *msg,
-		     struct string_list *refnames, unsigned int flags);
+		     struct string_list *refnames,
+		     const struct oid_array *old_oids,
+		     struct string_list *failed_refs,
+		     unsigned int flags);
 
 /** Delete a reflog */
 int refs_delete_reflog(struct ref_store *refs, const char *refname);
@@ -960,9 +974,10 @@ int ref_transaction_create(struct ref_transaction *transaction,
 			   struct strbuf *err);
 
 /*
- * Add a reference deletion to transaction. If old_oid is non-NULL,
- * then it holds the value that the reference should have had before
- * the update (which must not be null_oid).
+ * Add a reference deletion to transaction. If old_oid is non-NULL and not
+ * null_oid, then it holds the value that the reference should have had before
+ * the update. Passing null_oid is equivalent to passing NULL and disables the
+ * old value check.
  *
  * See the above comment "Reference transaction updates" for more
  * information.
