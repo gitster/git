@@ -440,4 +440,9 @@ test_expect_success 'invalid revision options are not reported as unknown' '
 	test_grep ! "unknown option" err
 '
 
+test_expect_success 'unknown revision options are reported correctly' '
+	test_must_fail git shortlog -n --no-such-option 2>err &&
+	test_grep "unknown option .*--no-such-option" err
+'
+
 test_done
