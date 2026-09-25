@@ -291,6 +291,7 @@ static struct commit *pick_regular_commit(struct repository *repo,
 					  enum replay_empty_commit_action empty)
 {
 	struct tree *pickme_tree, *base_tree, *replayed_base_tree;
+	struct commit *new_commit;
 
 	if (pickme->parents)
 		base_tree = repo_get_commit_tree(repo, pickme->parents->item);
@@ -361,7 +362,11 @@ static struct commit *pick_regular_commit(struct repository *repo,
 		}
 	}
 
-	return create_commit(repo, result->tree, pickme, replayed_base, mode);
+	new_commit = create_commit(repo, result->tree, pickme, replayed_base,
+				   mode);
+	if (!new_commit)
+		result->clean = -1;
+	return new_commit;
 }
 
 void replay_result_release(struct replay_result *result)
