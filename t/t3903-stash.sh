@@ -374,6 +374,38 @@ test_expect_success 'stash apply -q --index refreshes the index' '
 	test_cmp expect actual
 '
 
+
+test_expect_success 'stash apply --index does not revert unrelated upstream index changes' '
+	test_when_finished "rm -fr playpen" &&
+	mkdir playpen &&
+	(
+		cd playpen &&
+		git init &&
+		echo "base1" >file1 &&
+		echo "base2" >file2 &&
+		git add file1 file2 &&
+		git commit -m "initial base" &&
+
+		# Make a staged change to file1 and stash it
+		echo "staged1" >file1 &&
+		git add file1 &&
+		git stash &&
+
+		# Upstream advances by modifying unrelated file2
+		echo "upstream2" >file2 &&
+		git add file2 &&
+		git commit -m "upstream change to file2" &&
+
+		# Apply the stash with --index
+		git stash apply --index &&
+
+		# Verify working tree and index state
+		test "$(git show :file1)" = "staged1" &&
+		test "$(git show :file2)" = "upstream2" &&
+		test "$(git show HEAD:file2)" = "upstream2"
+	)
+'
+
 test_expect_success 'stash apply --index leaves everything untouched on failure' '
 	git reset --hard &&
 	echo test >other-file &&

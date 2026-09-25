@@ -639,7 +639,7 @@ static enum stash_apply_result do_apply_stash(const char *prefix,
 			merge = lookup_tree(o.repo, &info->i_tree);
 			merge_base = lookup_tree(o.repo, &info->b_tree);
 
-			merge_incore_nonrecursive(&o, head, merge, merge_base,
+			merge_incore_nonrecursive(&o, merge_base, merge, head,
 						  &result);
 
 			if (!result.clean)
