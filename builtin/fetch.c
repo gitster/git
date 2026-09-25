@@ -503,7 +503,8 @@ static void filter_prefetch_refspec(struct refspec *rs)
 static struct ref *get_ref_map(struct remote *remote,
 			       const struct ref *remote_refs,
 			       struct refspec *rs,
-			       int tags, int *autotags)
+			       int tags, int *autotags,
+			       char **bootstrap_head_branch)
 {
 	int i;
 	struct ref *rm;
@@ -511,6 +512,8 @@ static struct ref *get_ref_map(struct remote *remote,
 	struct ref **tail = &ref_map;
 	struct refspec *effective_refmap =
 		refmap.nr ? &refmap : remote ? &remote->refmap : NULL;
+	struct refspec inferred_rs;
+	int inferred_branches = 0;
 
 	/* opportunistically-updated references: */
 	struct ref *orefs = NULL, **oref_tail = &orefs;
@@ -518,15 +521,71 @@ static struct ref *get_ref_map(struct remote *remote,
 	struct hashmap existing_refs;
 	int existing_refs_populated = 0;
 
+	refspec_init_fetch(&inferred_rs, the_hash_algo);
+
 	filter_prefetch_refspec(rs);
 	if (remote)
 		filter_prefetch_refspec(&remote->fetch);
+
+	if (!rs->nr && remote && !remote->fetch.nr &&
+	    effective_refmap && effective_refmap->nr) {
+		struct string_list tracked = STRING_LIST_INIT_DUP;
+		struct string_list_item *item;
+		struct ref *head;
+		char *default_branch = NULL;
+		char *default_branch_dst = NULL;
+
+		branches_tracking_remote(remote, &tracked);
+		for_each_string_list_item(item, &tracked)
+			refspec_append(&inferred_rs, item->string);
+
+		/* Always fetch the default branch too, as "HEAD". */
+		head = get_remote_ref(remote_refs, "HEAD");
+		if (head && head->symref && *head->symref)
+			default_branch = xstrdup(head->symref);
+		free_one_ref(head);
+
+		for (i = 0; default_branch && !default_branch_dst &&
+			    !string_list_has_string(&tracked, default_branch) &&
+			    i < effective_refmap->nr; i++) {
+			struct refspec_item *map = &effective_refmap->items[i];
+
+			if (map->pattern)
+				match_refname_with_pattern(map->src, default_branch,
+							    map->dst, &default_branch_dst);
+			else if (!strcmp(map->src, default_branch))
+				default_branch_dst = xstrdup(map->dst);
+		}
+
+		if (default_branch_dst) {
+			struct refspec_item head_item = { .force = 1 };
+
+			head_item.src = xstrdup("HEAD");
+			head_item.dst = default_branch_dst;
+			get_fetch_map(remote_refs, &head_item, &tail, 1);
+			free(head_item.src);
+		}
+
+		if (default_branch && bootstrap_head_branch) {
+			const char *branch_name = default_branch;
+			skip_prefix(branch_name, "refs/heads/", &branch_name);
+			*bootstrap_head_branch = xstrdup(branch_name);
+		}
+
+		free(default_branch);
+		free(default_branch_dst);
+		string_list_clear(&tracked, 0);
+
+		rs = &inferred_rs;
+		inferred_branches = 1;
+	}
 
 	if (rs->nr) {
 		struct refspec *fetch_refspec;
 
 		for (i = 0; i < rs->nr; i++) {
-			get_fetch_map(remote_refs, &rs->items[i], &tail, 0);
+			get_fetch_map(remote_refs, &rs->items[i], &tail,
+				      inferred_branches);
 			if (rs->items[i].dst && rs->items[i].dst[0])
 				*autotags = 1;
 		}
@@ -561,6 +620,8 @@ static struct ref *get_ref_map(struct remote *remote,
 
 		for (i = 0; i < fetch_refspec->nr; i++)
 			get_fetch_map(ref_map, &fetch_refspec->items[i], &oref_tail, 1);
+	} else if (inferred_branches) {
+		/* Already fully handled above. */
 	} else if (effective_refmap && effective_refmap->nr) {
 		die("--refmap option is only meaningful with command-line refspec(s)");
 	} else {
@@ -656,6 +717,7 @@ static struct ref *get_ref_map(struct remote *remote,
 	if (existing_refs_populated)
 		hashmap_clear_and_free(&existing_refs, struct refname_hash_entry, ent);
 
+	refspec_clear(&inferred_rs);
 	return ref_map;
 }
 
@@ -1753,14 +1815,14 @@ static void warn_set_head(const char *remote, const char *head_name,
 }
 
 static int set_head(const struct ref *remote_refs, struct remote *remote,
-			int follow_remote_head)
+			int follow_remote_head, const char *known_head_branch)
 {
 	int result = 0, create_only, baremirror, was_detached;
 	struct strbuf b_head = STRBUF_INIT, b_remote_head = STRBUF_INIT,
 		      b_local_head = STRBUF_INIT;
 	const char *no_warn_branch = remote->no_warn_branch;
 	char *head_name = NULL;
-	struct ref *ref, *matches;
+	struct ref *ref, *matches = NULL;
 	struct ref *fetch_map = NULL, **fetch_map_tail = &fetch_map;
 	struct refspec_item refspec = {
 		.force = 0,
@@ -1771,19 +1833,23 @@ static int set_head(const struct ref *remote_refs, struct remote *remote,
 	struct string_list heads = STRING_LIST_INIT_DUP;
 	struct ref_store *refs = get_main_ref_store(the_repository);
 
-	get_fetch_map(remote_refs, &refspec, &fetch_map_tail, 0);
-	matches = guess_remote_head(find_ref_by_name(remote_refs, "HEAD"),
-				    fetch_map, REMOTE_GUESS_HEAD_ALL);
-	for (ref = matches; ref; ref = ref->next) {
-		string_list_append(&heads, strip_refshead(ref->name));
-	}
+	if (known_head_branch) {
+		head_name = xstrdup(known_head_branch);
+	} else {
+		get_fetch_map(remote_refs, &refspec, &fetch_map_tail, 0);
+		matches = guess_remote_head(find_ref_by_name(remote_refs, "HEAD"),
+					    fetch_map, REMOTE_GUESS_HEAD_ALL);
+		for (ref = matches; ref; ref = ref->next) {
+			string_list_append(&heads, strip_refshead(ref->name));
+		}
 
-	if (!heads.nr)
-		result = 1;
-	else if (heads.nr > 1)
-		result = 1;
-	else
-		head_name = xstrdup(heads.items[0].string);
+		if (!heads.nr)
+			result = 1;
+		else if (heads.nr > 1)
+			result = 1;
+		else
+			head_name = xstrdup(heads.items[0].string);
+	}
 
 	if (!head_name)
 		goto cleanup;
@@ -1925,6 +1991,7 @@ static int do_fetch(struct transport *transport,
 	struct strmap rejected_refs = STRMAP_INIT;
 	int summary_width = 0;
 	int follow_remote_head;
+	char *bootstrap_head_branch = NULL;
 
 	if (tags == TAGS_DEFAULT) {
 		if (transport->remote->fetch_tags == 2)
@@ -1960,15 +2027,31 @@ static int do_fetch(struct transport *transport,
 		refspec_ref_prefixes(rs, &transport_ls_refs_options.ref_prefixes);
 	} else {
 		struct branch *branch = branch_get(NULL);
+		int tracks_this_remote = branch && branch_has_merge_config(branch) &&
+			!strcmp(branch->remote_name, transport->remote->name);
+		struct refspec *effective_refmap = refmap.nr ? &refmap :
+			&transport->remote->refmap;
+		int inferred_branches = !transport->remote->fetch.nr &&
+			effective_refmap->nr;
 
-		if (transport->remote->fetch.nr) {
+		if (inferred_branches) {
+			struct string_list tracked = STRING_LIST_INIT_DUP;
+			struct string_list_item *item;
+
+			branches_tracking_remote(transport->remote, &tracked);
+			for_each_string_list_item(item, &tracked)
+				strvec_push(&transport_ls_refs_options.ref_prefixes,
+					    item->string);
+			string_list_clear(&tracked, 0);
+			strvec_push(&transport_ls_refs_options.ref_prefixes, "HEAD");
+		} else if (transport->remote->fetch.nr) {
 			refspec_ref_prefixes(&transport->remote->fetch,
 					     &transport_ls_refs_options.ref_prefixes);
-			if (follow_remote_head != FOLLOW_REMOTE_NEVER)
-				do_set_head = 1;
 		}
-		if (branch && branch_has_merge_config(branch) &&
-		    !strcmp(branch->remote_name, transport->remote->name)) {
+		if ((transport->remote->fetch.nr || inferred_branches) &&
+		    follow_remote_head != FOLLOW_REMOTE_NEVER)
+			do_set_head = 1;
+		if (tracks_this_remote) {
 			int i;
 			for (i = 0; i < branch->merge_nr; i++) {
 				strvec_push(&transport_ls_refs_options.ref_prefixes,
@@ -2008,7 +2091,8 @@ static int do_fetch(struct transport *transport,
 	transport_ls_refs_options_release(&transport_ls_refs_options);
 
 	ref_map = get_ref_map(transport->remote, remote_refs, rs,
-			      tags, &autotags);
+			      tags, &autotags, &bootstrap_head_branch);
+
 	if (!update_head_ok)
 		check_not_current_branch(ref_map);
 
@@ -2171,10 +2255,12 @@ static int do_fetch(struct transport *transport,
 		 * Way too many cases where this can go wrong so let's just
 		 * ignore errors and fail silently for now.
 		 */
-		set_head(remote_refs, transport->remote, follow_remote_head);
+		set_head(remote_refs, transport->remote, follow_remote_head,
+			 bootstrap_head_branch);
 	}
 
 cleanup:
+	free(bootstrap_head_branch);
 	/*
 	 * When using batched updates, we want to commit the non-rejected
 	 * updates and also handle the rejections.
