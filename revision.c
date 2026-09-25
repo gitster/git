@@ -2734,7 +2734,10 @@ void parse_revision_opt(struct rev_info *revs, struct parse_opt_ctx_t *ctx,
 {
 	int n = handle_revision_opt(revs, ctx->argc, ctx->argv,
 				    &ctx->cpidx, ctx->out, NULL);
-	if (n <= 0) {
+	if (n < 0) {
+		/* handle_revision_opt() has already reported the error. */
+		usage_with_options(usagestr, options);
+	} else if (!n) {
 		error("unknown option `%s'", ctx->argv[0]);
 		usage_with_options(usagestr, options);
 	}

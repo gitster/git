@@ -434,4 +434,10 @@ test_expect_success 'stdin with multiple groups reports error' '
 	test_must_fail git shortlog --group=author --group=committer <log
 '
 
+test_expect_success 'invalid revision options are not reported as unknown' '
+	test_must_fail git shortlog --default 2>err &&
+	test_grep "bad --default argument" err &&
+	test_grep ! "unknown option" err
+'
+
 test_done
