@@ -199,6 +199,7 @@ mark_option_requires_arg () {
 start_test_output () { :; }
 start_test_case_output () { :; }
 finalize_test_case_output () { :; }
+finalize_test_leak_output () { :; }
 finalize_test_output () { :; }
 
 parse_option () {
@@ -822,20 +823,23 @@ test_failure_ () {
 	say_color error "not ok $test_count - ${pfx:+$pfx }$1"
 	shift
 	printf '%s\n' "$*" | sed -e 's/^/#	/'
+	if test -n "$immediate" && test -n "$invert_exit_code"
+	then
+		say_color error "1..$test_count"
+		finalize_test_output
+		_invert_exit_code_failure_end_blurb
+		GIT_EXIT_OK=t
+		exit 0
+	fi
+	# Write the annotation before the --immediate exit paths below,
+	# which call exit and would otherwise skip it.
+	finalize_test_case_output failure "$failure_label" "$@"
 	if test -n "$immediate"
 	then
 		say_color error "1..$test_count"
-		if test -n "$invert_exit_code"
-		then
-			finalize_test_output
-			_invert_exit_code_failure_end_blurb
-			GIT_EXIT_OK=t
-			exit 0
-		fi
 		check_test_results_san_file_ "$test_failure"
 		_error_exit
 	fi
-	finalize_test_case_output failure "$failure_label" "$@"
 }
 
 test_known_broken_ok_ () {
@@ -1218,6 +1222,7 @@ check_test_results_san_file_ () {
 		return
 	fi &&
 	say_color >&4 error "$(cat "$TEST_RESULTS_SAN_FILE".*)" &&
+	finalize_test_leak_output &&
 
 	if test "$test_failure" = 0
 	then
