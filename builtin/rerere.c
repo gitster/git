@@ -12,7 +12,8 @@
 #include "pathspec.h"
 
 static const char * const rerere_usage[] = {
-	N_("git rerere [clear | forget <pathspec>... | diff | status | remaining | gc]"),
+	N_("git rerere [clear | forget <pathspec>... | diff | status | "
+	   "remaining | gc [--auto]]"),
 	NULL,
 };
 
@@ -56,15 +57,20 @@ int cmd_rerere(int argc,
 	       struct repository *repo UNUSED)
 {
 	struct string_list merge_rr = STRING_LIST_INIT_DUP;
-	int autoupdate = -1, flags = 0;
+	int autoupdate = -1, auto_flag = 0, flags = 0;
 
 	struct option options[] = {
 		OPT_SET_INT(0, "rerere-autoupdate", &autoupdate,
 			N_("register clean resolutions in index"), 1),
+		OPT_BOOL(0, "auto", &auto_flag,
+			 N_("skip gc while another process holds the lock")),
 		OPT_END(),
 	};
 
 	argc = parse_options(argc, argv, prefix, options, rerere_usage, 0);
+
+	if (auto_flag && (argc < 1 || strcmp(argv[0], "gc")))
+		die(_("the option '%s' requires '%s'"), "--auto", "gc");
 
 	repo_config(the_repository, git_xmerge_config, NULL);
 
@@ -94,7 +100,8 @@ int cmd_rerere(int argc,
 	if (!strcmp(argv[0], "clear")) {
 		rerere_clear(the_repository, &merge_rr);
 	} else if (!strcmp(argv[0], "gc"))
-		rerere_gc(the_repository, &merge_rr);
+		rerere_gc(the_repository, &merge_rr,
+			  auto_flag ? RERERE_NOWAIT : 0);
 	else if (!strcmp(argv[0], "status")) {
 		if (setup_rerere(the_repository, &merge_rr,
 				 flags | RERERE_READONLY) < 0)
