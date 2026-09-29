@@ -8,7 +8,7 @@ git-rerere - Reuse recorded resolution of conflicted merges
 SYNOPSIS
 --------
 [verse]
-'git rerere' [clear | forget <pathspec>... | diff | status | remaining | gc]
+'git rerere' [clear | forget <pathspec>... | diff | status | remaining | gc [--auto]]
 
 DESCRIPTION
 -----------
@@ -63,14 +63,17 @@ Print paths with conflicts that have not been autoresolved by rerere.
 This includes paths whose resolutions cannot be tracked by rerere,
 such as conflicting submodules.
 
-'gc'::
+'gc' [--auto]::
 
 Prune records of conflicted merges that
 occurred a long time ago.  By default, unresolved conflicts older
 than 15 days and resolved conflicts older than 60
 days are pruned.  These defaults are controlled via the
 `gc.rerereUnresolved` and `gc.rerereResolved` configuration
-variables respectively.
+variables respectively.  With `--auto`, which `git maintenance run
+--auto` and `git gc --auto` pass, `gc` does nothing while another
+process holds the rerere lock.  Without it, `gc` waits for the lock
+as long as `rerere.lockTimeout` allows and then fails.
 
 
 DISCUSSION
