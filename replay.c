@@ -85,13 +85,13 @@ static struct commit *create_commit(struct repository *repo,
 				    struct tree *tree,
 				    struct commit *based_on,
 				    struct commit *parent,
-				    enum replay_mode mode)
+				    enum replay_mode mode,
+				    const char *sign_commit)
 {
 	struct object_id ret;
 	struct object *obj = NULL;
 	struct commit_list *parents = NULL;
 	char *author = NULL;
-	char *sign_commit = NULL; /* FIXME: cli users might want to sign again */
 	struct commit_extra_header *extra = NULL;
 	struct strbuf msg = STRBUF_INIT;
 	const char *out_enc = get_commit_output_encoding();
@@ -288,9 +288,11 @@ static struct commit *pick_regular_commit(struct repository *repo,
 					  struct merge_options *merge_opt,
 					  struct merge_result *result,
 					  enum replay_mode mode,
-					  enum replay_empty_commit_action empty)
+					  enum replay_empty_commit_action empty,
+					  const char *sign_commit)
 {
 	struct tree *pickme_tree, *base_tree, *replayed_base_tree;
+	struct commit *new_commit;
 
 	if (pickme->parents)
 		base_tree = repo_get_commit_tree(repo, pickme->parents->item);
@@ -361,7 +363,11 @@ static struct commit *pick_regular_commit(struct repository *repo,
 		}
 	}
 
-	return create_commit(repo, result->tree, pickme, replayed_base, mode);
+	new_commit = create_commit(repo, result->tree, pickme, replayed_base,
+				   mode, sign_commit);
+	if (!new_commit)
+		result->clean = -1;
+	return new_commit;
 }
 
 void replay_result_release(struct replay_result *result)
@@ -481,7 +487,8 @@ int replay_revisions(struct rev_info *revs,
 
 			last_commit = pick_regular_commit(revs->repo, commit, base,
 							  &merge_opt, &result,
-							  mode, opts->empty);
+							  mode, opts->empty,
+							  opts->sign_commit);
 		}
 
 		if (!last_commit)

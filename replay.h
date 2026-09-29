@@ -67,6 +67,12 @@ struct replay_revisions_options {
 	 * Whether to linearize the commits (i.e. drop merge commits).
 	 */
 	int linearize;
+
+	/*
+	 * If non-NULL, GPG-sign the new commits. An empty string signs with
+	 * the default key (the committer identity); otherwise, the key ID.
+	 */
+	const char *sign_commit;
 };
 
 /* This struct is used as an out-parameter by `replay_revisions()`. */
