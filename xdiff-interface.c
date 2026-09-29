@@ -91,11 +91,11 @@ static int xdiff_outf(void *priv_, mmfile_t *mb, int nbuf)
 	return 0;
 }
 
-static int strbuf_out_line(void *priv, mmbuffer_t *mb, int nbuf)
+static int strbuf_out_line(void *priv, mmfile_t *mb, int nbuf)
 {
 	struct strbuf *out = priv;
-	int i;
-	for (i = 0; i < nbuf; i++)
+
+	for (int i = 0; i < nbuf; i++)
 		strbuf_add(out, mb[i].ptr, mb[i].size);
 	return 0;
 }
