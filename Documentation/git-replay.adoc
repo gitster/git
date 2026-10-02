@@ -10,7 +10,7 @@ SYNOPSIS
 --------
 [verse]
 (EXPERIMENTAL!) 'git replay' ([--contained] --onto=<newbase> | --advance=<branch> | --revert=<branch>)
-			     [--ref=<ref>] [--ref-action=<mode>] [--linearize] <revision-range>
+			     [--ref=<ref>] [--ref-action=<mode>] [--linearize] [-S[<keyid>]] <revision-range>
 
 DESCRIPTION
 -----------
@@ -105,6 +105,14 @@ behavior of git-rebase(1)'s `--no-rebase-merges` option.)
 `--linearize` cannot be combined with multiple branches or with
 `--contained`. To linearize several branches, replay them in separate
 `git replay` invocations.
+
+-S[<keyid>]::
+--gpg-sign[=<keyid>]::
+--no-gpg-sign::
+	GPG-sign commits. The `keyid` argument is optional and
+	defaults to the committer identity; if specified, it must be
+	stuck to the option without a space. `--no-gpg-sign` is useful to
+	countermand a `--gpg-sign` option given earlier on the command line.
 
 <revision-range>::
 	Range of commits to replay; see "Specifying Ranges" in

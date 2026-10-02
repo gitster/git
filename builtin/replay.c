@@ -85,7 +85,7 @@ int cmd_replay(int argc,
 	const char *const replay_usage[] = {
 		N_("(EXPERIMENTAL!) git replay "
 		   "([--contained] --onto=<newbase> | --advance=<branch> | --revert=<branch>)\n"
-		   "[--ref=<ref>] [--ref-action=<mode>] [--linearize] <revision-range>"),
+		   "[--ref=<ref>] [--ref-action=<mode>] [--linearize] [-S[<keyid>]] <revision-range>"),
 		NULL
 	};
 	struct option replay_options[] = {
@@ -113,6 +113,16 @@ int cmd_replay(int argc,
 			     PARSE_OPT_NONEG),
 		OPT_BOOL(0, "linearize", &opts.linearize,
 			 N_("drop merge commits, replaying only non-merge commits")),
+		{
+			.type = OPTION_STRING,
+			.short_name = 'S',
+			.long_name = "gpg-sign",
+			.value = &opts.sign_commit,
+			.argh = N_("key-id"),
+			.help = N_("GPG-sign commits"),
+			.flags = PARSE_OPT_OPTARG,
+			.defval = (intptr_t) "",
+		},
 		OPT_END()
 	};
 
