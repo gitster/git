@@ -575,7 +575,7 @@ static int midx_compaction_step_include_packs(struct midx_compaction_step *step,
 
 		strbuf_reset(&path);
 		strbuf_addf(&path, "%s/%s", opts->packdir, item->string);
-		p = packfile_store_load_pack(files->packed, path.buf, 1);
+		p = packfile_store_load_pack(files->dirs->packed, path.buf, 1);
 		if (!p || open_pack_index(p)) {
 			ret = error(_("cannot open index for %s"), path.buf);
 			goto out;
