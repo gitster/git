@@ -944,6 +944,15 @@ int ref_transaction_update_reflog(struct ref_transaction *transaction,
 				  struct strbuf *err);
 
 /*
+ * Replace a reference's reflog with the explicit entries added to the same
+ * transaction via ref_transaction_update_reflog(). Without such entries,
+ * remove the reflog. This operation does not change the reference itself.
+ */
+int ref_transaction_replace_reflog(struct ref_transaction *transaction,
+				    const char *refname,
+				    struct strbuf *err);
+
+/*
  * Add a reference creation to transaction. new_oid is the value that
  * the reference should have after the update; it must not be
  * null_oid. It is verified that the reference does not exist

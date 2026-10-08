@@ -1983,6 +1983,22 @@ static int files_create_reflog(struct ref_store *ref_store, const char *refname,
 	return 0;
 }
 
+static void format_reflog_entry(struct strbuf *sb,
+				const struct object_id *old_oid,
+				const struct object_id *new_oid,
+				const char *committer, const char *msg)
+{
+	if (!committer)
+		committer = git_committer_info(0);
+
+	strbuf_addf(sb, "%s %s %s", oid_to_hex(old_oid), oid_to_hex(new_oid), committer);
+	if (msg && *msg) {
+		strbuf_addch(sb, '\t');
+		strbuf_addstr(sb, msg);
+	}
+	strbuf_addch(sb, '\n');
+}
+
 static int log_ref_write_fd(int fd, const struct object_id *old_oid,
 			    const struct object_id *new_oid,
 			    const char *committer, const char *msg)
@@ -1990,15 +2006,7 @@ static int log_ref_write_fd(int fd, const struct object_id *old_oid,
 	struct strbuf sb = STRBUF_INIT;
 	int ret = 0;
 
-	if (!committer)
-		committer = git_committer_info(0);
-
-	strbuf_addf(&sb, "%s %s %s", oid_to_hex(old_oid), oid_to_hex(new_oid), committer);
-	if (msg && *msg) {
-		strbuf_addch(&sb, '\t');
-		strbuf_addstr(&sb, msg);
-	}
-	strbuf_addch(&sb, '\n');
+	format_reflog_entry(&sb, old_oid, new_oid, committer, msg);
 	if (write_in_full(fd, sb.buf, sb.len) < 0)
 		ret = -1;
 	strbuf_release(&sb);
@@ -2397,6 +2405,8 @@ static int files_for_each_reflog_ent(struct ref_store *ref_store,
 
 	while (!ret && !strbuf_getwholeline(&sb, logfp, '\n'))
 		ret = show_one_reflog_ent(refs, refname, &sb, fn, cb_data);
+	if (ferror(logfp))
+		ret = -1;
 	fclose(logfp);
 	strbuf_release(&sb);
 	return ret;
@@ -2665,11 +2675,119 @@ static enum ref_transaction_error check_old_oid(struct ref_update *update,
 	return REF_TRANSACTION_ERROR_INCORRECT_OLD_VALUE;
 }
 
+struct staged_reflog {
+	struct tempfile *file;
+	struct ref_update **updates;
+	size_t nr, alloc;
+};
+
 struct files_transaction_backend_data {
 	struct ref_transaction *packed_transaction;
 	int packed_refs_locked;
 	struct strmap ref_locks;
+	struct strmap reflog_files;
 };
+
+static int reflog_update_cmp(const void *a, const void *b)
+{
+	const struct ref_update *one = *(struct ref_update * const *)a;
+	const struct ref_update *two = *(struct ref_update * const *)b;
+
+	return (one->index > two->index) - (one->index < two->index);
+}
+
+static int prepare_reflog_replacements(struct files_ref_store *refs,
+				      struct ref_transaction *transaction,
+				      struct strbuf *err)
+{
+	struct files_transaction_backend_data *data = transaction->backend_data;
+	struct strbuf path = STRBUF_INIT;
+	struct strbuf contents = STRBUF_INIT;
+	struct hashmap_iter iter;
+	struct strmap_entry *entry;
+	size_t i;
+	int ret = -1;
+
+	for (i = 0; i < transaction->nr; i++) {
+		struct ref_update *update = transaction->updates[i];
+		struct staged_reflog *log;
+
+		if (!(update->flags & REF_REPLACE_REFLOG))
+			continue;
+		CALLOC_ARRAY(log, 1);
+		strmap_put(&data->reflog_files, update->refname, log);
+	}
+	for (i = 0; i < transaction->nr; i++) {
+		struct ref_update *update = transaction->updates[i];
+		struct staged_reflog *log = strmap_get(&data->reflog_files, update->refname);
+
+		if (!log || !(update->flags & REF_LOG_ONLY) ||
+		    !(update->flags & REF_HAVE_NEW))
+			continue;
+		if (!(update->flags & REF_LOG_USE_PROVIDED_OIDS)) {
+			strbuf_addf(err, "replacing reflog '%s' requires explicit OIDs",
+				    update->refname);
+			goto out;
+		}
+		ALLOC_GROW(log->updates, log->nr + 1, log->alloc);
+		log->updates[log->nr++] = update;
+	}
+	strmap_for_each_entry(&data->reflog_files, &iter, entry) {
+		struct staged_reflog *log = entry->value;
+		int fd;
+
+		if (!log->nr)
+			continue;
+		QSORT(log->updates, log->nr, reflog_update_cmp);
+		/* Keep the staging file beside the logs, which may be on another device. */
+		strbuf_reset(&path);
+		files_reflog_path(refs, &path, is_root_ref(entry->key) ?
+				 ".tmp-reflog-XXXXXX" : "refs/.tmp-reflog-XXXXXX");
+		if (safe_create_leading_directories(refs->base.repo, path.buf))
+			goto write_error;
+		log->file = mks_tempfile_m(path.buf, 0666);
+		if (!log->file)
+			goto write_error;
+		fd = get_tempfile_fd(log->file);
+		for (i = 0; i < log->nr; i++) {
+			struct ref_update *update = log->updates[i];
+
+			format_reflog_entry(&contents, &update->old_oid, &update->new_oid,
+					    update->committer_info, update->msg);
+			if (contents.len >= 65536) {
+				if (write_in_full(fd, contents.buf, contents.len) < 0)
+					goto write_error;
+				strbuf_reset(&contents);
+			}
+		}
+		if (write_in_full(fd, contents.buf, contents.len) < 0)
+			goto write_error;
+		strbuf_reset(&contents);
+		if (adjust_shared_perm(refs->base.repo, get_tempfile_path(log->file)) ||
+		    close_tempfile_gently(log->file))
+			goto write_error;
+	}
+	ret = 0;
+	goto out;
+
+write_error:
+	strbuf_addf(err, "cannot write staged reflog: %s", strerror(errno));
+out:
+	strbuf_release(&path);
+	strbuf_release(&contents);
+	return ret;
+}
+
+static int install_reflog(const char *path, void *data)
+{
+	struct staged_reflog *log = data;
+	int ret = rename(get_tempfile_path(log->file), path);
+
+	/* Some systems report ENOTDIR when the destination is a directory. */
+	if (ret && errno == ENOTDIR)
+		errno = EISDIR;
+	return ret;
+}
 
 /*
  * Prepare for carrying out update:
@@ -2929,6 +3047,17 @@ static void files_transaction_cleanup(struct files_ref_store *refs,
 	}
 
 	if (backend_data) {
+		struct hashmap_iter iter;
+		struct strmap_entry *entry;
+
+		strmap_for_each_entry(&backend_data->reflog_files, &iter, entry) {
+			struct staged_reflog *log = entry->value;
+
+			delete_tempfile(&log->file);
+			free(log->updates);
+			free(log);
+		}
+		strmap_clear(&backend_data->reflog_files, 0);
 		if (backend_data->packed_transaction &&
 		    ref_transaction_abort(backend_data->packed_transaction, &err)) {
 			error("error aborting transaction: %s", err.buf);
@@ -2970,6 +3099,7 @@ static int files_transaction_prepare(struct ref_store *ref_store,
 
 	CALLOC_ARRAY(backend_data, 1);
 	strmap_init(&backend_data->ref_locks);
+	strmap_init(&backend_data->reflog_files);
 	transaction->backend_data = backend_data;
 
 	/*
@@ -3102,6 +3232,7 @@ static int files_transaction_prepare(struct ref_store *ref_store,
 			if (ret) {
 				ref_transaction_free(packed_transaction);
 				backend_data->packed_transaction = NULL;
+				goto cleanup;
 			}
 		} else {
 			/*
@@ -3121,6 +3252,8 @@ static int files_transaction_prepare(struct ref_store *ref_store,
 			}
 		}
 	}
+
+	ret = prepare_reflog_replacements(refs, transaction, err);
 
 cleanup:
 	free(head_ref);
@@ -3346,6 +3479,31 @@ static int files_transaction_finish(struct ref_store *ref_store,
 	backend_data = transaction->backend_data;
 	packed_transaction = backend_data->packed_transaction;
 
+	for (i = 0; i < transaction->nr; i++) {
+		struct ref_update *update = transaction->updates[i];
+		struct staged_reflog *log;
+
+		if (!(update->flags & REF_REPLACE_REFLOG))
+			continue;
+		log = strmap_get(&backend_data->reflog_files, update->refname);
+		strbuf_reset(&sb);
+		files_reflog_path(refs, &sb, update->refname);
+		if (!log->file) {
+			if (unlink(sb.buf) && errno != ENOENT && errno != EISDIR)
+				ret = -1;
+		} else if (raceproof_create_file(refs, sb.buf, install_reflog, log)) {
+			ret = -1;
+		} else {
+			delete_tempfile(&log->file);
+		}
+		if (ret) {
+			strbuf_addf(err, "cannot replace reflog '%s': %s",
+				    update->refname, strerror(errno));
+		}
+		if (ret)
+			goto cleanup;
+	}
+
 	/* Perform updates first so live commits remain referenced */
 	for (i = 0; i < transaction->nr; i++) {
 		struct ref_update *update = transaction->updates[i];
@@ -3354,8 +3512,9 @@ static int files_transaction_finish(struct ref_store *ref_store,
 		if (update->rejection_err)
 			continue;
 
-		if (update->flags & REF_NEEDS_COMMIT ||
-		    update->flags & REF_LOG_ONLY) {
+		if ((update->flags & REF_NEEDS_COMMIT ||
+		     update->flags & REF_LOG_ONLY) &&
+		    !strmap_contains(&backend_data->reflog_files, update->refname)) {
 			if (parse_and_write_reflog(refs, update, lock, err)) {
 				ret = REF_TRANSACTION_ERROR_GENERIC;
 				goto cleanup;

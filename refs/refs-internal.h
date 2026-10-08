@@ -49,6 +49,9 @@ struct ref_transaction;
  */
 #define REF_HAVE_PEELED (1 << 15)
 
+/* Replace a reflog with the explicit log-only updates in the transaction. */
+#define REF_REPLACE_REFLOG (1 << 16)
+
 /*
  * Return the length of time to retry acquiring a loose reference lock
  * before giving up, in milliseconds:

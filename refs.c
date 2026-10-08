@@ -1436,7 +1436,6 @@ enum ref_transaction_error ref_transaction_update(struct ref_transaction *transa
 		strbuf_addstr(err, _("refusing to force and skip creation of reflog"));
 		return REF_TRANSACTION_ERROR_GENERIC;
 	}
-
 	if (!transaction_refname_valid(refname, new_oid, flags, err))
 		return REF_TRANSACTION_ERROR_GENERIC;
 
@@ -1516,6 +1515,39 @@ int ref_transaction_update_reflog(struct ref_transaction *transaction,
 	if (index > transaction->max_index)
 		transaction->max_index = index;
 
+	return 0;
+}
+
+int ref_transaction_replace_reflog(struct ref_transaction *transaction,
+				    const char *refname,
+				    struct strbuf *err)
+{
+	size_t i;
+	unsigned int flags = REF_LOG_ONLY | REF_NO_DEREF |
+		REF_SKIP_CREATE_REFLOG | REF_REPLACE_REFLOG;
+
+	assert(err);
+	if (transaction->flags &
+	    (REF_TRANSACTION_FLAG_INITIAL | REF_TRANSACTION_ALLOW_FAILURE)) {
+		strbuf_addstr(err, _("reflog replacement requires an "
+				     "all-or-nothing, non-initial transaction"));
+		return REF_TRANSACTION_ERROR_GENERIC;
+	}
+	if (!transaction_refname_valid(refname, NULL, flags, err))
+		return REF_TRANSACTION_ERROR_GENERIC;
+	for (i = 0; i < transaction->nr; i++) {
+		struct ref_update *update = transaction->updates[i];
+
+		if ((update->flags & REF_REPLACE_REFLOG) &&
+		    !strcmp(update->refname, refname)) {
+			strbuf_addf(err, _("reflog replacement for '%s' already queued"),
+				    refname);
+			return REF_TRANSACTION_ERROR_NAME_CONFLICT;
+		}
+	}
+
+	ref_transaction_add_update(transaction, refname, flags,
+				   NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 	return 0;
 }
 

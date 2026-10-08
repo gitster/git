@@ -146,6 +146,45 @@ static int cmd_rename_ref(struct ref_store *refs, const char **argv)
 	return refs_rename_ref(refs, oldref, newref, logmsg);
 }
 
+static int cmd_reflog_transaction(struct ref_store *refs, const char **argv)
+{
+	const char *refname = notnull(*argv++, "refname");
+	const char *mode = notnull(*argv++, "mode");
+	struct strbuf err = STRBUF_INIT;
+	struct ref_transaction *transaction = ref_store_transaction_begin(refs, 0, &err);
+	int ret = !transaction;
+
+	if (!ret) {
+		if (!strcmp(mode, "replace")) {
+			ret = ref_transaction_replace_reflog(transaction, refname, &err);
+		} else if (!strcmp(mode, "replace-twice")) {
+			ret = ref_transaction_replace_reflog(transaction, refname, &err) ||
+				ref_transaction_replace_reflog(transaction, refname, &err);
+		} else if (strcmp(mode, "append")) {
+			die("unknown reflog transaction mode: %s", mode);
+		}
+	}
+	while (!ret && *argv) {
+		uint64_t index = strtoumax(notnull(*argv++, "index"), NULL, 10);
+		struct object_id old_oid, new_oid;
+		const char *message;
+
+		if (get_oid_hex(notnull(*argv++, "old-oid"), &old_oid) ||
+		    get_oid_hex(notnull(*argv++, "new-oid"), &new_oid))
+			die("invalid object ID");
+		message = notnull(*argv++, "message");
+		ret = ref_transaction_update_reflog(transaction, refname,
+				&new_oid, &old_oid, NULL, message, index, &err);
+	}
+	if (!ret)
+		ret = ref_transaction_commit(transaction, &err);
+	if (ret)
+		error("%s", err.buf);
+	ref_transaction_free(transaction);
+	strbuf_release(&err);
+	return ret;
+}
+
 static int each_ref(const struct reference *ref, void *cb_data UNUSED)
 {
 	printf("%s %s 0x%x\n", oid_to_hex(ref->oid), ref->name, ref->flags);
@@ -308,6 +347,7 @@ static struct command commands[] = {
 	{ "create-symref", cmd_create_symref },
 	{ "delete-refs", cmd_delete_refs },
 	{ "rename-ref", cmd_rename_ref },
+	{ "reflog-transaction", cmd_reflog_transaction },
 	{ "for-each-ref", cmd_for_each_ref },
 	{ "for-each-ref--exclude", cmd_for_each_ref__exclude },
 	{ "resolve-ref", cmd_resolve_ref },

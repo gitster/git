@@ -1503,9 +1503,11 @@ static int write_transaction_table(struct reftable_writer *writer, void *cb_data
 		 * - `core.logAllRefUpdates` tells us to create the reflog for
 		 *   the given ref.
 		 */
-		if ((u->flags & REF_HAVE_NEW) &&
+		if ((u->flags & REF_REPLACE_REFLOG) ||
+		    ((u->flags & REF_HAVE_NEW) &&
+		    !(u->flags & REF_LOG_ONLY) &&
 		    !(u->type & REF_ISSYMREF) &&
-		    ref_update_has_null_new_value(u)) {
+		    ref_update_has_null_new_value(u))) {
 			struct reftable_log_record log = {0};
 			struct reftable_iterator it = {0};
 
@@ -1548,8 +1550,10 @@ static int write_transaction_table(struct reftable_writer *writer, void *cb_data
 
 			if (ret)
 				goto done;
-		} else if (!(u->flags & REF_SKIP_CREATE_REFLOG) &&
+		}
+		if (!(u->flags & REF_SKIP_CREATE_REFLOG) &&
 			   (u->flags & REF_HAVE_NEW) &&
+			   (!ref_update_has_null_new_value(u) || (u->flags & REF_LOG_ONLY)) &&
 			   (u->flags & REF_FORCE_CREATE_REFLOG ||
 			    should_write_log(arg->refs, u->refname))) {
 			struct reftable_log_record *log;
