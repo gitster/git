@@ -1889,12 +1889,11 @@ static void invalidate_kept_pack_cache(struct odb_source_packed *store)
 
 void repo_invalidate_kept_pack_caches(struct repository *r)
 {
-	struct odb_source *source;
+	struct odb_source_files *files =
+		odb_source_files_downcast(r->objects->source);
 
-	for (source = r->objects->sources; source; source = source->next) {
-		struct odb_source_files *files = odb_source_files_downcast(source);
-		invalidate_kept_pack_cache(files->packed);
-	}
+	for (struct odb_files_dir *dir = files->dirs; dir; dir = dir->next)
+		invalidate_kept_pack_cache(dir->packed);
 }
 
 static void maybe_invalidate_kept_pack_cache(struct odb_source_packed *store,
