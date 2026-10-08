@@ -8,6 +8,9 @@
 struct fsck_options;
 struct ref_transaction;
 
+/* Physical updates nested in a transaction already reported to hooks. */
+#define REF_TRANSACTION_FLAG_INTERNAL (1 << 2)
+
 /*
  * Data structures and functions for the internal use of the refs
  * module. Code outside of the refs module should use only the public

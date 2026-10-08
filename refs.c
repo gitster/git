@@ -2689,6 +2689,9 @@ static int run_transaction_hook(struct ref_transaction *transaction,
 	struct run_hooks_opt opt = RUN_HOOKS_OPT_INIT;
 	int ret = 0;
 
+	if (transaction->flags & REF_TRANSACTION_FLAG_INTERNAL)
+		return 0;
+
 	strvec_push(&opt.args, state);
 
 	opt.feed_pipe = transaction_hook_feed_stdin;
