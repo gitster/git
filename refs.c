@@ -3181,28 +3181,165 @@ out:
 	return ret;
 }
 
+static int transaction_copy_ref(struct ref_transaction *transaction,
+				const char *oldref, const char *newref,
+				unsigned int source_flags, const char *logmsg,
+				struct strbuf *err)
+{
+	struct ref_update *source, *destination;
+	struct object_id oid;
+	int type;
+
+	if (transaction->state != REF_TRANSACTION_OPEN)
+		BUG("copy added to a prepared transaction");
+	if (!refs_resolve_ref_unsafe(transaction->ref_store, oldref,
+			RESOLVE_REF_READING | RESOLVE_REF_NO_RECURSE, &oid, &type)) {
+		strbuf_addf(err, _("refname %s not found"), oldref);
+		return -1;
+	}
+	if (type & REF_ISSYMREF) {
+		strbuf_addf(err, _("refname %s is a symbolic ref, copying or renaming it is not supported"), oldref);
+		return -1;
+	}
+	if (!strcmp(oldref, newref))
+		return 0;
+	if (!transaction_refname_valid(newref, &oid, REF_NO_DEREF, err))
+		return -1;
+	if (transaction->flags & (REF_TRANSACTION_FLAG_INITIAL | REF_TRANSACTION_ALLOW_FAILURE)) {
+		strbuf_addstr(err, _("copy and rename require an all-or-nothing, non-initial transaction"));
+		return -1;
+	}
+
+	/* This value describes the request to 'preparing'; locks decide the value used. */
+	source = ref_transaction_add_update(transaction, oldref,
+			REF_NO_DEREF | REF_COPY_SOURCE | source_flags,
+			(source_flags & REF_HAVE_NEW) ? null_oid(transaction->ref_store->repo->hash_algo) : NULL,
+			NULL, NULL, NULL, NULL, NULL, logmsg);
+	destination = ref_transaction_add_update(transaction, newref,
+			REF_NO_DEREF | REF_HAVE_NEW,
+			&oid, NULL, NULL, NULL, NULL, NULL, logmsg);
+	destination->copy_from = source;
+	return ref_transaction_replace_reflog(transaction, newref, err);
+}
+
+int ref_transaction_copy(struct ref_transaction *transaction,
+			 const char *oldref, const char *newref,
+			 const char *logmsg, struct strbuf *err)
+{
+	return transaction_copy_ref(transaction, oldref, newref,
+				    REF_LOG_ONLY | REF_SKIP_CREATE_REFLOG, logmsg, err);
+}
+
+int ref_transaction_rename(struct ref_transaction *transaction,
+			   const char *oldref, const char *newref,
+			   const char *logmsg, struct strbuf *err)
+{
+	return transaction_copy_ref(transaction, oldref, newref,
+				    REF_HAVE_NEW, logmsg, err);
+}
+
+int ref_update_record_copy_source(struct ref_update *update,
+				  const struct object_id *oid,
+				  struct strbuf *err)
+{
+	if ((update->type & REF_ISSYMREF) || is_null_oid(oid)) {
+		strbuf_addf(err, _("'%s' is not an existing direct reference"), update->refname);
+		return -1;
+	}
+	oidcpy(&update->old_oid, oid);
+	update->flags |= REF_HAVE_OLD;
+	return 0;
+}
+
+struct copy_reflog_data {
+	struct ref_transaction *transaction;
+	const char *refname;
+	struct strbuf *err;
+};
+
+static int copy_reflog_entry(const char *refname UNUSED,
+			     struct object_id *old_oid, struct object_id *new_oid,
+			     const char *committer, timestamp_t timestamp, int tz,
+			     const char *message, void *cb_data)
+{
+	struct copy_reflog_data *data = cb_data;
+	struct strbuf ident = STRBUF_INIT;
+	int ret;
+
+	strbuf_addf(&ident, "%s %" PRItime " %+05d", committer, timestamp, tz);
+	ret = ref_transaction_update_reflog(data->transaction, data->refname,
+			new_oid, old_oid, ident.buf, message,
+			data->transaction->max_index + 1, data->err);
+	strbuf_release(&ident);
+	return ret;
+}
+
+int ref_transaction_prepare_copy(struct ref_transaction *transaction,
+				 struct ref_update *update,
+				 struct strbuf *err)
+{
+	struct ref_update *source = update->copy_from;
+	struct copy_reflog_data data = { transaction, update->refname, err };
+	struct object *object;
+	int ret;
+
+	oidcpy(&update->new_oid, &source->old_oid);
+	object = parse_object(transaction->ref_store->repo, &update->new_oid);
+	if (!object || (is_branch(update->refname) && object->type != OBJ_COMMIT)) {
+		strbuf_addf(err, _("cannot copy object %s to '%s'"),
+			    oid_to_hex(&update->new_oid), update->refname);
+		return -1;
+	}
+	if (object->type == OBJ_TAG &&
+	    !peel_object(transaction->ref_store->repo, &update->new_oid,
+			 &update->peeled, PEEL_OBJECT_VERIFY_TAGGED_OBJECT_TYPE))
+		update->flags |= REF_HAVE_PEELED;
+
+	if (!refs_reflog_exists(transaction->ref_store, source->refname))
+		return 0;
+	ret = refs_for_each_reflog_ent(transaction->ref_store, source->refname,
+				       copy_reflog_entry, &data);
+	if (ret && !err->len)
+		strbuf_addf(err, _("cannot read reflog for '%s'"), source->refname);
+	return ret;
+}
+
 int refs_rename_ref(struct ref_store *refs, const char *oldref,
 		    const char *newref, const char *logmsg)
 {
-	char *msg;
-	int retval;
+	struct strbuf err = STRBUF_INIT;
+	struct ref_transaction *transaction = ref_store_transaction_begin(refs, 0, &err);
+	int ret = -1;
 
-	msg = normalize_reflog_message(logmsg);
-	retval = refs->be->rename_ref(refs, oldref, newref, msg);
-	free(msg);
-	return retval;
+	if (!transaction ||
+	    ref_transaction_rename(transaction, oldref, newref, logmsg, &err))
+		goto out;
+	ret = transaction->nr ? ref_transaction_commit(transaction, &err) : 0;
+out:
+	if (ret)
+		error("%s", err.buf);
+	ref_transaction_free(transaction);
+	strbuf_release(&err);
+	return ret;
 }
 
 int refs_copy_existing_ref(struct ref_store *refs, const char *oldref,
-		    const char *newref, const char *logmsg)
+			   const char *newref, const char *logmsg)
 {
-	char *msg;
-	int retval;
+	struct strbuf err = STRBUF_INIT;
+	struct ref_transaction *transaction = ref_store_transaction_begin(refs, 0, &err);
+	int ret = -1;
 
-	msg = normalize_reflog_message(logmsg);
-	retval = refs->be->copy_ref(refs, oldref, newref, msg);
-	free(msg);
-	return retval;
+	if (!transaction ||
+	    ref_transaction_copy(transaction, oldref, newref, logmsg, &err))
+		goto out;
+	ret = transaction->nr ? ref_transaction_commit(transaction, &err) : 0;
+out:
+	if (ret)
+		error("%s", err.buf);
+	ref_transaction_free(transaction);
+	strbuf_release(&err);
+	return ret;
 }
 
 const char *ref_update_original_update_refname(struct ref_update *update)

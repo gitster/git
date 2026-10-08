@@ -74,6 +74,12 @@ extern int ignore_case;
  */
 #define REF_LOG_VIA_SPLIT (1 << 14)
 
+/* A D/F or case-only rename cannot lock a loose destination beside its source. */
+#define REF_NEEDS_PACK (1 << 18)
+
+/* The source reflog was removed to make room for its rename destination. */
+#define REF_RENAMED_LOG (1 << 19)
+
 struct ref_lock {
 	char *ref_name;
 	struct lock_file lk;
@@ -787,6 +793,37 @@ static enum ref_transaction_error lock_raw_ref(struct files_ref_store *refs,
 	lock->ref_name = xstrdup(refname);
 	lock->count = 1;
 	files_ref_path(refs, &ref_file, refname);
+
+	if (update->copy_from && (update->copy_from->flags & REF_HAVE_NEW)) {
+		const char *source = update->copy_from->refname;
+		size_t source_len = strlen(source), dest_len = strlen(refname);
+		int source_is_parent = starts_with(refname, source) && refname[source_len] == '/';
+		int dest_is_parent = starts_with(source, refname) && source[dest_len] == '/';
+		int same_path = repo_ignore_case(refs->base.repo) && !strcasecmp(source, refname);
+
+		if (source_is_parent || dest_is_parent || same_path) {
+			struct string_list skip = STRING_LIST_INIT_NODUP;
+
+			string_list_insert(&skip, source);
+			ret = refs_verify_refname_available(&refs->base, refname,
+							   extras, &skip, 0, err);
+			string_list_clear(&skip, 0);
+			if (ret)
+				goto error_return;
+			/* The existing source and its lock protect a child or case-only destination. */
+			if (dest_is_parent && repo_hold_lock_file_for_update_timeout(
+					refs->base.repo, &lock->lk, ref_file.buf, LOCK_NO_DEREF,
+					get_files_ref_lock_timeout_ms(refs->base.repo)) < 0) {
+				unable_to_lock_message(ref_file.buf, errno, err);
+				ret = REF_TRANSACTION_ERROR_GENERIC;
+				goto error_return;
+			}
+			oidclr(&lock->old_oid, refs->base.repo->hash_algo);
+			update->flags |= REF_NEEDS_PACK;
+			ret = 0;
+			goto out;
+		}
+	}
 
 retry:
 	switch (safe_create_leading_directories(refs->base.repo, ref_file.buf)) {
@@ -2538,7 +2575,8 @@ static enum ref_transaction_error split_head_update(struct ref_update *update,
 
 	new_update = ref_transaction_add_update(
 			transaction, "HEAD",
-			update->flags | REF_LOG_ONLY | REF_NO_DEREF | REF_LOG_VIA_SPLIT,
+			(update->flags & ~REF_COPY_SOURCE) |
+			REF_LOG_ONLY | REF_NO_DEREF | REF_LOG_VIA_SPLIT,
 			&update->new_oid, &update->old_oid, &update->peeled,
 			NULL, NULL, update->committer_info, update->msg);
 	new_update->parent_update = update;
@@ -2677,6 +2715,7 @@ static enum ref_transaction_error check_old_oid(struct ref_update *update,
 
 struct staged_reflog {
 	struct tempfile *file;
+	struct tempfile *source_log;
 	struct ref_update **updates;
 	size_t nr, alloc;
 };
@@ -2789,6 +2828,155 @@ static int install_reflog(const char *path, void *data)
 	return ret;
 }
 
+static int move_reflog(const char *path, void *data)
+{
+	struct tempfile *tempfile = data;
+	int ret = rename(get_tempfile_path(tempfile), path);
+
+	if (ret && errno == ENOTDIR)
+		errno = EISDIR;
+	return ret;
+}
+
+static int stage_source_reflog(struct files_ref_store *refs,
+			       struct ref_update *update,
+			       struct staged_reflog *log,
+			       struct strbuf *err)
+{
+	struct strbuf source = STRBUF_INIT;
+	struct strbuf path = STRBUF_INIT;
+	int ret = -1;
+
+	files_reflog_path(refs, &source, update->copy_from->refname);
+	if (!refs_reflog_exists(&refs->base, update->copy_from->refname)) {
+		ret = 0;
+		goto out;
+	}
+	files_reflog_path(refs, &path, "refs/.tmp-reflog-source-XXXXXX");
+	log->source_log = mks_tempfile_m(path.buf, 0666);
+	if (!log->source_log || close_tempfile_gently(log->source_log) ||
+	    rename(source.buf, get_tempfile_path(log->source_log))) {
+		strbuf_addf(err, "cannot stage source reflog '%s': %s",
+			    update->copy_from->refname, strerror(errno));
+		goto out;
+	}
+	try_remove_empty_parents(refs, update->copy_from->refname,
+				 REMOVE_EMPTY_PARENTS_REFLOG);
+	update->copy_from->flags |= REF_RENAMED_LOG;
+	ret = 0;
+
+out:
+	if (ret)
+		delete_tempfile(&log->source_log);
+	strbuf_release(&source);
+	strbuf_release(&path);
+	return ret;
+}
+
+static int restore_source_reflog(struct files_ref_store *refs,
+				 struct ref_update *update,
+				 struct staged_reflog *log,
+				 struct strbuf *err)
+{
+	struct strbuf source = STRBUF_INIT;
+	int ret;
+
+	if (!log->source_log)
+		return 0;
+	files_reflog_path(refs, &source, update->copy_from->refname);
+	ret = raceproof_create_file(refs, source.buf, move_reflog,
+				    log->source_log);
+	if (ret) {
+		struct strbuf recovery = STRBUF_INIT;
+
+		strbuf_addf(err, "; cannot restore source reflog '%s': %s",
+			    update->copy_from->refname, strerror(errno));
+		strbuf_addf(&recovery, "%s.recovery",
+			    get_tempfile_path(log->source_log));
+		if (rename_tempfile(&log->source_log, recovery.buf))
+			strbuf_addf(err, "; cannot preserve its backup: %s",
+				    strerror(errno));
+		else
+			strbuf_addf(err, "; backup saved as '%s'", recovery.buf);
+		strbuf_release(&recovery);
+	} else {
+		delete_tempfile(&log->source_log);
+	}
+	strbuf_release(&source);
+	return ret;
+}
+
+static int check_reflog_symlink(struct files_ref_store *refs,
+				const char *refname, struct strbuf *err)
+{
+	struct strbuf path = STRBUF_INIT;
+	struct stat st;
+	int ret = 0;
+
+	files_reflog_path(refs, &path, refname);
+	if (!lstat(path.buf, &st)) {
+		if (S_ISLNK(st.st_mode)) {
+			strbuf_addf(err, "reflog for %s is a symlink", refname);
+			ret = -1;
+		}
+	} else if (errno != ENOENT && errno != ENOTDIR) {
+		strbuf_addf(err, "cannot stat reflog for %s: %s", refname, strerror(errno));
+		ret = -1;
+	}
+	strbuf_release(&path);
+	return ret;
+}
+
+static struct ref_update *find_update_with_flag(struct ref_transaction *transaction,
+						const char *refname,
+						unsigned int flag)
+{
+	size_t i;
+
+	for (i = 0; i < transaction->nr; i++) {
+		struct ref_update *update = transaction->updates[i];
+
+		if ((update->flags & flag) && !strcmp(update->refname, refname))
+			return update;
+	}
+	return NULL;
+}
+
+static int prepare_copy_reflog(struct files_ref_store *refs,
+			       struct ref_transaction *transaction,
+			       struct ref_update *update, struct strbuf *err)
+{
+	enum log_refs_config config = files_ref_store_write_options(refs)->log_all_ref_updates;
+	int source_has_log;
+	int write_log;
+
+	if (check_reflog_symlink(refs, update->copy_from->refname, err) ||
+	    check_reflog_symlink(refs, update->refname, err))
+		return -1;
+	source_has_log = refs_reflog_exists(&refs->base, update->copy_from->refname);
+	/* A copy without source history only appends to an existing destination log. */
+	if (!source_has_log && !(update->copy_from->flags & REF_HAVE_NEW)) {
+		struct ref_update *replacement = find_update_with_flag(
+			transaction, update->refname, REF_REPLACE_REFLOG);
+
+		if (!replacement)
+			BUG("copy destination without a reflog replacement");
+		replacement->flags &= ~REF_REPLACE_REFLOG;
+	}
+	if (config == LOG_REFS_UNSET)
+		config = is_bare_repository(refs->base.repo) ? LOG_REFS_NONE : LOG_REFS_NORMAL;
+	write_log = source_has_log || should_autocreate_reflog(config, update->refname) ||
+		(!(update->copy_from->flags & REF_HAVE_NEW) &&
+		 refs_reflog_exists(&refs->base, update->refname));
+	if (ref_transaction_prepare_copy(transaction, update, err))
+		return -1;
+	if (!write_log)
+		return 0;
+	return ref_transaction_update_reflog(transaction, update->refname,
+			&update->new_oid, &update->new_oid, NULL, update->msg,
+			transaction->max_index + 1, err);
+}
+
 /*
  * Prepare for carrying out update:
  * - Lock the reference referred to by update.
@@ -2819,6 +3007,8 @@ static enum ref_transaction_error lock_ref_for_update(struct files_ref_store *re
 	files_assert_main_repository(refs, "lock_ref_for_update");
 
 	backend_data = transaction->backend_data;
+	if (update->copy_from && prepare_copy_reflog(refs, transaction, update, err))
+		return REF_TRANSACTION_ERROR_GENERIC;
 
 	if ((update->flags & REF_HAVE_NEW) && ref_update_has_null_new_value(update))
 		update->flags |= REF_DELETING;
@@ -2828,6 +3018,8 @@ static enum ref_transaction_error lock_ref_for_update(struct files_ref_store *re
 		if (ret)
 			goto out;
 	}
+	if (update->copy_from)
+		update->flags |= REF_SKIP_CREATE_REFLOG;
 
 	lock = strmap_get(&backend_data->ref_locks, update->refname);
 	if (lock) {
@@ -2849,6 +3041,17 @@ static enum ref_transaction_error lock_ref_for_update(struct files_ref_store *re
 	}
 
 	update->backend_data = lock;
+	if (update->copy_from) {
+		oidcpy(&update->old_oid, &lock->old_oid);
+		if (update->type & REF_ISSYMREF)
+			update->old_target = xstrdup(referent.buf);
+		update->flags |= REF_HAVE_OLD;
+	}
+	if ((update->flags & REF_COPY_SOURCE) &&
+	    ref_update_record_copy_source(update, &lock->old_oid, err)) {
+		ret = REF_TRANSACTION_ERROR_GENERIC;
+		goto out;
+	}
 
 	if (update->flags & REF_LOG_VIA_SPLIT) {
 		struct ref_lock *parent_lock;
@@ -2974,7 +3177,7 @@ static enum ref_transaction_error lock_ref_for_update(struct files_ref_store *re
 		update->flags |= REF_NEEDS_COMMIT;
 	} else if ((update->flags & REF_HAVE_NEW) &&
 		   !(update->flags & REF_DELETING) &&
-		   !(update->flags & REF_LOG_ONLY)) {
+		   !(update->flags & (REF_LOG_ONLY | REF_NEEDS_PACK))) {
 		if (!(update->type & REF_ISSYMREF) &&
 		    oideq(&lock->old_oid, &update->new_oid)) {
 			/*
@@ -3003,7 +3206,7 @@ static enum ref_transaction_error lock_ref_for_update(struct files_ref_store *re
 			}
 		}
 	}
-	if (!(update->flags & REF_NEEDS_COMMIT)) {
+	if (!(update->flags & (REF_NEEDS_COMMIT | REF_NEEDS_PACK))) {
 		/*
 		 * We didn't call write_ref_to_lockfile(), so
 		 * the lockfile is still open. Close it to
@@ -3054,6 +3257,7 @@ static void files_transaction_cleanup(struct files_ref_store *refs,
 			struct staged_reflog *log = entry->value;
 
 			delete_tempfile(&log->file);
+			delete_tempfile(&log->source_log);
 			free(log->updates);
 			free(log);
 		}
@@ -3162,7 +3366,7 @@ static int files_transaction_prepare(struct ref_store *ref_store,
 			goto cleanup;
 		}
 
-		if (update->flags & REF_DELETING &&
+		if (update->flags & (REF_DELETING | REF_NEEDS_PACK) &&
 		    !(update->flags & REF_LOG_ONLY) &&
 		    !(update->flags & REF_IS_PRUNING) &&
 		    !is_root_ref(update->refname)) {
@@ -3189,6 +3393,8 @@ static int files_transaction_prepare(struct ref_store *ref_store,
 					REF_HAVE_NEW | REF_NO_DEREF,
 					&update->new_oid, NULL, NULL,
 					NULL, NULL, NULL, NULL);
+			if (update->copy_from || (update->flags & REF_COPY_SOURCE))
+				packed_transaction->flags |= REF_TRANSACTION_FLAG_INTERNAL;
 		}
 	}
 
@@ -3481,11 +3687,18 @@ static int files_transaction_finish(struct ref_store *ref_store,
 
 	for (i = 0; i < transaction->nr; i++) {
 		struct ref_update *update = transaction->updates[i];
+		struct ref_update *operation;
 		struct staged_reflog *log;
 
 		if (!(update->flags & REF_REPLACE_REFLOG))
 			continue;
 		log = strmap_get(&backend_data->reflog_files, update->refname);
+		operation = find_update_with_flag(transaction, update->refname,
+						  REF_NEEDS_PACK);
+		if (operation && stage_source_reflog(refs, operation, log, err)) {
+			ret = -1;
+			goto cleanup;
+		}
 		strbuf_reset(&sb);
 		files_reflog_path(refs, &sb, update->refname);
 		if (!log->file) {
@@ -3499,6 +3712,8 @@ static int files_transaction_finish(struct ref_store *ref_store,
 		if (ret) {
 			strbuf_addf(err, "cannot replace reflog '%s': %s",
 				    update->refname, strerror(errno));
+			if (operation)
+				restore_source_reflog(refs, operation, log, err);
 		}
 		if (ret)
 			goto cleanup;
@@ -3563,7 +3778,7 @@ static int files_transaction_finish(struct ref_store *ref_store,
 
 		if (update->flags & REF_DELETING &&
 		    !(update->flags & REF_LOG_ONLY) &&
-		    !(update->flags & REF_IS_PRUNING)) {
+		    !(update->flags & (REF_IS_PRUNING | REF_RENAMED_LOG))) {
 			strbuf_reset(&sb);
 			files_reflog_path(refs, &sb, update->refname);
 			if (!unlink_or_warn(sb.buf))

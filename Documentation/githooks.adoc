@@ -518,6 +518,16 @@ distinguish these cases, you can inspect the current value of
 references are not resolved: `<ref-name>` will reflect the symbolic reference
 itself rather than the object it points to.
 
+Copying or renaming a reference is reported as one transaction. A rename
+reports the deletion of the source and the update of the destination;
+a copy reports only the destination update. Copying the reflog does not
+produce additional hook input. In the "preparing" state, the old values
+are unspecified (all zeroes), and the destination's new value is the
+source value read before locking. In subsequent states, these operations
+report the old values and the source value read under lock. Thus, a
+"preparing" hook may change the source before it is copied or renamed.
+A "prepared" hook still sees the original references and reflogs on disk.
+
 For symbolic reference updates the `<old_value>` and `<new-value>`
 fields could denote references instead of objects. A reference will be
 denoted with a 'ref:' prefix, like `ref:<ref-target>`.

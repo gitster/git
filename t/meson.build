@@ -218,6 +218,7 @@ integration_tests = [
   't1421-reflog-write.sh',
   't1422-show-ref-exists.sh',
   't1423-ref-backend.sh',
+  't1424-ref-copy-transaction.sh',
   't1425-reflog-transaction.sh',
   't1430-bad-ref-name.sh',
   't1450-fsck.sh',

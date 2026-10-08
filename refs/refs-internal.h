@@ -52,6 +52,9 @@ struct ref_transaction;
 /* Replace a reflog with the explicit log-only updates in the transaction. */
 #define REF_REPLACE_REFLOG (1 << 16)
 
+/* A source whose value and reflog are consumed by a later update. */
+#define REF_COPY_SOURCE (1 << 17)
+
 /*
  * Return the length of time to retry acquiring a loose reference lock
  * before giving up, in milliseconds:
@@ -161,6 +164,9 @@ struct ref_update {
 	 */
 	struct ref_update *parent_update;
 
+	/* The source is queued first, so backends lock it before the destination. */
+	struct ref_update *copy_from;
+
 	const char refname[FLEX_ARRAY];
 };
 
@@ -192,6 +198,13 @@ struct ref_update *ref_transaction_add_update(
 		const char *new_target, const char *old_target,
 		const char *committer_info,
 		const char *msg);
+
+int ref_update_record_copy_source(struct ref_update *update,
+				  const struct object_id *oid,
+				  struct strbuf *err);
+int ref_transaction_prepare_copy(struct ref_transaction *transaction,
+				 struct ref_update *update,
+				 struct strbuf *err);
 
 /*
  * Transaction states.

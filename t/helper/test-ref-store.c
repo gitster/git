@@ -185,6 +185,41 @@ static int cmd_reflog_transaction(struct ref_store *refs, const char **argv)
 	return ret;
 }
 
+static int cmd_copy_transaction(struct ref_store *refs, const char **argv)
+{
+	struct strbuf err = STRBUF_INIT;
+	struct ref_transaction *transaction = ref_store_transaction_begin(refs, 0, &err);
+	int ret = !transaction;
+
+	while (!ret && *argv) {
+		const char *operation = *argv++;
+		const char *source = notnull(*argv++, "source");
+		const char *destination = notnull(*argv++, "destination");
+
+		if (!strcmp(operation, "rename"))
+			ret = ref_transaction_rename(transaction, source, destination, "rename", &err);
+		else if (!strcmp(operation, "copy"))
+			ret = ref_transaction_copy(transaction, source, destination, "copy", &err);
+		else if (!strcmp(operation, "update")) {
+			struct object_id oid;
+
+			if (get_oid_hex(destination, &oid))
+				die("invalid object ID: %s", destination);
+			ret = ref_transaction_update(transaction, source, &oid,
+						     NULL, NULL, NULL, 0, "update", &err);
+		} else {
+			die("unknown operation: %s", operation);
+		}
+	}
+	if (!ret)
+		ret = ref_transaction_commit(transaction, &err);
+	if (ret)
+		error("%s", err.buf);
+	ref_transaction_free(transaction);
+	strbuf_release(&err);
+	return ret;
+}
+
 static int each_ref(const struct reference *ref, void *cb_data UNUSED)
 {
 	printf("%s %s 0x%x\n", oid_to_hex(ref->oid), ref->name, ref->flags);
@@ -348,6 +383,7 @@ static struct command commands[] = {
 	{ "delete-refs", cmd_delete_refs },
 	{ "rename-ref", cmd_rename_ref },
 	{ "reflog-transaction", cmd_reflog_transaction },
+	{ "copy-transaction", cmd_copy_transaction },
 	{ "for-each-ref", cmd_for_each_ref },
 	{ "for-each-ref--exclude", cmd_for_each_ref__exclude },
 	{ "resolve-ref", cmd_resolve_ref },

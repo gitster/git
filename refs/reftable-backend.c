@@ -1076,6 +1076,22 @@ static enum ref_transaction_error prepare_single_update(struct reftable_ref_stor
 	struct object_id current_oid = {0};
 	const char *rewritten_ref;
 
+	if (u->copy_from) {
+		const struct object_id *zero = null_oid(refs->base.repo->hash_algo);
+
+		if (ref_transaction_prepare_copy(transaction, u, err))
+			return REF_TRANSACTION_ERROR_GENERIC;
+		if ((u->copy_from->flags & REF_HAVE_NEW) &&
+		    ref_transaction_update_reflog(transaction, u->refname,
+				zero, &u->new_oid, NULL, u->msg,
+				transaction->max_index + 1, err))
+			return REF_TRANSACTION_ERROR_GENERIC;
+		if (ref_transaction_update_reflog(transaction, u->refname,
+				&u->new_oid, zero, NULL, u->msg,
+				transaction->max_index + 1, err))
+			return REF_TRANSACTION_ERROR_GENERIC;
+	}
+
 	/*
 	 * There is no need to reload the respective backends here as
 	 * we have already reloaded them when preparing the transaction
@@ -1126,14 +1142,26 @@ static enum ref_transaction_error prepare_single_update(struct reftable_ref_stor
 
 		ref_transaction_add_update(
 			transaction, "HEAD",
-			u->flags | REF_LOG_ONLY | REF_NO_DEREF,
+			(u->flags & ~REF_COPY_SOURCE) |
+			REF_LOG_ONLY | REF_NO_DEREF,
 			&u->new_oid, &u->old_oid, &u->peeled, NULL, NULL,
 			NULL, u->msg);
 	}
+	if (u->copy_from)
+		u->flags |= REF_SKIP_CREATE_REFLOG;
 
 	ret = reftable_backend_read_ref(be, rewritten_ref,
 					&current_oid, referent, &u->type);
 	if (ret < 0)
+		return REF_TRANSACTION_ERROR_GENERIC;
+	if (u->copy_from) {
+		oidcpy(&u->old_oid, &current_oid);
+		if (u->type & REF_ISSYMREF)
+			u->old_target = xstrdup(referent->buf);
+		u->flags |= REF_HAVE_OLD;
+	}
+	if ((u->flags & REF_COPY_SOURCE) &&
+	    ref_update_record_copy_source(u, &current_oid, err))
 		return REF_TRANSACTION_ERROR_GENERIC;
 	if (ret > 0 && !ref_update_expects_existing_old_ref(u)) {
 		struct string_list_item *item;
@@ -1319,6 +1347,7 @@ static int reftable_be_transaction_prepare(struct ref_store *ref_store,
 		reftable_be_downcast(ref_store, REF_STORE_WRITE|REF_STORE_MAIN, "ref_transaction_prepare");
 	struct strbuf referent = STRBUF_INIT, head_referent = STRBUF_INIT;
 	struct string_list refnames_to_check = STRING_LIST_INIT_NODUP;
+	struct string_list renamed_sources = STRING_LIST_INIT_NODUP;
 	struct reftable_transaction_data *tx_data = NULL;
 	struct reftable_backend *be;
 	struct object_id head_oid;
@@ -1338,6 +1367,9 @@ static int reftable_be_transaction_prepare(struct ref_store *ref_store,
 	 * that will be modified during the transaction.
 	 */
 	for (i = 0; i < transaction->nr; i++) {
+		struct ref_update *update = transaction->updates[i];
+		if (update->copy_from && (update->copy_from->flags & REF_HAVE_NEW))
+			string_list_insert(&renamed_sources, update->copy_from->refname);
 		ret = prepare_transaction_update(NULL, refs, tx_data,
 						 transaction->updates[i], err);
 		if (ret)
@@ -1390,7 +1422,7 @@ static int reftable_be_transaction_prepare(struct ref_store *ref_store,
 	}
 
 	ret = refs_verify_refnames_available(ref_store, &refnames_to_check,
-					     &transaction->refnames, NULL,
+					     &transaction->refnames, &renamed_sources,
 					     transaction,
 					     transaction->flags & REF_TRANSACTION_FLAG_INITIAL,
 					     err);
@@ -1411,6 +1443,7 @@ done:
 	strbuf_release(&referent);
 	strbuf_release(&head_referent);
 	string_list_clear(&refnames_to_check, 1);
+	string_list_clear(&renamed_sources, 0);
 
 	return ret;
 }

@@ -953,6 +953,22 @@ int ref_transaction_replace_reflog(struct ref_transaction *transaction,
 				    struct strbuf *err);
 
 /*
+ * Queue a copy or rename of a direct reference and its reflog. The source is
+ * read again under lock during prepare; changes made by the preparing hook
+ * are included. An existing destination is overwritten without dereferencing
+ * it. Several independent copies, renames and ordinary updates may be queued
+ * together. Each destination (and each source being renamed) must be unique.
+ * Initial transactions and transactions allowing individual failures are not
+ * supported. On failure, discard the transaction.
+ */
+int ref_transaction_copy(struct ref_transaction *transaction,
+			 const char *oldref, const char *newref,
+			 const char *logmsg, struct strbuf *err);
+int ref_transaction_rename(struct ref_transaction *transaction,
+			   const char *oldref, const char *newref,
+			   const char *logmsg, struct strbuf *err);
+
+/*
  * Add a reference creation to transaction. new_oid is the value that
  * the reference should have after the update; it must not be
  * null_oid. It is verified that the reference does not exist
