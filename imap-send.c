@@ -225,19 +225,21 @@ static int ssl_socket_connect(struct imap_socket *sock UNUSED,
 static int host_matches(const char *host, const ASN1_STRING *asn1_str)
 {
 	const char *pattern = (const char *)ASN1_STRING_get0_data(asn1_str);
+	int pat_len = ASN1_STRING_length(asn1_str);
 
 	/* embedded NUL characters may open a security hole */
-	if (memchr(pattern, '\0', ASN1_STRING_length(asn1_str)))
-	    return 0;
+	if (memchr(pattern, '\0', pat_len))
+		return 0;
 
-	if (pattern[0] == '*' && pattern[1] == '.') {
+	if (pat_len >= 2 && pattern[0] == '*' && pattern[1] == '.') {
 		pattern += 2;
+		pat_len -= 2;
 		if (!(host = strchr(host, '.')))
 			return 0;
 		host++;
 	}
 
-	return *host && *pattern && !strcasecmp(host, pattern);
+	return *host && strlen(host) == (size_t)pat_len && !strncasecmp(host, pattern, pat_len);
 }
 
 static int verify_hostname(X509 *cert, const char *hostname)
@@ -278,8 +280,9 @@ static int verify_hostname(X509 *cert, const char *hostname)
 		return error("cannot get certificate common name");
 	if (host_matches(hostname, cname))
 		return 0;
-	return error("certificate owner '%s' does not match hostname '%s'",
-		     ASN1_STRING_get0_data(cname), hostname);
+	return error("certificate owner '%.*s' does not match hostname '%s'",
+		     (int)ASN1_STRING_length(cname),
+		     (const char *)ASN1_STRING_get0_data(cname), hostname);
 }
 
 static int ssl_socket_connect(struct imap_socket *sock,
