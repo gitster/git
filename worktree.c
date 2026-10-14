@@ -640,7 +640,11 @@ int other_head_refs(struct repository *repo,
 static const char *get_worktree_id(const char *dotgit_contents)
 {
 	const char *slash = find_last_dir_sep(dotgit_contents);
-	if (!slash)
+	const char *prefix = "/worktrees";
+	int prefixlen = strlen(prefix);
+	if (!slash ||
+	    slash - dotgit_contents < prefixlen ||
+	    strncmp(slash - prefixlen, prefix, prefixlen))
 		return "";
 	return slash + 1;
 }
@@ -692,8 +696,10 @@ static void repair_gitfile(struct worktree *wt,
 	if (err == READ_GITFILE_ERR_NOT_A_FILE ||
 		err == READ_GITFILE_ERR_IS_A_DIR)
 		fn(1, wt->path, _(".git is not a file"), cb_data);
-	else if (err || !is_git_directory(backlink.buf))
+	else if (err)
 		repair = _(".git file broken");
+	else if (strcmp(get_worktree_id(dotgit_contents), wt->id))
+		fn(1, wt->path, _("unrelated .git file"), cb_data);
 	else if (fspathcmp(backlink.buf, repo.buf))
 		repair = _(".git file incorrect");
 	else if (use_relative_paths == is_absolute_path(dotgit_contents))
@@ -815,7 +821,7 @@ static ssize_t infer_backlink(struct repository *repo,
 	if (!*id)
 		goto error;
 	repo_common_path_replace(repo, inferred, "worktrees/%s", id);
-	if (!is_directory(inferred->buf))
+	if (!is_git_directory(inferred->buf))
 		goto error;
 
 	return inferred->len;
@@ -888,6 +894,12 @@ void repair_worktree_at_path(struct repository *repo,
 		   cb_data);
 		goto done;
 	}
+	if (!inferred_backlink.len) {
+		fn(1, dotgit.buf,
+		   _("unable to locate repository; .git file is not for a linked worktree"),
+		   cb_data);
+		goto done;
+	}
 
 	/*
 	 * If we got this far, either the worktree's .git file pointed at a
@@ -905,7 +917,7 @@ void repair_worktree_at_path(struct repository *repo,
 	 * in the *original* repository, not in the "copy" repository).
 	 * Therefore, we prioritize inferred_backlink over backlink.
 	 */
-	if (inferred_backlink.len && fspathcmp(backlink.buf, inferred_backlink.buf))
+	if (fspathcmp(backlink.buf, inferred_backlink.buf))
 		strbuf_swap(&backlink, &inferred_backlink);
 
 	strbuf_addf(&gitdir, "%s/gitdir", backlink.buf);
