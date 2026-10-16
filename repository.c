@@ -476,7 +476,22 @@ int repo_hold_locked_index(struct repository *repo,
 			   struct lock_file *lf,
 			   int flags)
 {
+	int timeout_ms;
+
 	if (!repo->index_file)
 		BUG("the repo hasn't been setup");
-	return repo_hold_lock_file_for_update(repo, lf, repo->index_file, flags);
+
+	if (repo->index->initialized) {
+		/*
+		 * Index was initialized (read) without lock. To minimize the
+		 * chance of lost update, do not wait.
+		 */
+		timeout_ms = 0;
+	} else {
+		timeout_ms = 1000;
+		repo_config_get_int(repo, "core.indexlocktimeout", &timeout_ms);
+	}
+
+	return repo_hold_lock_file_for_update_timeout(repo, lf, repo->index_file,
+						      flags, timeout_ms);
 }
