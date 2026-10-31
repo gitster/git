@@ -34,6 +34,7 @@
 #include "sequencer.h"
 #include "rebase-interactive.h"
 #include "reset.h"
+#include "shallow.h"
 #include "trace2.h"
 #include "hook.h"
 #include "trailer.h"
@@ -288,6 +289,8 @@ static int init_basic_state(struct replay_opts *opts, const char *head_name,
 	return write_basic_state(opts, head_name, onto, orig_head);
 }
 
+static int cleanup_autostash(struct rebase_options *opts);
+
 static int do_interactive_rebase(struct rebase_options *opts, unsigned flags)
 {
 	int ret = -1;
@@ -309,6 +312,8 @@ static int do_interactive_rebase(struct rebase_options *opts, unsigned flags)
 				    &make_script_args, flags);
 	if (ret) {
 		error(_("could not generate todo list"));
+		/* Nothing has been started yet; put back what we stashed */
+		cleanup_autostash(opts);
 		goto cleanup;
 	}
 
@@ -615,6 +620,55 @@ static int move_to_original_branch(struct rebase_options *opts)
 
 	strbuf_release(&branch_reflog);
 	strbuf_release(&head_reflog);
+	return ret;
+}
+
+/*
+ * The "apply" backend does not go through the sequencer, so check here that
+ * none of the commits "git format-patch" is about to turn into patches is a
+ * shallow boundary commit.  This walks the same set of commits as run_am().
+ */
+static int check_no_shallow_boundary_to_apply(struct rebase_options *opts)
+{
+	struct rev_info revs;
+	struct strvec args = STRVEC_INIT;
+	struct commit *commit;
+	int ret = 0;
+
+	if (!is_repository_shallow(the_repository))
+		return 0;
+
+	repo_init_revisions(the_repository, &revs, NULL);
+	revs.max_parents = 1;
+	revs.cherry_pick = 1;
+	revs.right_only = 1;
+	revs.limited = 1;
+
+	strvec_push(&args, "");
+	strvec_pushf(&args, "%s...%s",
+		     oid_to_hex(opts->root ?
+				&opts->onto->object.oid :
+				&opts->upstream->object.oid),
+		     oid_to_hex(&opts->orig_head->object.oid));
+	if (opts->restrict_revision)
+		strvec_pushf(&args, "^%s",
+			     oid_to_hex(&opts->restrict_revision->object.oid));
+
+	setup_revisions_from_strvec(&args, &revs, NULL);
+	if (prepare_revision_walk(&revs)) {
+		ret = error(_("revision walk setup failed"));
+		goto out;
+	}
+	while ((commit = get_revision(&revs))) {
+		if (sequencer_refuse_shallow_boundary(the_repository, commit, 0)) {
+			ret = -1;
+			break;
+		}
+	}
+
+out:
+	release_revisions(&revs);
+	strvec_clear(&args);
 	return ret;
 }
 
@@ -1871,6 +1925,12 @@ int cmd_rebase(int argc,
 
 	if (is_merge(&options))
 		goto run_rebase;
+
+	/* Fail before HEAD or the working tree has been touched */
+	if (check_no_shallow_boundary_to_apply(&options)) {
+		ret = -1;
+		goto cleanup_autostash;
+	}
 
 	/* Detach HEAD and reset the tree */
 	if (options.flags & REBASE_NO_QUIET)

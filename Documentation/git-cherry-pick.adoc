@@ -178,6 +178,15 @@ fail unless one of `--empty=keep` or `--allow-empty` are specified.
 	Pass the merge strategy-specific option through to the
 	merge strategy.  See linkgit:git-merge[1] for details.
 
+--allow-shallow-boundary::
+	By default, 'git cherry-pick' refuses to pick a commit that is a
+	shallow boundary (i.e. a commit listed in `.git/shallow`).
+	Its parents are missing from this repository, so it looks like
+	a root commit that added every file in its tree, and picking it
+	would add all of them.  This option overrides that safeguard.
++
+To get the missing history instead, use `git fetch --unshallow`.
+
 include::rerere-options.adoc[]
 
 SEQUENCER SUBCOMMANDS

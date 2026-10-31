@@ -256,4 +256,212 @@ test_expect_success 'cherry-pick is unaware of --reference (for now)' '
 	test_grep "^usage: git cherry-pick" actual
 '
 
+# Tests for shallow boundary safeguard
+
+test_expect_success 'setup shallow boundary tests' '
+	git init shallow-src &&
+	test_commit -C shallow-src A &&
+	test_commit -C shallow-src B &&
+	test_commit -C shallow-src C &&
+	git clone --no-local --depth=2 "file://$(pwd)/shallow-src" shallow-repo &&
+	git -C shallow-repo rev-parse --verify B >boundary &&
+	test_cmp shallow-repo/.git/shallow boundary
+'
+
+test_expect_success 'revert of shallow boundary commit is refused' '
+	git -C shallow-repo reset --hard C &&
+	test_must_fail git -C shallow-repo revert --no-edit B 2>err &&
+	test_grep "shallow boundary commit" err &&
+	test_path_is_missing shallow-repo/.git/sequencer &&
+	test_path_is_missing shallow-repo/.git/REVERT_HEAD &&
+	git -C shallow-repo rev-parse C >expect &&
+	git -C shallow-repo rev-parse HEAD >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success 'cherry-pick of shallow boundary commit is refused' '
+	git -C shallow-repo checkout -q --detach C &&
+	git -C shallow-repo rm -rq . &&
+	git -C shallow-repo commit -q -m empty &&
+	git -C shallow-repo rev-parse HEAD >expect &&
+	test_must_fail git -C shallow-repo cherry-pick B 2>err &&
+	test_grep "shallow boundary commit" err &&
+	git -C shallow-repo rev-parse HEAD >actual &&
+	test_cmp expect actual &&
+	git -C shallow-repo reset -q --hard C
+'
+
+test_expect_success 'revert of non-boundary commit in shallow repo works' '
+	git -C shallow-repo revert --no-edit C &&
+	git -C shallow-repo reset -q --hard C
+'
+
+test_expect_success 'multi-commit revert is refused before anything is reverted' '
+	test_must_fail git -C shallow-repo revert --no-edit C B 2>err &&
+	test_grep "shallow boundary commit" err &&
+	test_path_is_missing shallow-repo/.git/sequencer &&
+	git -C shallow-repo rev-parse C >expect &&
+	git -C shallow-repo rev-parse HEAD >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success '--allow-shallow-boundary overrides the revert check' '
+	git -C shallow-repo revert --no-edit --allow-shallow-boundary B &&
+	test_path_is_missing shallow-repo/B.t &&
+	git -C shallow-repo reset -q --hard C
+'
+
+test_expect_success '--allow-shallow-boundary overrides the cherry-pick check' '
+	git -C shallow-repo checkout -q --detach C &&
+	git -C shallow-repo rm -rq . &&
+	git -C shallow-repo commit -q -m empty &&
+	git -C shallow-repo cherry-pick --allow-shallow-boundary B &&
+	test_path_is_file shallow-repo/B.t &&
+	git -C shallow-repo reset -q --hard C
+'
+
+test_expect_success '--allow-shallow-boundary survives --continue' '
+	test_commit -C shallow-repo conflict-1 file one &&
+	test_commit -C shallow-repo conflict-2 file two &&
+	test_must_fail git -C shallow-repo revert --no-edit \
+		--allow-shallow-boundary conflict-1 B &&
+	echo resolved >shallow-repo/file &&
+	git -C shallow-repo add file &&
+	git -C shallow-repo revert --continue &&
+	test_path_is_missing shallow-repo/B.t &&
+	git -C shallow-repo reset -q --hard C
+'
+
+test_expect_success 'revert and cherry-pick in a non-shallow repo are unaffected' '
+	git init full-repo &&
+	test_commit -C full-repo A &&
+	test_commit -C full-repo B &&
+	git -C full-repo revert --no-edit B &&
+	git -C full-repo cherry-pick B &&
+	test_path_is_file full-repo/B.t
+'
+
+test_expect_success 'rebase of a range containing a shallow boundary is refused' '
+	git -C shallow-repo checkout -q --detach C &&
+	git -C shallow-repo rev-parse C >expect &&
+	test_must_fail git -C shallow-repo rebase --root 2>err &&
+	test_grep "shallow boundary commit" err &&
+	test_path_is_missing shallow-repo/.git/rebase-merge &&
+	git -C shallow-repo rev-parse HEAD >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success 'rebase --rebase-merges is refused as well' '
+	test_must_fail git -C shallow-repo rebase --rebase-merges --root 2>err &&
+	test_grep "shallow boundary commit" err &&
+	test_path_is_missing shallow-repo/.git/rebase-merge
+'
+
+test_expect_success 'rebase --apply of a range containing a shallow boundary is refused' '
+	git -C shallow-repo checkout -q --detach C &&
+	git -C shallow-repo checkout -q --orphan unrelated &&
+	git -C shallow-repo rm -rfq . &&
+	test_commit -C shallow-repo unrelated &&
+	git -C shallow-repo checkout -q --detach C &&
+	git -C shallow-repo rev-parse C >expect &&
+	test_must_fail git -C shallow-repo rebase --apply \
+		--onto unrelated unrelated 2>err &&
+	test_grep "shallow boundary commit" err &&
+	test_path_is_missing shallow-repo/.git/rebase-apply &&
+	git -C shallow-repo rev-parse HEAD >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success 'rebase --apply restores an autostash when refusing' '
+	echo dirty >shallow-repo/C.t &&
+	test_must_fail git -C shallow-repo rebase --apply --autostash \
+		--onto unrelated unrelated 2>err &&
+	test_grep "shallow boundary commit" err &&
+	echo dirty >expect &&
+	test_cmp expect shallow-repo/C.t &&
+	git -C shallow-repo stash list >stashes &&
+	test_must_be_empty stashes &&
+	git -C shallow-repo checkout -q -- C.t
+'
+
+test_expect_success 'rebase --apply that does not replay the boundary is unaffected' '
+	git -C shallow-repo checkout -q -B apply-topic C &&
+	test_commit -C shallow-repo E &&
+	git -C shallow-repo rebase --apply --onto unrelated C &&
+	test_path_is_file shallow-repo/E.t
+'
+
+test_expect_success 'rebase that does not replay the boundary is unaffected' '
+	git -C shallow-repo checkout -q -B topic C &&
+	test_commit -C shallow-repo D &&
+	git -C shallow-repo rebase C
+'
+
+test_expect_success 'rebase restores an autostash when refusing (merge backend)' '
+	git -C shallow-repo checkout -q --detach C &&
+	echo dirty >shallow-repo/C.t &&
+	test_must_fail git -C shallow-repo rebase --autostash --root 2>err &&
+	test_grep "shallow boundary commit" err &&
+	test_path_is_missing shallow-repo/.git/rebase-merge &&
+	echo dirty >expect &&
+	test_cmp expect shallow-repo/C.t &&
+	git -C shallow-repo stash list >stashes &&
+	test_must_be_empty stashes &&
+	git -C shallow-repo checkout -q -- C.t
+'
+
+test_expect_success 'interactive rebase restores an autostash when refusing' '
+	echo dirty >shallow-repo/C.t &&
+	test_must_fail env GIT_SEQUENCE_EDITOR=: \
+		git -C shallow-repo rebase -i --autostash --root 2>err &&
+	test_grep "shallow boundary commit" err &&
+	test_path_is_missing shallow-repo/.git/rebase-merge &&
+	echo dirty >expect &&
+	test_cmp expect shallow-repo/C.t &&
+	git -C shallow-repo stash list >stashes &&
+	test_must_be_empty stashes &&
+	git -C shallow-repo checkout -q -- C.t
+'
+
+test_expect_success 'rebase onto new upstream work in a shallow clone still works' '
+	git clone --no-local --depth=1 "file://$(pwd)/shallow-src" shallow-local &&
+	test_commit -C shallow-local local &&
+	test_commit -C shallow-src upstream &&
+	git -C shallow-local fetch origin &&
+	git -C shallow-local rebase origin/HEAD &&
+	test_path_is_file shallow-local/upstream.t &&
+	test_path_is_file shallow-local/local.t
+'
+
+test_expect_success 'single-commit shallow clone: revert and cherry-pick are refused' '
+	git init one-src &&
+	test_commit -C one-src only &&
+	git clone --no-local --depth=1 "file://$(pwd)/one-src" one-shallow &&
+	git -C one-shallow rev-parse HEAD >expect &&
+	test_must_fail git -C one-shallow revert --no-edit HEAD 2>err &&
+	test_grep "shallow boundary commit" err &&
+	test_must_fail git -C one-shallow cherry-pick -n HEAD 2>err &&
+	test_grep "shallow boundary commit" err &&
+	test_path_is_file one-shallow/only.t &&
+	git -C one-shallow rev-parse HEAD >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success 'revert and cherry-pick work once the clone is unshallowed' '
+	git clone --no-local --depth=2 "file://$(pwd)/shallow-src" unshallowed &&
+	test_must_fail git -C unshallowed revert --no-edit HEAD~1 2>err &&
+	test_grep "shallow boundary commit" err &&
+	git -C unshallowed fetch --unshallow &&
+	git -C unshallowed revert --no-edit C &&
+	test_path_is_missing unshallowed/C.t &&
+	git -C unshallowed cherry-pick C &&
+	test_path_is_file unshallowed/C.t
+'
+
+test_expect_success '--allow-shallow-boundary cannot be combined with --abort' '
+	test_must_fail git -C shallow-repo revert --abort \
+		--allow-shallow-boundary 2>err &&
+	test_grep "cannot be used with" err
+'
+
 test_done

@@ -816,6 +816,13 @@ You should understand the implications of using `git rebase` on a
 repository that you share.  See also RECOVERING FROM UPSTREAM REBASE
 below.
 
+If the commits to be rebased include a shallow boundary commit (a
+commit listed in `.git/shallow`), the rebase refuses to start, because
+the missing parents make that commit look like a root commit that added
+every file in its tree.  This applies to both the `merge` and `apply`
+backends, and nothing is changed when the rebase is refused.  Run
+`git fetch --unshallow` to get the missing history first.
+
 When the rebase is run, it will first execute a `pre-rebase` hook if one
 exists.  You can use this hook to do sanity checks and reject the rebase
 if it isn't appropriate.  Please see the template `pre-rebase` hook script

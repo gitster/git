@@ -49,6 +49,7 @@
 #include "rebase-interactive.h"
 #include "reset.h"
 #include "branch.h"
+#include "shallow.h"
 
 #define GIT_REFLOG_ACTION "GIT_REFLOG_ACTION"
 
@@ -3165,6 +3166,9 @@ static int populate_opts_cb(const char *key, const char *value,
 		opts->record_origin = git_config_bool_or_int(key, value, ctx->kvi, &error_flag);
 	else if (!strcmp(key, "options.allow-ff"))
 		opts->allow_ff = git_config_bool_or_int(key, value, ctx->kvi, &error_flag);
+	else if (!strcmp(key, "options.allow-shallow-boundary"))
+		opts->allow_shallow_boundary =
+			git_config_bool_or_int(key, value, ctx->kvi, &error_flag);
 	else if (!strcmp(key, "options.mainline"))
 		opts->mainline = git_config_int(key, value, ctx->kvi);
 	else if (!strcmp(key, "options.strategy"))
@@ -3430,6 +3434,23 @@ int write_basic_state(struct replay_opts *opts, const char *head_name,
 	return 0;
 }
 
+/*
+ * A shallow boundary commit has had its parents hidden, so it looks like
+ * a root commit that added every file at once.  Picking or reverting it
+ * would not do what the user expects, so refuse before anything is
+ * started.
+ */
+int sequencer_refuse_shallow_boundary(struct repository *r,
+				      const struct commit *commit, int allow)
+{
+	if (allow || !is_shallow_boundary_commit(r, &commit->object.oid))
+		return 0;
+	return error(_("commit %s is a shallow boundary commit; its parents "
+		       "are missing from this clone (use 'git fetch --unshallow' "
+		       "to get them)"),
+		     oid_to_hex(&commit->object.oid));
+}
+
 static int walk_revs_populate_todo(struct todo_list *todo_list,
 				struct replay_opts *opts)
 {
@@ -3445,13 +3466,18 @@ static int walk_revs_populate_todo(struct todo_list *todo_list,
 	encoding = get_log_output_encoding();
 
 	while ((commit = get_revision(opts->revs))) {
-		struct todo_item *item = append_new_todo(todo_list);
-		const char *commit_buffer = repo_logmsg_reencode(the_repository,
-								 commit, NULL,
-								 encoding);
+		struct todo_item *item;
+		const char *commit_buffer;
 		const char *subject;
 		int subject_len;
 
+		if (sequencer_refuse_shallow_boundary(the_repository, commit,
+					    opts->allow_shallow_boundary))
+			return -1;
+
+		item = append_new_todo(todo_list);
+		commit_buffer = repo_logmsg_reencode(the_repository, commit,
+						     NULL, encoding);
 		item->command = command;
 		item->commit = commit;
 		item->arg_offset = 0;
@@ -3763,6 +3789,9 @@ static int save_opts(struct replay_opts *opts)
 	if (opts->allow_ff)
 		res |= repo_config_set_in_file_gently(the_repository, opts_file,
 					"options.allow-ff", NULL, "true");
+	if (opts->allow_shallow_boundary)
+		res |= repo_config_set_in_file_gently(the_repository, opts_file,
+				"options.allow-shallow-boundary", NULL, "true");
 	if (opts->mainline) {
 		struct strbuf buf = STRBUF_INIT;
 		strbuf_addf(&buf, "%d", opts->mainline);
@@ -5651,6 +5680,9 @@ static int single_pick(struct repository *r,
 	int check_todo;
 	struct todo_item item;
 
+	if (sequencer_refuse_shallow_boundary(r, cmit, opts->allow_shallow_boundary))
+		return -1;
+
 	item.command = opts->action == REPLAY_PICK ?
 			TODO_PICK : TODO_REVERT;
 	item.commit = cmit;
@@ -6037,6 +6069,7 @@ static int make_script_with_merges(struct pretty_print_context *pp,
 	int rebase_cousins = flags & TODO_LIST_REBASE_COUSINS;
 	int root_with_onto = flags & TODO_LIST_ROOT_WITH_ONTO;
 	int skipped_commit = 0;
+	int ret = 0;
 	struct strbuf buf = STRBUF_INIT, oneline = STRBUF_INIT;
 	struct strbuf label_from_message = STRBUF_INIT;
 	struct commit_list *commits = NULL, **tail = &commits, *iter;
@@ -6100,6 +6133,10 @@ static int make_script_with_merges(struct pretty_print_context *pp,
 		}
 		if (is_empty && !keep_empty)
 			continue;
+		if (sequencer_refuse_shallow_boundary(the_repository, commit, 0)) {
+			ret = -1;
+			goto cleanup;
+		}
 
 		strbuf_reset(&oneline);
 		pretty_print_commit(pp, commit, &oneline);
@@ -6266,6 +6303,7 @@ static int make_script_with_merges(struct pretty_print_context *pp,
 		commit_list_free(list);
 	}
 
+cleanup:
 	commit_list_free(commits);
 	commit_list_free(tips);
 
@@ -6281,7 +6319,7 @@ static int make_script_with_merges(struct pretty_print_context *pp,
 	hashmap_clear_and_free(&state.labels, struct labels_entry, entry);
 	strbuf_release(&state.buf);
 
-	return 0;
+	return ret;
 }
 
 int sequencer_make_script(struct repository *r, struct strbuf *out,
@@ -6353,6 +6391,10 @@ int sequencer_make_script(struct repository *r, struct strbuf *out,
 		}
 		if (is_empty && !keep_empty)
 			continue;
+		if (sequencer_refuse_shallow_boundary(r, commit, 0)) {
+			ret = -1;
+			goto cleanup;
+		}
 		strbuf_addf(out, "%s %s ", insn,
 			    oid_to_hex(&commit->object.oid));
 		pretty_print_commit(&pp, commit, out);

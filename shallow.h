@@ -14,6 +14,7 @@ void set_alternate_shallow_file(struct repository *r, const char *path);
 int register_shallow(struct repository *r, const struct object_id *oid);
 int unregister_shallow(const struct object_id *oid);
 int is_repository_shallow(struct repository *r);
+int is_shallow_boundary_commit(struct repository *r, const struct object_id *oid);
 
 /*
  * Lock for updating the $GIT_DIR/shallow file.

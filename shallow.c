@@ -92,6 +92,15 @@ int is_repository_shallow(struct repository *r)
 	return r->parsed_objects->is_shallow;
 }
 
+int is_shallow_boundary_commit(struct repository *r, const struct object_id *oid)
+{
+	struct commit_graft *graft;
+	if (!is_repository_shallow(r))
+		return 0;
+	graft = lookup_commit_graft(r, oid);
+	return graft && graft->nr_parent < 0;
+}
+
 static void reset_repository_shallow(struct repository *r)
 {
 	r->parsed_objects->is_shallow = -1;

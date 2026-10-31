@@ -57,6 +57,7 @@ struct replay_opts {
 	int committer_date_is_author_date;
 	int ignore_date;
 	int commit_use_reference;
+	int allow_shallow_boundary;
 
 	struct strvec trailer_args;
 
@@ -190,6 +191,12 @@ int sequencer_remove_state(struct replay_opts *opts);
 #define TODO_LIST_REAPPLY_CHERRY_PICKS (1U << 7)
 #define TODO_LIST_WARN_SKIPPED_CHERRY_PICKS (1U << 8)
 
+/*
+ * Return -1 after reporting an error if "commit" is a shallow boundary
+ * commit and "allow" is zero, 0 otherwise.
+ */
+int sequencer_refuse_shallow_boundary(struct repository *r,
+				      const struct commit *commit, int allow);
 int sequencer_make_script(struct repository *r, struct strbuf *out,
 			  struct strvec *argv, unsigned flags);
 

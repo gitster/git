@@ -122,6 +122,16 @@ include::rerere-options.adoc[]
 	configuration variable can be used to enable this option by
 	default.
 
+--allow-shallow-boundary::
+	By default, 'git revert' refuses to revert a commit that is a
+	shallow boundary (i.e. a commit listed in `.git/shallow`).
+	Its parents are missing from this repository, so it looks like
+	a root commit that added every file in its tree, and reverting
+	it would remove all of them.  This option overrides that
+	safeguard.
++
+To get the missing history instead, use `git fetch --unshallow`.
+
 
 SEQUENCER SUBCOMMANDS
 ---------------------
