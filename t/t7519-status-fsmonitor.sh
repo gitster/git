@@ -394,6 +394,44 @@ test_expect_success UNTRACKED_CACHE 'ignore .git changes when invalidating UNTR'
 	test_cmp before after
 '
 
+for response in trivial failure
+do
+	test_expect_success UNTRACKED_CACHE \
+		"invalidate untracked cache after fsmonitor response: $response" '
+		test_create_repo "untracked-$response" &&
+		(
+			cd "untracked-$response" &&
+			git config core.untrackedCache true &&
+			git config core.fsmonitor .git/hooks/fsmonitor-test &&
+			git config core.fsmonitorHookVersion 2 &&
+			echo empty >.git/fsmonitor-response &&
+			test_hook --setup fsmonitor-test <<-\EOF &&
+			printf "token\0"
+			case "$(cat .git/fsmonitor-response)" in
+			trivial) printf "/\0" ;;
+			failure) exit 1 ;;
+			esac
+			EOF
+
+			mkdir -p inc/deep &&
+			git update-index --force-write-index &&
+			git status --porcelain >../actual &&
+			test_must_be_empty ../actual &&
+
+			>inc/deep/new &&
+			echo "$response" >.git/fsmonitor-response &&
+			git update-index --refresh &&
+			echo empty >.git/fsmonitor-response &&
+
+			test-tool dump-untracked-cache >../actual &&
+			test_grep ! " valid" ../actual &&
+			echo "?? inc/" >../expect &&
+			git status --porcelain >../actual &&
+			test_cmp ../expect ../actual
+		)
+	'
+done
+
 test_expect_success 'discard_index() also discards fsmonitor info' '
 	test_config core.fsmonitor "$TEST_DIRECTORY/t7519/fsmonitor-all" &&
 	test_might_fail git update-index --refresh &&

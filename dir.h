@@ -596,6 +596,7 @@ static inline int dir_path_match(struct index_state *istate,
 int cmp_dir_entry(const void *p1, const void *p2);
 int check_dir_entry_contains(const struct dir_entry *out, const struct dir_entry *in);
 
+void untracked_cache_invalidate_all(struct index_state *);
 void untracked_cache_invalidate_path(struct index_state *, const char *, int safe_path);
 /*
  * Invalidate the untracked-cache for this path, but first strip

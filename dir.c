@@ -3976,6 +3976,24 @@ static void invalidate_one_directory(struct untracked_cache *uc,
 	ucd->untracked_nr = 0;
 }
 
+static void invalidate_directory_recursive(struct untracked_cache *uc,
+					  struct untracked_cache_dir *ucd)
+{
+	invalidate_one_directory(uc, ucd);
+	for (size_t i = 0; i < ucd->dirs_nr; i++)
+		invalidate_directory_recursive(uc, ucd->dirs[i]);
+}
+
+void untracked_cache_invalidate_all(struct index_state *istate)
+{
+	if (!istate->untracked || !istate->untracked->root)
+		return;
+
+	invalidate_directory_recursive(istate->untracked,
+				       istate->untracked->root);
+	istate->cache_changed |= UNTRACKED_CHANGED;
+}
+
 /*
  * Normally when an entry is added or removed from a directory,
  * invalidating that directory is enough. No need to touch its

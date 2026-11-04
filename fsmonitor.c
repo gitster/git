@@ -713,8 +713,10 @@ apply_results:
 		if (is_cache_changed)
 			istate->cache_changed |= FSMONITOR_CHANGED;
 
-		if (istate->untracked)
+		if (istate->untracked) {
+			untracked_cache_invalidate_all(istate);
 			istate->untracked->use_fsmonitor = 0;
+		}
 	}
 	trace2_region_leave("fsmonitor", "apply_results", istate->repo);
 
