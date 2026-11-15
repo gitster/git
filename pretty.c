@@ -1997,6 +1997,100 @@ void userformat_find_requirements(const char *fmt, struct userformat_want *w)
 	}
 }
 
+/*
+ * Make the coloring of each line in 'sb' from offset 'start' onwards
+ * self-contained, so that it survives --graph and color-aware pagers such as
+ * 'less -R' resetting colors at line breaks, and doesn't leak into what
+ * follows, for example the graph.
+ *
+ * Color escape sequences since the last reset are collected, and if any are
+ * active at a newline, a reset is inserted before it. They are replayed at the
+ * start of the next non-empty line, unless that begins with a reset. A reset is
+ * also appended at the end if colors are still active there.
+ *
+ * Resets, which have a zero or empty code, are only recognized at the start of
+ * a sequence. They make little sense elsewhere, and missing one merely adds to
+ * the replayed sequences.
+ */
+static void make_line_colors_self_contained(struct strbuf *sb, size_t start)
+{
+	struct strbuf colors = STRBUF_INIT; /* colors since last reset */
+	struct strbuf tmp = STRBUF_INIT;
+
+	const char *copied = sb->buf;
+	const char *sb_end = sb->buf + sb->len;
+	const char *p = sb->buf + start;
+
+	while (p < sb_end) {
+		size_t esc_len;
+		char *end;
+		bool replay = false, is_reset, is_reset_only;
+
+		if (!colors.len) {
+			/* look for colors to collect */
+			p = memchr(p, '\033', sb_end - p);
+			if (!p)
+				break;
+		} else {
+			/* look for more colors or the line end */
+			p += strcspn(p, "\033\n");
+		}
+
+		if (*p == '\n') {
+			/* leave room for added resets and colors */
+			if (!tmp.len)
+				strbuf_grow(&tmp, sb->len * 3 / 2);
+
+			/* reset active colors at line end */
+			strbuf_add(&tmp, copied, p - copied);
+			copied = p;
+			strbuf_addstr(&tmp, GIT_COLOR_RESET);
+
+			while (*++p == '\n')
+				; /* skip empty lines */
+
+			if (p == sb_end) {
+				/* no line left to replay colors on */
+				strbuf_reset(&colors);
+				break;
+			}
+			replay = true;
+		}
+
+		esc_len = display_mode_esc_sequence_len(p);
+		is_reset = esc_len && !strtoul(p + 2, &end, 10);
+		is_reset_only = is_reset && *end == 'm';
+
+		if (replay && !is_reset) {
+			strbuf_add(&tmp, copied, p - copied);
+			copied = p;
+			strbuf_addbuf(&tmp, &colors);
+		}
+
+		if (esc_len) {
+			if (is_reset)
+				strbuf_reset(&colors);
+			if (!is_reset_only)
+				strbuf_add(&colors, p, esc_len);
+			p += esc_len;
+		} else {
+			p++;
+		}
+	}
+
+	if (tmp.len) {
+		strbuf_add(&tmp, copied, sb_end - copied);
+		strbuf_swap(sb, &tmp);
+	}
+
+	/* reset active colors at buffer end */
+	if (colors.len)
+		strbuf_addstr(sb, GIT_COLOR_RESET);
+
+	strbuf_release(&tmp);
+	strbuf_release(&colors);
+}
+
 void repo_format_commit_message(struct repository *r,
 				const struct commit *commit,
 				const char *format, struct strbuf *sb,
@@ -2010,6 +2104,7 @@ void repo_format_commit_message(struct repository *r,
 	};
 	const char *output_enc = pretty_ctx->output_encoding;
 	const char *utf8 = "UTF-8";
+	size_t orig_len = sb->len;
 
 	while (strbuf_expand_step(sb, &format)) {
 		size_t len;
@@ -2022,6 +2117,9 @@ void repo_format_commit_message(struct repository *r,
 			strbuf_addch(sb, '%');
 	}
 	rewrap_message_tail(sb, &context, 0, 0, 0);
+
+	if (want_color(pretty_ctx->color))
+		make_line_colors_self_contained(sb, orig_len);
 
 	/*
 	 * Convert output to an actual output encoding; note that

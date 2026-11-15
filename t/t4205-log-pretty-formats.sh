@@ -538,6 +538,76 @@ test_expect_success 'strbuf_utf8_replace() not producing NUL' '
 	test_grep ! Q actual
 '
 
+test_expect_success 'colors carry across lines' '
+	git log -1 --color=always \
+		--format="%C(bold)%C(red)a%n%C(green)b" >raw &&
+	test_decode_color <raw >actual &&
+	cat >expect <<-\EOF &&
+	<BOLD><RED>a<RESET>
+	<BOLD><RED><GREEN>b<RESET>
+	EOF
+	test_cmp expect actual
+'
+
+test_expect_success 'colors carry across wrapped lines' '
+	commit=$(echo "one two three" | git commit-tree HEAD^{tree}) &&
+	git log -1 --color=always --format="%C(bold)%w(7)%s" $commit >raw &&
+	test_decode_color <raw >actual &&
+	cat >expect <<-\EOF &&
+	<BOLD>one two<RESET>
+	<BOLD>three<RESET>
+	EOF
+	test_cmp expect actual
+'
+
+test_expect_success 'colors are reset at the end of each commit' '
+	git log -2 --color=always --format="%C(red)a" >raw &&
+	test_decode_color <raw >actual &&
+	cat >expect <<-\EOF &&
+	<RED>a<RESET>
+	<RED>a<RESET>
+	EOF
+	test_cmp expect actual
+'
+
+test_expect_success 'colors are not replayed on empty lines or before resets' '
+	git log -1 --color=always \
+		--format="%C(red)a%n%n%C(reset)b%C(green)%nc%n" >raw &&
+	test_decode_color <raw >actual &&
+	cat >expect <<-\EOF &&
+	<RED>a<RESET>
+
+	<RESET>b<GREEN><RESET>
+	<GREEN>c<RESET>
+
+	EOF
+	test_cmp expect actual
+'
+
+test_expect_success 'resets followed by colors carry across lines' '
+	git log -1 --color=always \
+		--format="%C(red)%C(blue reset)a%nb%x1b[0;31m%nc%x1b[0m%nd" \
+		>raw &&
+	test_decode_color <raw >actual &&
+	cat >expect <<-\EOF &&
+	<RED><;BLUE>a<RESET>
+	<;BLUE>b<RESET;RED><RESET>
+	<RESET;RED>c<RESET>
+	d
+	EOF
+	test_cmp expect actual
+'
+
+test_expect_success 'colors carry across lines with --graph' '
+	git log -1 --graph --color=always --format="%C(red)a%nb" >raw &&
+	test_decode_color <raw >actual &&
+	cat >expect <<-\EOF &&
+	* <RED>a<RESET>
+	<RED>|<RESET> <RED>b<RESET>
+	EOF
+	test_cmp expect actual
+'
+
 # --date=[XXX] and corresponding %a[X] %c[X] format equivalency
 test_expect_success '--date=iso-strict %ad%cd is the same as %aI%cI' '
 	git log --format=%ad%n%cd --date=iso-strict >expected &&
