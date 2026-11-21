@@ -209,8 +209,7 @@ do
 	test_expect_success "reject a $hash commit with an empty mergetag line" '
 		git cat-file tag committag >../${hash}_committag &&
 		{
-			sed -n "/^committer /q;p" ../${hash}_commit2 &&
-			grep "^committer " ../${hash}_commit2 &&
+			sed -e "/^committer /q" ../${hash}_commit2 &&
 			echo "mergetag " &&
 			sed "s/^/ /" ../${hash}_committag &&
 			echo &&
