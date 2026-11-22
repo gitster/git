@@ -300,4 +300,22 @@ test_expect_success 'from line with unterminated comment' '
 	test_cmp expect actual
 '
 
+test_expect_success 'mailinfo on header-only message does not leak header into body' '
+	cat >in <<-\EOF &&
+	From: A U Thor <author@example.com>
+	Subject: header-only message
+	Content-Type: text/plain; format=flowed
+	EOF
+	cat >expect <<-\EOF &&
+	Author: A U Thor
+	Email: author@example.com
+	Subject: header-only message
+
+	EOF
+	git mailinfo msg patch <in >actual &&
+	test_cmp expect actual &&
+	test_must_be_empty msg &&
+	test_must_be_empty patch
+'
+
 test_done

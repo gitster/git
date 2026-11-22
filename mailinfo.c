@@ -895,13 +895,18 @@ static int is_rfc2822_header(const struct strbuf *line)
 	return 0;
 }
 
+/*
+ * Read one header line (including continuations) into `line`.
+ * Returns 1 if a header was read, 0 if a blank or non-header line was read
+ * into `line` (with '\n' restored), or -1 on EOF/error.
+ */
 static int read_one_header_line(struct strbuf *line, FILE *in)
 {
 	struct strbuf continuation = STRBUF_INIT;
 
 	/* Get the first part of the line. */
 	if (strbuf_getline_lf(line, in))
-		return 0;
+		return -1;
 
 	/*
 	 * Is it an empty line or not a valid rfc2822 header?
@@ -986,7 +991,7 @@ again:
 	strbuf_reset(&mi->charset);
 
 	/* slurp in this section's info */
-	while (read_one_header_line(line, mi->input))
+	while (read_one_header_line(line, mi->input) > 0)
 		check_header(mi, line, mi->p_hdr_data, 0);
 
 	strbuf_release(&newline);
@@ -1018,7 +1023,7 @@ static void handle_filter_flowed(struct mailinfo *mi, struct strbuf *line,
 		return;
 	}
 
-	if (line->buf[len - 1] == '\n') {
+	if (len && line->buf[len - 1] == '\n') {
 		len--;
 		if (len && line->buf[len - 1] == '\r')
 			len--;
@@ -1195,7 +1200,7 @@ static void handle_info(struct mailinfo *mi)
 int mailinfo(struct mailinfo *mi, const char *msg, const char *patch)
 {
 	FILE *cmitmsg;
-	int peek;
+	int peek, ret;
 	struct strbuf line = STRBUF_INIT;
 
 	cmitmsg = fopen(msg, "w");
@@ -1223,10 +1228,11 @@ int mailinfo(struct mailinfo *mi, const char *msg, const char *patch)
 	ungetc(peek, mi->input);
 
 	/* process the email header */
-	while (read_one_header_line(&line, mi->input))
+	while ((ret = read_one_header_line(&line, mi->input)) > 0)
 		check_header(mi, &line, mi->p_hdr_data, 1);
 
-	handle_body(mi, &line);
+	if (!ret)
+		handle_body(mi, &line);
 	fwrite(mi->log_message.buf, 1, mi->log_message.len, cmitmsg);
 	fclose(cmitmsg);
 	fclose(mi->patchfile);
