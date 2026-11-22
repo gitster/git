@@ -381,6 +381,26 @@ test_expect_success 'git clean -id (ask)' '
 
 '
 
+test_expect_failure 'git clean -id (ask - EOF without trailing LF)' '
+	mkdir -p build docs &&
+	touch a.out src/part3.c src/part3.h src/part4.c src/part4.h \
+		docs/manual.txt obj.o build/lib.so &&
+	printf "a\ny" |
+	git clean -id &&
+	test_path_is_file Makefile &&
+	test_path_is_file README &&
+	test_path_is_file src/part1.c &&
+	test_path_is_file src/part2.c &&
+	test_path_is_missing a.out &&
+	test_path_is_file docs/manual.txt &&
+	test_path_is_file src/part3.c &&
+	test_path_is_file src/part3.h &&
+	test_path_is_file src/part4.c &&
+	test_path_is_file src/part4.h &&
+	test_path_is_file obj.o &&
+	test_path_is_file build/lib.so
+'
+
 test_expect_success 'git clean -id (ask - Ctrl+D)' '
 
 	mkdir -p build docs &&
