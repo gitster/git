@@ -492,6 +492,17 @@ test_expect_success 'git clean -id with prefix and path (ask)' '
 
 '
 
+test_expect_success 'git clean -id (filter - EOF without trailing LF)' '
+	mkdir -p build docs &&
+	touch a.out src/part3.c src/part3.h src/part4.c src/part4.h \
+		docs/manual.txt obj.o build/lib.so &&
+	printf "f\n*.out" |
+	git clean -id &&
+	test_path_is_file a.out &&
+	test_path_is_file docs/manual.txt &&
+	test_path_is_file src/part3.c
+'
+
 test_expect_success TTY 'git clean -i paints the header in HEADER color' '
 	>a.out &&
 	echo q |

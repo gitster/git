@@ -4114,4 +4114,37 @@ test_expect_success 'fast-import: heredoc terminator at EOF is not re-parsed as 
 	)
 '
 
+test_expect_success 'fast-import: merge line without trailing LF at EOF' '
+	test_when_finished "rm -rf eof-merge" &&
+	git init eof-merge &&
+	(
+		cd eof-merge &&
+		cat >input <<-\EOF &&
+		commit refs/heads/a
+		mark :1
+		committer A U Thor <author@example.com> 1000000000 +0000
+		data 2
+		a
+
+		commit refs/heads/b
+		mark :2
+		committer A U Thor <author@example.com> 1000000001 +0000
+		data 2
+		b
+
+		commit refs/heads/a
+		committer A U Thor <author@example.com> 1000000002 +0000
+		data 6
+		merge
+		from :1
+		EOF
+		printf "merge :2" >>input &&
+		git fast-import --quiet <input &&
+		git rev-parse b >expect &&
+		git rev-parse a^2 >actual &&
+		test_cmp expect actual &&
+		test_must_fail git rev-parse --verify a^3
+	)
+'
+
 test_done
