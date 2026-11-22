@@ -447,4 +447,33 @@ test_expect_success 'unknown revision options are reported correctly' '
 	test_grep "unknown option .*--no-such-option" err
 '
 
+test_expect_failure 'shortlog from stdin with incomplete Author line at EOF' '
+	test_write_lines \
+		"Author: A U Thor <author@example.com>" \
+		"" \
+		"    First commit" >in &&
+	printf "%s" "Author: B U Thor <b@example.com>" >>in &&
+	test_write_lines \
+		"A U Thor (1):" \
+		"      First commit" \
+		"" \
+		"B U Thor (1):" \
+		"      " \
+		"" >expect &&
+	git shortlog <in >actual &&
+	test_cmp expect actual
+'
+
+test_expect_failure 'shortlog from stdin with incomplete header line at EOF' '
+	printf "%s\n%s" \
+		"Author: A U Thor <author@example.com>" \
+		"Date:   Mon Jan 1 00:00:00 2024 +0000" >in &&
+	test_write_lines \
+		"A U Thor (1):" \
+		"      " \
+		"" >expect &&
+	git shortlog <in >actual &&
+	test_cmp expect actual
+'
+
 test_done
