@@ -381,7 +381,7 @@ test_expect_success 'git clean -id (ask)' '
 
 '
 
-test_expect_failure 'git clean -id (ask - EOF without trailing LF)' '
+test_expect_success 'git clean -id (ask - EOF without trailing LF)' '
 	mkdir -p build docs &&
 	touch a.out src/part3.c src/part3.h src/part4.c src/part4.h \
 		docs/manual.txt obj.o build/lib.so &&

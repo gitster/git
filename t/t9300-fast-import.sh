@@ -4087,7 +4087,7 @@ test_expect_success 'Y: rewrite submodules via stdin' '
 	)
 '
 
-test_expect_failure 'fast-import: heredoc terminator at EOF is not re-parsed as command' '
+test_expect_success 'fast-import: heredoc terminator at EOF is not re-parsed as command' '
 	test_when_finished "rm -rf eof-deleteall" &&
 	git init eof-deleteall &&
 	(

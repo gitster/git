@@ -447,7 +447,7 @@ test_expect_success 'unknown revision options are reported correctly' '
 	test_grep "unknown option .*--no-such-option" err
 '
 
-test_expect_failure 'shortlog from stdin with incomplete Author line at EOF' '
+test_expect_success 'shortlog from stdin with incomplete Author line at EOF' '
 	test_write_lines \
 		"Author: A U Thor <author@example.com>" \
 		"" \
@@ -464,7 +464,7 @@ test_expect_failure 'shortlog from stdin with incomplete Author line at EOF' '
 	test_cmp expect actual
 '
 
-test_expect_failure 'shortlog from stdin with incomplete header line at EOF' '
+test_expect_success 'shortlog from stdin with incomplete header line at EOF' '
 	printf "%s\n%s" \
 		"Author: A U Thor <author@example.com>" \
 		"Date:   Mon Jan 1 00:00:00 2024 +0000" >in &&

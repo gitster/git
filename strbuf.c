@@ -643,8 +643,10 @@ int strbuf_getwholeline(struct strbuf *sb, FILE *fp, int term)
 {
 	ssize_t r;
 
-	if (feof(fp))
+	if (feof(fp)) {
+		strbuf_reset(sb);
 		return EOF;
+	}
 
 	/* Translate slopbuf to NULL, as we cannot call realloc on it */
 	if (!sb->alloc)
@@ -688,10 +690,10 @@ int strbuf_getwholeline(struct strbuf *sb, FILE *fp, int term)
 {
 	int ch;
 
+	strbuf_reset(sb);
 	if (feof(fp))
 		return EOF;
 
-	strbuf_reset(sb);
 	flockfile(fp);
 	while ((ch = getc_unlocked(fp)) != EOF) {
 		if (!strbuf_avail(sb))
